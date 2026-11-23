@@ -45,6 +45,14 @@ QString hashFile(const QString &path);
 bool storeObject(const QString &srcPath, const QString &root,
                  const QString &oid, const QString &ext, QString *errorOut);
 
+/// AN OBJECT A READER REFUSED (NOQT-DOCUMENT-1 stage 5, N3: a bake whose payload checksum failed). Its size is right
+/// and its bytes are not, so the dedup (an object of the right size is the content) would keep it through every
+/// re-bake. Marked, it is no object to the dedup: the next store of its content (stage, commitStaged, storeObject)
+/// REPLACES it and clears the mark, and MeshBakeStore's freshness reads it as absent, so the open's stale path
+/// re-bakes it. The mark lives for the process: a later boot finds the same bytes again at its first read.
+void markCorrupt(const QString &objectPath);
+bool isMarkedCorrupt(const QString &objectPath);
+
 /// Ensure the CAS tables/triggers/user_version exist on this connection. `stampGeneration` false (a library reset's
 /// rebuild): the tables only - the reset stamps the generation once it is whole.
 void ensureCasSchema(db::Connection &conn, bool stampGeneration = true);

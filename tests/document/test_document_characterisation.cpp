@@ -65,6 +65,7 @@
 #include "irisgl/document/qt/colour.h"
 
 #include "../support/documentgraph.h"
+#include <cstdint>
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -331,10 +332,10 @@ int main(int argc, char **argv)
         s2->getRootNode()->addChild(cam2);
         mesh2->addChild(child);
 
-        CHECK(s2->lights.contains("a15-light") && s2->meshes.contains("a15-mesh")
-                  && s2->particleSystems.contains("a15-particles")
-                  && s2->cameras.contains("a15-camera")
-                  && s2->meshes.contains("a15-child"),
+        CHECK(s2->lights.count("a15-light") && s2->meshes.count("a15-mesh")
+                  && s2->particleSystems.count("a15-particles")
+                  && s2->cameras.count("a15-camera")
+                  && s2->meshes.count("a15-child"),
               "A1.5: addNode registers each node under its own guid");
 
         // A node the scene never saw: removing it must not evict anything —
@@ -343,39 +344,39 @@ int main(int argc, char **argv)
         // default-constructed QString when the value is absent). The unnamed
         // light below is registered under "" precisely so that bug has
         // something to destroy.
-        auto unnamed = iris::LightNode::create(); unnamed->setGUID(QString());
+        auto unnamed = iris::LightNode::create(); unnamed->setGUID(QString().toStdString());
         s2->getRootNode()->addChild(unnamed);
-        CHECK(s2->lights.contains(QString()),
+        CHECK(s2->lights.count(QString().toStdString()),
               "A1.5: a guid-less light registers under the empty key");
         auto stranger = iris::LightNode::create(); stranger->setGUID("a15-stranger");
         const int lightsBefore = s2->lights.size();
         s2->removeNode(stranger);
-        CHECK(s2->lights.size() == lightsBefore && s2->lights.contains("a15-light"),
+        CHECK(s2->lights.size() == lightsBefore && s2->lights.count("a15-light"),
               "A1.5: removing an unregistered node evicts nothing");
-        CHECK(s2->lights.contains(QString()),
+        CHECK(s2->lights.count(QString().toStdString()),
               "A1.5: and specifically not the empty-keyed entry (the old reverse "
               "lookup removed it)");
 
         s2->removeNode(lamp);
-        CHECK(!s2->lights.contains("a15-light") && !s2->nodes.contains("a15-light"),
+        CHECK(!s2->lights.count("a15-light") && !s2->nodes.count("a15-light"),
               "A1.5: a light leaves both the light registry and the node map");
 
         s2->removeNode(parts);
-        CHECK(!s2->particleSystems.contains("a15-particles"), "A1.5: particles deregister");
+        CHECK(!s2->particleSystems.count("a15-particles"), "A1.5: particles deregister");
 
         CHECK(s2->setActiveCamera("a15-camera"), "A1.5: the camera can be made active");
         s2->removeNode(cam2);
-        CHECK(!s2->cameras.contains("a15-camera"), "A1.5: cameras deregister");
-        CHECK(s2->getActiveCameraGuid().isEmpty(),
+        CHECK(!s2->cameras.count("a15-camera"), "A1.5: cameras deregister");
+        CHECK(s2->getActiveCameraGuid().empty(),
               "A1.5: deleting the ACTIVE camera clears the active guid");
 
         // ONE NODE (ENGINE-UPGRADE-1 stage 2): the subtree's walk is SceneNode::removeFromScene's, as setScene's is
         // addNode's — removeNode recursing beside it removed a node at depth d d times, each repeat a reverse scan.
         s2->removeNode(mesh2);
-        CHECK(!s2->meshes.contains("a15-mesh") && s2->meshes.contains("a15-child"),
+        CHECK(!s2->meshes.count("a15-mesh") && s2->meshes.count("a15-child"),
               "A1.5: removeNode removes ONE node — its child is the caller's walk");
         s2->getRootNode()->removeChild(mesh2);       // the document's own path out of the scene
-        CHECK(!s2->meshes.contains("a15-child") && !s2->nodes.contains("a15-child"),
+        CHECK(!s2->meshes.count("a15-child") && !s2->nodes.count("a15-child"),
               "A1.5: removeChild takes the whole subtree out of the mesh registry and the node map");
         s2.reset();
     }
@@ -460,7 +461,7 @@ int main(int argc, char **argv)
         // knows what it should be (ATOM P2 deleted setMesh(QString), which parsed
         // a file inside a setter): a seed key for a built-in, a mesh row's guid
         // for an import. It is still read-only through the property bag.
-        refMesh->meshPath = QStringLiteral(":assets/models/sky.obj");
+        refMesh->meshPath = (QStringLiteral(":assets/models/sky.obj")).toStdString();
         advertises(refMesh, { "meshPath", "meshIndex", "faceCullingMode", "name" }, "MeshNode");
         roundTrip(refMesh, "faceCullingMode", int(iris::FaceCullingMode::Front), "MeshNode");
         readOnly(refMesh, "meshPath", iris::Value("/somewhere/else.obj"), "MeshNode");
@@ -646,7 +647,7 @@ int main(int argc, char **argv)
             body->isPhysicsBody = false;
             body->setSocketAttachment("owner-guid", "head");
             CHECK(!body->isStaticEligible(), "static: a socket rider is never eligible");
-            body->setSocketAttachment(QString(), QString());
+            body->setSocketAttachment(QString().toStdString(), QString().toStdString());
             CHECK(body->isStaticEligible(), "static: ...and eligible again once neither holds");
             // AVATAR WRAPPERS, the gap mobility closed (REALTIME_REFLECTIONS_SPEC
             // §2): a character walks every frame of play, and until 2026-09-12

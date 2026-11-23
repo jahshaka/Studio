@@ -45,7 +45,7 @@ MaterialPreviewService::~MaterialPreviewService()
 
 QString MaterialPreviewService::nodeGuid() const
 {
-    return active() ? mNode->getGUID() : QString();
+    return active() ? QString::fromStdString(mNode->getGUID()) : QString();
 }
 
 bool MaterialPreviewService::canPreview(const QString &presetOrGuid)

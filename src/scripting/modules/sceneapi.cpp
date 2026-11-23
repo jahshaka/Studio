@@ -374,13 +374,13 @@ QVariant SceneApi::find(const QString &name)
         return iris::SceneNodePtr();
     };
     auto hit = walk(scene->getRootNode());
-    return hit ? QVariant(hit->getGUID()) : QVariant();
+    return hit ? QVariant(QString::fromStdString(hit->getGUID())) : QVariant();
 }
 
 QString SceneApi::root()
 {
     auto scene = sceneOrFail();
-    return scene ? scene->getRootNode()->getGUID() : QString();
+    return scene ? QString::fromStdString(scene->getRootNode()->getGUID()) : QString();
 }
 
 QVariantList SceneApi::raycast(const QVariant &origin, const QVariant &direction,
@@ -415,7 +415,7 @@ QVariantList SceneApi::raycast(const QVariant &origin, const QVariant &direction
     for (const auto &h : hits) {
         if (!h.node) continue;
         QVariantMap m;
-        m.insert(QStringLiteral("id"), h.node->getGUID());
+        m.insert(QStringLiteral("id"), QString::fromStdString(h.node->getGUID()));
         m.insert(QStringLiteral("name"), QString::fromStdString(h.node->getName()));
         // `rootId` is what a VIEWPORT CLICK on this hit would select (F4,
         // 2026-09-06 verb-coverage audit): the top of the node's `attached`
@@ -425,7 +425,7 @@ QVariantList SceneApi::raycast(const QVariant &origin, const QVariant &direction
         // sub-mesh was hit, which is the case that used to make a scripted
         // raycast + editor.select land somewhere a user's click never does.
         const iris::SceneNodePtr root = ScenePicker::pickRoot(h.node);
-        m.insert(QStringLiteral("rootId"), root ? root->getGUID() : h.node->getGUID());
+        m.insert(QStringLiteral("rootId"), QString::fromStdString(root ? root->getGUID() : h.node->getGUID()));
         QVariantMap p;
         p.insert(QStringLiteral("x"), h.hitPoint.x());
         p.insert(QStringLiteral("y"), h.hitPoint.y());
@@ -503,7 +503,7 @@ QString SceneApi::finishAdd(const QVariantMap &options, const QString &verb)
     // this, every scripted/MCP-built scene is fully dynamic while the same
     // adds through the UI keep SCENE_STATIC (scripting audit F1).
     if (!options.isEmpty()) node->applyStaticDefaults();
-    return node->getGUID();
+    return QString::fromStdString(node->getGUID());
 }
 
 QVariant SceneApi::addPrimitive(const QString &name, const QVariantMap &options)
@@ -619,7 +619,7 @@ QString SceneApi::addFloor(const QVariantMap &options)
     }
     if (!applyOptions(floor, rest, verb)) return QString();
     if (!rest.isEmpty()) floor->applyStaticDefaults();
-    return floor->getGUID();
+    return QString::fromStdString(floor->getGUID());
 }
 
 QString SceneApi::addLight(const QString &type, const QVariantMap &options)
@@ -720,7 +720,7 @@ bool SceneApi::setActiveCamera(const QVariant &id)
     const QVariant value = normalizeJs(id);
     // No argument, null and "" all mean the same thing: back to the free viewer.
     const QString guid = (!value.isValid() || value.isNull()) ? QString() : value.toString();
-    if (!scene->setActiveCamera(guid))
+    if (!scene->setActiveCamera(guid.toStdString()))
         return fail(QStringLiteral("scene.setActiveCamera: '%1' is not a camera in this scene "
                                    "(scene.cameras() lists them; pass null for the free viewer)")
                         .arg(guid));
@@ -731,7 +731,7 @@ QVariant SceneApi::activeCamera()
 {
     auto scene = sceneOrFail();
     if (!scene) return QVariant();
-    const QString guid = scene->getActiveCameraGuid();
+    const QString guid = QString::fromStdString(scene->getActiveCameraGuid());
     return guid.isEmpty() ? QVariant() : QVariant(guid);
 }
 
@@ -822,7 +822,7 @@ QString SceneApi::addParticles(const QString &preset, const QVariantMap &options
 
     iris::ParticlePreset recipe = iris::ParticlePreset::Custom;
     if (!preset.isEmpty()) {
-        const QStringList known = iris::ParticleSystemNode::presetNames();
+        const QStringList known = qtstd::toQStringList(iris::ParticleSystemNode::presetNames());
         const bool ok = std::any_of(known.begin(), known.end(), [&](const QString &k) {
             return k.compare(preset, Qt::CaseInsensitive) == 0;
         });
@@ -831,7 +831,7 @@ QString SceneApi::addParticles(const QString &preset, const QVariantMap &options
                      .arg(preset, known.join(", ")));
             return QString();
         }
-        recipe = iris::ParticleSystemNode::presetFromName(preset);
+        recipe = iris::ParticleSystemNode::presetFromName(preset.toStdString());
     }
 
     host.services->selection->select(iris::SceneNodePtr());
@@ -914,7 +914,8 @@ QVariantMap SceneApi::bounds(const QVariant &options)
             return out;
         }
     } else {
-        subjects = scene->getRootNode()->children();
+        const std::vector<iris::SceneNodePtr> kids = scene->getRootNode()->children();
+        subjects = QList<iris::SceneNodePtr>(kids.begin(), kids.end());
     }
 
     iris::Vec3 mn, mx;

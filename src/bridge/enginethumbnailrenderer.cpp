@@ -172,7 +172,7 @@ void EngineThumbnailRenderer::clearSubject()
     // stands, which is exactly the state worth keeping).
     if (!mStudio || !mirror() || !engine()) return;
     bool removedAny = false;
-    const QList<iris::SceneNodePtr> subjects = mStudio->rootNode->children();
+    const std::vector<iris::SceneNodePtr> subjects = mStudio->rootNode->children();
     for (const iris::SceneNodePtr &child : subjects) {
         if (!child) continue;
         child->removeFromParent();

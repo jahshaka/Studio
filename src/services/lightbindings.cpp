@@ -96,8 +96,8 @@ bool LightBindings::bindProfile(const iris::LightNodePtr &light, const QString &
         return false;
     }
 
-    light->iesProfileGuid = guid;
-    light->iesProfilePath = path;
+    light->iesProfileGuid = guid.toStdString();
+    light->iesProfilePath = path.toStdString();
     light->iesNormalisation = normalisationFor(guid, db);
     // THE CHANGE MARK (SPECS/DIRTY_SET_MIRROR_SPEC.md): these are reflected
     // fields written by hand rather than through setPropertyValue, and the
@@ -174,9 +174,9 @@ bool LightBindings::bindSkyCube(const iris::LightNodePtr &light, const QJsonObje
 void LightBindings::resolve(const iris::LightNodePtr &light, Database *db, Project *project)
 {
     if (!light) return;
-    if (!light->iesProfileGuid.isEmpty()) {
-        light->iesProfilePath = resolvePath(db, light->iesProfileGuid, project);
-        light->iesNormalisation = normalisationFor(light->iesProfileGuid, db);
+    if (!light->iesProfileGuid.empty()) {
+        light->iesProfilePath = (resolvePath(db, QString::fromStdString(light->iesProfileGuid), project)).toStdString();
+        light->iesNormalisation = normalisationFor(QString::fromStdString(light->iesProfileGuid), db);
     } else {
         light->iesProfilePath.clear();
         light->iesNormalisation = 1.0f;

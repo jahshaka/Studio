@@ -434,7 +434,7 @@ void PublishPage::onProcess()
                                                                 : QString(), dir,
                                             host.viewport ? host.viewport->engineScene() : nullptr,
                                             (scene && host.services && host.services->ambience)
-                                                ? host.services->ambience->fileFor(scene->ambientMusicGuid)
+                                                ? host.services->ambience->fileFor(QString::fromStdString(scene->ambientMusicGuid))
                                                 : QString());
     if (!r.ok) {
         setStatus(QStringLiteral("Export failed: %1").arg(r.error), true);

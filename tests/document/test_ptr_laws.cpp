@@ -67,7 +67,7 @@ static void testOwnedNode()
     CHECK(read == parent, "...and is the owner's own handle");
 
     const auto kids = parent->children();
-    CHECK(kids.size() == 1 && kids.first() == child, "children() answers the owned child's own handle");
+    CHECK(kids.size() == 1 && kids.front() == child, "children() answers the owned child's own handle");
 
     noThrow("removeFromParent() of an owned node", [&] { child->removeFromParent(); });
     CHECK(!child->hasParent(), "removeFromParent() of an owned node detaches it");

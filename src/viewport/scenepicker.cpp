@@ -78,7 +78,7 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &se
     iris::Vec3 rayDir = (segEnd - segStart).normalized();
     iris::Vec3 hitPoint; float t;
     if (includeLights) {
-        for (auto &light : scene->lights) {
+        for (auto &[lightKey, light] : scene->lights) {
             if (light->isPickable() &&
                 iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, light->getGlobalPosition(),
                                                               sphereRadius, t, hitPoint)) {
@@ -89,7 +89,7 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &se
         }
     }
     if (includeDecals) {
-        for (auto &decal : scene->decals) {
+        for (auto &[decalKey, decal] : scene->decals) {
             if (decal->isPickable() &&
                 iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, decal->getGlobalPosition(),
                                                               sphereRadius, t, hitPoint)) {
@@ -117,7 +117,7 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &se
         //     BEHIND the eye, so an in-front test cannot catch that one).
         //  2. Nothing behind the ray's start is a hit. raySphereIntersects does
         //     not require the sphere to be ahead of the origin.
-        for (auto &camera : scene->cameras) {
+        for (auto &[cameraKey, camera] : scene->cameras) {
             if (!camera || !camera->isPickable()) continue;
             const iris::Vec3 centre = camera->getGlobalPosition();
             if ((centre - cameraPos).lengthSquared() < sphereRadius * sphereRadius) continue;

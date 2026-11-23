@@ -233,7 +233,7 @@ int main(int argc, char **argv)
             fireTurb |= a.kind == ParticleAffectorDesc::Kind::Turbulence;
         CHECK(fireTurb, "the fire preset asks for turbulence (the flicker)");
         // A preset replaces the recipe, not the node.
-        const QString guidBefore = ps->getGUID();
+        const QString guidBefore = QString::fromStdString(ps->getGUID());
         ps->setName("my emitter");
         ps->applyPreset(iris::ParticlePreset::Smoke);
         CHECK(ps->getGUID() == guidBefore && ps->getName() == "my emitter",

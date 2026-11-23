@@ -47,6 +47,8 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 #include <QMap>
 #include <memory>
+#include <string>
+#include <unordered_map>
 
 static int failures = 0;
 #define CHECK(cond, name) do { \
@@ -233,7 +235,7 @@ void testUiStep()
 // play-start snapshot, on stand-in nodes — exact values in, exact values back.
 struct PoseNode
 {
-    QString guid;
+    std::string guid;
     iris::Vec3 pos, scale{ 1, 1, 1 };
     iris::Quat rot;
     int writes = 0;
@@ -245,6 +247,7 @@ struct PoseNode
     void setLocalScale(const iris::Vec3 &v) { scale = v; ++writes; }
 };
 struct PoseEntry { iris::Vec3 pos, scale; iris::Quat rot; };
+using PoseNodes = std::unordered_map<std::string, std::shared_ptr<PoseNode>>;   // the document's guid -> node map
 
 void testEditPose()
 {
@@ -263,7 +266,7 @@ void testEditPose()
     const iris::Quat playRot = moved->rot;
 
     QSet<QString> spawnedGuids;
-    const auto played = editpose::swapIn(QList<std::shared_ptr<PoseNode>>{ moved, still, spawned }, snapshot,
+    const auto played = editpose::swapIn(PoseNodes{ { "moved", moved }, { "still", still }, { "spawned", spawned } }, snapshot,
                                          &spawnedGuids);
     CHECK(moved->pos == iris::Vec3(1, 2, 3) && moved->rot == iris::Quat(),
           "editpose: a node Play moved carries its play-start pose for the walk");
@@ -274,7 +277,7 @@ void testEditPose()
     editpose::putBack(played);
     CHECK(moved->pos == playPos && moved->rot == playRot && moved->scale == iris::Vec3(1, 1, 1),
           "editpose: the play pose comes back exactly");
-    CHECK(editpose::swapIn(QList<std::shared_ptr<PoseNode>>{}, snapshot, nullptr).isEmpty(),
+    CHECK(editpose::swapIn(PoseNodes{}, snapshot, nullptr).isEmpty(),
           "editpose: no nodes, nothing swapped");
 }
 
@@ -326,7 +329,7 @@ void testDocumentEditPose()
     body->guid = "body"; lamp->guid = "lamp";
     body->pos = iris::Vec3(0, -20, 0);      // Simulate Physics dropped it before Play was pressed
     lamp->pos = iris::Vec3(4, 4, 4);
-    const auto snap = editpose::playStartSnapshot<PoseEntry>(QList<std::shared_ptr<PoseNode>>{ body, lamp }, simulated);
+    const auto snap = editpose::playStartSnapshot<PoseEntry>(PoseNodes{ { "body", body }, { "lamp", lamp } }, simulated);
     CHECK(snap.value("body").pos == iris::Vec3(0, 9, 0) && snap.value("lamp").pos == iris::Vec3(4, 4, 4) &&
               snap.size() == 2,
           "editpose: a run started over a running simulation takes the body's PRE-SIMULATE pose, every other node's own");

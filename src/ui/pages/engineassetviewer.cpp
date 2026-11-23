@@ -304,7 +304,7 @@ void EngineAssetViewer::applyJafSky(const QString &guid)
 {
     if (!mDb) return;
     auto scene = mScene->document();
-    scene->skyGuid = guid;
+    scene->skyGuid = guid.toStdString();
 
     const QJsonObject skyProperties =
         QJsonDocument::fromJson(mDb->fetchAsset(guid).properties).object().value("sky").toObject();

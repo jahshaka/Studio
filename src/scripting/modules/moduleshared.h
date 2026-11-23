@@ -39,6 +39,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 
 #include "data/project.h"   // ModelTypes
+#include "irisgl/document/mapvalue.h"
 
 namespace scriptmod {
 
@@ -365,7 +366,7 @@ inline iris::SceneNodePtr findNodeByGuid(const iris::SceneNodePtr &node, const Q
     if (!node) return iris::SceneNodePtr();
     if (node->getGUID() == guid) return node;
     if (auto sc = node->getScene()) {
-        auto hit = sc->nodes.value(guid);
+        auto hit = iris::valueOr(sc->nodes, guid.toStdString());
         if (hit) return hit;
         // In the hash's domain and absent from it = absent, full stop.
         return iris::SceneNodePtr();
@@ -396,11 +397,11 @@ inline QString nodeTypeName(iris::SceneNodeType type)
 inline QVariantMap nodeToJs(const iris::SceneNodePtr &node)
 {
     QVariantMap m;
-    m["id"] = node->getGUID();
+    m["id"] = QString::fromStdString(node->getGUID());
     m["name"] = QString::fromStdString(node->getName());
     m["type"] = nodeTypeName(node->getSceneNodeType());
     auto parentNode = node->getParent();
-    m["parent"] = parentNode ? parentNode->getGUID() : QString();
+    m["parent"] = parentNode ? QString::fromStdString(parentNode->getGUID()) : QString();
     m["position"] = vecToJs(node->getLocalPos());
     m["rotation"] = vecToJs(node->getLocalRot().toEulerAngles());
     m["scale"] = vecToJs(node->getLocalScale());
@@ -410,8 +411,8 @@ inline QVariantMap nodeToJs(const iris::SceneNodePtr &node)
     // spends its token budget on. When it IS present it is the answer to "why
     // does node.transform on this thing not stick?".
     if (node->isSocketAttached())
-        m["socket"] = QVariantMap{ { "owner", node->socketOwnerGuid },
-                                   { "name", node->socketName } };
+        m["socket"] = QVariantMap{ { "owner", QString::fromStdString(node->socketOwnerGuid) },
+                                   { "name", QString::fromStdString(node->socketName) } };
     return m;
 }
 
@@ -470,7 +471,7 @@ inline QVariantMap lightToJs(const iris::SceneNodePtr &node)
         m["rectHeight"] = light->rectHeight;
         m["doubleSided"] = light->doubleSided;
     }
-    if (!light->iesProfileGuid.isEmpty()) m["lightProfile"] = light->iesProfileGuid;
+    if (!light->iesProfileGuid.empty()) m["lightProfile"] = QString::fromStdString(light->iesProfileGuid);
     // Lighting channels: reported only when the light is NOT on all of them.
     // On by default on every light in every scene, so an always-present key
     // would be 4294967295 of noise per light in every scene summary.

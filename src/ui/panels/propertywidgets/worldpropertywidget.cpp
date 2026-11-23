@@ -175,7 +175,7 @@ WorldPropertyWidget::WorldPropertyWidget()
                                            [this](const QVariant &row) {
         iris::RayTracingMode mode = iris::RayTracingMode::Auto;
         iris::rayTracingModeFromName(
-            rayTracingSelector->getItemData(row.toInt()).toString(), mode);
+            rayTracingSelector->getItemData(row.toInt()).toString().toStdString(), mode);
         return QVariant(int(mode));
     }));
 }
@@ -261,7 +261,7 @@ void WorldPropertyWidget::refreshRows()
     ambientMusicSelector->addItem("None", "");
     for (const auto &music : musicFilesAvailableFromDatabase)
         ambientMusicSelector->addItem(music.name, music.guid);
-    ambientMusicSelector->setCurrentItemData(scene->ambientMusicGuid);
+    ambientMusicSelector->setCurrentItemData(QString::fromStdString(scene->ambientMusicGuid));
     loading = false;
 }
 

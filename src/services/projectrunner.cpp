@@ -207,20 +207,35 @@ iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped(openreads::Reads &reads)
 	});
 
 	LoadTimeline::mark(QStringLiteral("parse(worker)"));
-	runPumped([&reads, prewarm]() {
+	const auto readModels = [&reads, prewarm](const QStringList &paths, QStringList *refused,
+	                                          QVector<MeshBakeStore::BakeJob> *requeue) {
 		openreads::ReadConnection conn(reads.dbPath);
 		QVector<iris::PrewarmItem> plan;
 		{
 			LoadTimeline::Accumulate planning(QStringLiteral("worker:plan"));
-			plan.reserve(reads.modelPaths.size());
-			for (const QString &path : reads.modelPaths)
+			plan.reserve(paths.size());
+			for (const QString &path : paths)
 				plan.append(MeshBakeStore::planFor(conn.db(), reads.root, path));
 		}
 		for (const iris::PrewarmItem &item : plan) {
 			LoadTimeline::Accumulate read(QStringLiteral("worker:bakeRead"));
 			prewarm->parse(item);
 		}
-	});
+		const QStringList again = MeshBakeStore::takeRefused(plan, *prewarm);   // the second read: named, never re-queued
+		if (!refused) return;
+		*refused = again;
+		if (!refused->isEmpty()) *requeue = MeshBakeStore::staleJobsFor(conn.db(), reads.root, *refused);
+	};
+	QStringList refused;
+	QVector<MeshBakeStore::BakeJob> requeue;
+	runPumped([&]() { readModels(reads.modelPaths, &refused, &requeue); });
+	// A BAKE THE READ REFUSED (N3: its header matched, its payload's checksum did not) goes back on the stale path,
+	// once a model (takeRefused): re-baked from its source when the source is on disk, then read again (a second
+	// refusal is named and is a miss).
+	if (!requeue.isEmpty()) {
+		MeshBakeStore::rebuildPumped(requeue, std::function<void(int, int)>());
+		runPumped([&]() { readModels(refused, nullptr, nullptr); });
+	}
 	LoadTimeline::add(QStringLiteral("worker:bakeHits"), 0.0, prewarm->bakedCount());
 	return prewarm;
 }

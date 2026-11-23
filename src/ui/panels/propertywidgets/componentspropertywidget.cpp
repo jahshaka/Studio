@@ -191,11 +191,11 @@ void ComponentsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
             auto *item = new QTreeWidgetItem();
             item->setText(0, QString::fromStdString(part.node->getName()));
             item->setIcon(0, nodeicons::forType(part.node->getSceneNodeType()));
-            item->setData(0, kGuidRole, part.node->getGUID());
+            item->setData(0, kGuidRole, QString::fromStdString(part.node->getGUID()));
             item->setIcon(1, nodeicons::visibility(part.node->isVisible()));
             item->setIcon(2, nodeicons::lock(!part.node->isPickable()));
             item->setToolTip(0, QString::fromStdString(part.node->getName()));
-            partsByGuid.insert(part.node->getGUID(), part.node);
+            partsByGuid.insert(QString::fromStdString(part.node->getGUID()), part.node);
 
             QTreeWidgetItem *parent = (part.depth >= 2 && byDepth.size() >= part.depth - 1)
                                           ? byDepth[part.depth - 2] : nullptr;
@@ -232,8 +232,8 @@ void ComponentsPropertyWidget::applyEditorSelection()
     QString primaryGuid;
     if (services && services->selection) {
         for (const auto &node : services->selection->selectedSet())
-            if (node) selected.insert(node->getGUID());
-        if (const auto primary = services->selection->selected()) primaryGuid = primary->getGUID();
+            if (node) selected.insert(QString::fromStdString(node->getGUID()));
+        if (const auto primary = services->selection->selected()) primaryGuid = QString::fromStdString(primary->getGUID());
     }
 
     applying = true;

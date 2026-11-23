@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "services/vrworld.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
+#include "irisgl/document/mapvalue.h"
 
 namespace {
 
@@ -42,8 +43,8 @@ QVariant captureSky(const ScenePtr &s)
     QVariantMap m;
     m["skyType"] = int(s->skyType);
     QJsonObject data;
-    for (auto it = s->skyData.constBegin(); it != s->skyData.constEnd(); ++it)
-        data.insert(it.key(), qtstd::toQJsonValue(it.value()));
+    for (auto it = s->skyData.cbegin(); it != s->skyData.cend(); ++it)
+        data.insert(QString::fromStdString(it->first), qtstd::toQJsonValue(it->second));
     m["skyData"] = data;
     m["skyColor"] = iris::toQColor(s->skyColor);
     m["gradientTop"] = iris::toQColor(s->gradientTop);
@@ -66,7 +67,7 @@ void applySky(const ScenePtr &s, const QVariant &value)
     const QJsonObject data = m.value("skyData").toJsonObject();
     s->skyData.clear();
     for (auto it = data.constBegin(); it != data.constEnd(); ++it)
-        s->skyData.insert(it.key(), qtstd::fromQJsonObject(it.value().toObject()));
+        s->skyData.insert_or_assign(it.key().toStdString(), qtstd::fromQJsonObject(it.value().toObject()));
     s->skyColor = iris::toSrgbColor(m.value("skyColor").value<QColor>());
     s->gradientTop = iris::toSrgbColor(m.value("gradientTop").value<QColor>());
     s->gradientMid = iris::toSrgbColor(m.value("gradientMid").value<QColor>());
@@ -76,7 +77,7 @@ void applySky(const ScenePtr &s, const QVariant &value)
     // writer, so the typed fields the renderer reads and the JSON the panels
     // bind from are the same fact by construction.
     s->setSkyRealistic(iris::Scene::skyRealisticFromJson(
-        s->skyData.value(QStringLiteral("Realistic"))));
+        iris::valueOr(s->skyData, (QStringLiteral("Realistic")).toStdString())));
 }
 
 QVector<sceneprops::Field> buildFields()
@@ -91,8 +92,8 @@ QVector<sceneprops::Field> buildFields()
     // intensity and tint, which are LIGHT-NODE properties and go through
     // SetNodePropertyCommand like every other light's rows.)
     // THE SUN PIN and THE SUN DISC — scene-level rows the World panel writes.
-    add("sunLight", [](const ScenePtr &s) { return QVariant(s->sunLightGuid); },
-        [](const ScenePtr &s, const QVariant &v) { s->sunLightGuid = v.toString(); });
+    add("sunLight", [](const ScenePtr &s) { return QVariant(QString::fromStdString(s->sunLightGuid)); },
+        [](const ScenePtr &s, const QVariant &v) { s->sunLightGuid = v.toString().toStdString(); });
     // THE WORLD SKY's LIGHTING (PHOTON-7 10-3 R5b): false = an unlit backdrop (drawn, lighting nothing).
     add("skyLighting", [](const ScenePtr &s) { return QVariant(s->skyLighting); },
         [](const ScenePtr &s, const QVariant &v) { s->skyLighting = v.toBool(); });
@@ -121,7 +122,7 @@ QVector<sceneprops::Field> buildFields()
             const QVariantMap m = v.toMap();
             s->clouds = iris::CloudLayer::fromJson(qtstd::fromVariant(QVariant(m)));
             const QString path = m.value("weatherPath").toString();
-            if (s->clouds.weatherMapGuid.isEmpty() || path.isEmpty())
+            if (s->clouds.weatherMapGuid.empty() || path.isEmpty())
                 s->cloudWeatherMap.reset();
             else if (!s->cloudWeatherMap || s->cloudWeatherMap->source != path)
                 s->cloudWeatherMap = iris::Texture2D::load(path);
@@ -165,8 +166,8 @@ QVector<sceneprops::Field> buildFields()
     // THE AMBIENT MUSIC: data only. AmbienceService mirrors both fields to the
     // audio device on its next sync, so a write here, its undo and the verb
     // all play the same way (audit D8).
-    add("ambientMusic", [](const ScenePtr &s) { return QVariant(s->ambientMusicGuid); },
-        [](const ScenePtr &s, const QVariant &v) { s->ambientMusicGuid = v.toString(); });
+    add("ambientMusic", [](const ScenePtr &s) { return QVariant(QString::fromStdString(s->ambientMusicGuid)); },
+        [](const ScenePtr &s, const QVariant &v) { s->ambientMusicGuid = v.toString().toStdString(); });
     add("ambientMusicVolume", [](const ScenePtr &s) { return QVariant(s->ambientMusicVolume); },
         [](const ScenePtr &s, const QVariant &v) {
             s->ambientMusicVolume = qBound(0.0f, v.toFloat(), 100.0f);

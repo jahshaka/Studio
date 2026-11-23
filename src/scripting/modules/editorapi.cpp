@@ -70,6 +70,8 @@ For more information see the LICENSE file
 #include <QEventLoop>
 #include "ui/controls/assetdrag.h"
 #include "ui/panels/presets/assetmaterialpanel.h"
+#include "irisgl/document/mapvalue.h"
+#include <algorithm>
 
 using namespace scriptmod;
 
@@ -1107,7 +1109,7 @@ QVariant EditorApi::selection()
     // answer (hygiene lane, 2026-09-09).
     if (!host.services || !host.services->selection) return jsNull();
     auto node = host.services->selection->selected();
-    return node ? QVariant(node->getGUID()) : jsNull();
+    return node ? QVariant(QString::fromStdString(node->getGUID())) : jsNull();
 }
 
 QVariantList EditorApi::selectionSet()
@@ -1115,7 +1117,7 @@ QVariantList EditorApi::selectionSet()
     QVariantList out;
     if (!host.services || !host.services->selection) return out;
     for (const auto &node : host.services->selection->selectedSet())
-        if (node) out.append(node->getGUID());
+        if (node) out.append(QString::fromStdString(node->getGUID()));
     return out;
 }
 
@@ -1167,7 +1169,7 @@ QVariantList EditorApi::outlinerRows()
         for (int i = 0; i < kids; ++i)
             if (iris::SceneNode *child = node->childAt(i))
                 if (!child->isAttached()) ++childRows;
-        out.append(QVariantMap{ { "id", node->getGUID() },
+        out.append(QVariantMap{ { "id", QString::fromStdString(node->getGUID()) },
                                 { "name", QString::fromStdString(node->getName()) },
                                 { "type", scriptmod::nodeTypeName(node->getSceneNodeType()) },
                                 { "children", childRows } });
@@ -1241,7 +1243,7 @@ QVariantList EditorApi::selectRange(const QString &fromId, const QString &toId)
     for (const auto &n : range) if (n.get() != to.get()) ordered.append(n);
     host.services->selection->select(ordered);
     for (const auto &n : host.services->selection->selectedSet())
-        if (n) out.append(n->getGUID());
+        if (n) out.append(QString::fromStdString(n->getGUID()));
     return out;
 }
 
@@ -1257,7 +1259,7 @@ QVariantList EditorApi::selectAll()
     // MainWindow::selectAllActiveSpace calls this service method, it does not
     // reimplement the walk.
     for (const auto &n : host.services->sceneEdit->selectAll())
-        if (n) out.append(n->getGUID());
+        if (n) out.append(QString::fromStdString(n->getGUID()));
     return out;
 }
 
@@ -1294,7 +1296,7 @@ QVariantList EditorApi::duplicateSelection()
     const auto set = host.services->selection->selectedSet();
     if (set.isEmpty()) { fail("editor.duplicateSelection: nothing is selected"); return out; }
     for (const auto &node : host.services->sceneEdit->duplicateNodes(set))
-        if (node) out.append(node->getGUID());
+        if (node) out.append(QString::fromStdString(node->getGUID()));
     return out;
 }
 
@@ -1797,7 +1799,7 @@ bool EditorApi::pilot(const QVariant &id)
     auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
                                                              : iris::ScenePtr();
     if (!scene) return fail("editor.pilot: no scene is open");
-    auto cam = scene->cameras.value(guid);
+    auto cam = iris::valueOr(scene->cameras, guid.toStdString());
     if (!cam)
         return fail(QStringLiteral("editor.pilot: '%1' is not a camera in this scene "
                                    "(scene.cameras() lists them)").arg(guid));
@@ -1810,7 +1812,7 @@ QVariant EditorApi::piloting()
 {
     if (!requireEngine()) return QVariant();
     auto cam = host.viewport->pilotedCamera();
-    return cam ? QVariant(cam->getGUID()) : QVariant();
+    return cam ? QVariant(QString::fromStdString(cam->getGUID())) : QVariant();
 }
 
 bool EditorApi::setViewCamera(const QVariant &id)
@@ -1837,7 +1839,7 @@ QVariantMap EditorApi::pip()
         host.services && host.services->selection) {
         auto sel = host.services->selection->selected();
         auto cam = sel ? std::dynamic_pointer_cast<iris::CameraNode>(sel) : iris::CameraNodePtr();
-        if (cam && cam != host.viewport->pilotedCamera()) showing = cam->getGUID();
+        if (cam && cam != host.viewport->pilotedCamera()) showing = QString::fromStdString(cam->getGUID());
     }
     out["camera"] = showing;
     // THE ENGINE'S OWN READING (VIEWS-XID-1): what the View is holding, not
@@ -2686,7 +2688,7 @@ QVariant EditorApi::clickTargetAt(double x, double y)
     if (!requireEngine()) return QVariant();
     const iris::SceneNodePtr node = host.viewport->clickTargetAt(QPointF(x, y));
     if (!node) return QVariant();
-    return QVariantMap{ { QStringLiteral("id"), node->getGUID() },
+    return QVariantMap{ { QStringLiteral("id"), QString::fromStdString(node->getGUID()) },
                         { QStringLiteral("name"), QString::fromStdString(node->getName()) } };
 }
 
@@ -2697,7 +2699,7 @@ QVariant EditorApi::dropTargetAt(double x, double y)
     const iris::SceneNodePtr node = host.viewport->dropTargetAt(QPointF(x, y), &locked);
     if (!node) return QVariant();
     QVariantMap out;
-    out.insert("id", node->getGUID());
+    out.insert("id", QString::fromStdString(node->getGUID()));
     out.insert("name", QString::fromStdString(node->getName()));
     // A LOCKED node is reported, not hidden (owner correction, 2026-09-15):
     // "there is something here and it will refuse you" is a different answer
@@ -3139,7 +3141,7 @@ QString EditorApi::raiseIssue(const QVariantMap &issue)
     if (!out.node.isEmpty()) {
         if (auto scene = (host.services && host.services->sceneEdit)
                               ? host.services->sceneEdit->scene() : iris::ScenePtr()) {
-            auto node = scene->nodes.value(out.node);
+            auto node = iris::valueOr(scene->nodes, out.node.toStdString());
             if (node) out.nodeName = QString::fromStdString(node->getName());
         }
     }

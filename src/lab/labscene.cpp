@@ -33,6 +33,7 @@
 #include <chrono>
 #include <cstdio>
 #include <functional>
+#include <algorithm>
 
 namespace lab {
 
@@ -72,7 +73,7 @@ QJsonArray lightsOf(const iris::SceneNodePtr &root)
 {
     QJsonArray out;
     std::function<void(const iris::SceneNodePtr &, QJsonArray)> walk = [&](const iris::SceneNodePtr &n, QJsonArray path) {
-        const QList<iris::SceneNodePtr> kids = n->children();
+        const std::vector<iris::SceneNodePtr> kids = n->children();
         for (int i = 0; i < kids.size(); ++i) {
             const iris::SceneNodePtr &c = kids[i];
             if (c->getSceneNodeType() == iris::SceneNodeType::Light) {
@@ -110,7 +111,7 @@ int attachLights(const iris::SceneNodePtr &root, const QJsonArray &lights)
         const QJsonObject o = v.toObject();
         iris::SceneNodePtr parent = root;
         for (const QJsonValue &i : o["parent"].toArray()) {
-            const QList<iris::SceneNodePtr> kids = parent->children();
+            const std::vector<iris::SceneNodePtr> kids = parent->children();
             const int k = i.toInt(-1);
             if (k < 0 || k >= kids.size()) { parent.reset(); break; }
             parent = kids[k];

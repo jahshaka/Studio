@@ -24,11 +24,9 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
-#include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/core/viewport.h"
-#include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/animation/keyframeset.h"
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/animation.h"
@@ -103,7 +101,6 @@ For more information see the LICENSE file
 
 #include "zip.h"
 
-#include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/input/inputmap.h"
 
@@ -725,7 +722,7 @@ void MainWindow::assignAnimationAsset(const QString &guid, const iris::SceneNode
     ref.kind = QStringLiteral("avatar");
     ref.intent = AssetRef::Intent::Assign;
     if (node) {
-        ref.targetGuid = node->getGUID();
+        ref.targetGuid = QString::fromStdString(node->getGUID());
         ref.targetName = QString::fromStdString(node->getName());
     }
     moduleHub->openAsset(ref);

@@ -951,8 +951,8 @@ int main(int argc, char **argv)
         CHECK(decal->getSceneNodeType() == iris::SceneNodeType::Decal,
               "DecalNode SETS its SceneNodeType (as CameraNode does since CAMERAS_SPEC)");
         decal->width = 3.0f; decal->height = 3.0f; decal->depth = 2.0f;
-        decal->textureGuid = QStringLiteral("guid-red");
-        decal->resolvedTexturePath = redPath;
+        decal->textureGuid = (QStringLiteral("guid-red")).toStdString();
+        decal->resolvedTexturePath = redPath.toStdString();
         decal->setLocalPos(iris::Vec3(0, 0, 0));
         doc->getRootNode()->addChild(decal);
         CHECK(doc->decals.size() == 1, "Scene::decals registers the node by guid");
@@ -965,7 +965,7 @@ int main(int argc, char **argv)
               "a DecalNode paints its image onto the floor through the mirror");
 
         // Changing the bound image re-binds (a different atlas slice).
-        decal->resolvedTexturePath = bluePath;
+        decal->resolvedTexturePath = bluePath.toStdString();
         mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         const Colour rebound = centre(img);
@@ -981,12 +981,12 @@ int main(int argc, char **argv)
 
         // An UNRESOLVABLE image leaves the node decal-free rather than keeping the
         // previous one bound (a stale decal would keep painting the old picture).
-        decal->resolvedTexturePath = QStringLiteral("/no/such/decal/image.png");
+        decal->resolvedTexturePath = (QStringLiteral("/no/such/decal/image.png")).toStdString();
         mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         CHECK(std::abs(centre(img).r - bare.r) < 0.02f,
               "an unresolvable decal image projects NOTHING (no stale binding)");
-        decal->resolvedTexturePath = redPath;
+        decal->resolvedTexturePath = redPath.toStdString();
         mirror.sync(); enginetest::frames(engine, 3);
 
         // The wire box: kind 4, amber while the decal projects.
@@ -1011,7 +1011,7 @@ int main(int argc, char **argv)
 
         // Removing the node removes the engine decal.
         doc->getRootNode()->removeChild(decal);
-        CHECK(doc->decals.isEmpty(), "removing the node clears Scene::decals");
+        CHECK(doc->decals.empty(), "removing the node clears Scene::decals");
         mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img);
         CHECK(std::abs(centre(img).r - bare.r) < 0.02f, "removing a decal node clears the projection");
@@ -1627,8 +1627,8 @@ int main(int argc, char **argv)
             { QImage px(4, 4, QImage::Format_RGBA8888); px.fill(QColor(255, 30, 30)); px.save(perWorld); }
             auto d2 = iris::DecalNode::create();
             d2->width = 3.0f; d2->height = 3.0f; d2->depth = 2.0f;
-            d2->textureGuid = QStringLiteral("guid-%1").arg(round);
-            d2->resolvedTexturePath = perWorld;
+            d2->textureGuid = (QStringLiteral("guid-%1").arg(round)).toStdString();
+            d2->resolvedTexturePath = perWorld.toStdString();
             wdoc->getRootNode()->addChild(d2);
             mirror.sync(); enginetest::frames(engine, 3);
             view->readPixels(img);
@@ -1906,9 +1906,9 @@ int main(int argc, char **argv)
         // (1) NOT mirrored yet: no engine geometry for this document at all, and
         // picking does not need any.
         auto pre = iris::picking::raycastMeshes(pdoc.get(), a, b);
-        CHECK(!pre.isEmpty() && pre.first().node == cube,
+        CHECK(!pre.empty() && pre.front().node == cube,
               "picking: an unmirrored document finds the cube, with a triangle index");
-        CHECK(!pre.isEmpty() && pre.first().triangleIndex >= 0,
+        CHECK(!pre.empty() && pre.front().triangleIndex >= 0,
               "picking: the narrow phase reports a triangle index");
 
         // (2) mirrored: the same answer.
@@ -1917,43 +1917,43 @@ int main(int argc, char **argv)
         pmirror.sync();
         enginetest::frames(engine, 1);
         auto post = iris::picking::raycastMeshes(pdoc.get(), a, b);
-        CHECK(!post.isEmpty() && post.first().node == cube,
+        CHECK(!post.empty() && post.front().node == cube,
               "picking: a mirrored document finds the same cube");
-        CHECK(!post.isEmpty() && pre.size() == post.size() &&
-                  post.first().triangleIndex == pre.first().triangleIndex,
+        CHECK(!post.empty() && pre.size() == post.size() &&
+                  post.front().triangleIndex == pre.front().triangleIndex,
               "picking: ...the same hits, the same triangle");
 
         // (3) THE FRAME IT IS ASKED (the engine's RaySceneQuery answered from the
         // last updateSceneGraph — a node moved since was tested at its old place):
         // moved and picked with NO frame in between, it is found where it IS.
         cube->setLocalPos(iris::Vec3(6, 0, 0));
-        CHECK(!iris::picking::raycastMeshes(pdoc.get(), iris::Vec3(6, 0, 20), iris::Vec3(6, 0, -20)).isEmpty(),
+        CHECK(!iris::picking::raycastMeshes(pdoc.get(), iris::Vec3(6, 0, 20), iris::Vec3(6, 0, -20)).empty(),
               "picking: a node moved this frame is hit at its NEW place (no frame rendered)");
-        CHECK(iris::picking::raycastMeshes(pdoc.get(), a, b).isEmpty(),
+        CHECK(iris::picking::raycastMeshes(pdoc.get(), a, b).empty(),
               "picking: ...and not at its old one");
         cube->setLocalPos(iris::Vec3(0, 0, 0));
 
         // A ray that misses finds nothing through either phase.
         const iris::Vec3 mA(50, 50, 20), mB(50, 50, -20);
-        CHECK(iris::picking::raycastMeshes(pdoc.get(), mA, mB).isEmpty(),
+        CHECK(iris::picking::raycastMeshes(pdoc.get(), mA, mB).empty(),
               "picking: a ray past the geometry hits nothing");
 
         // `pickable` is honoured exactly, on the candidate.
         cube->setPickable(false);
         pmirror.sync();
         enginetest::frames(engine, 1);
-        CHECK(iris::picking::raycastMeshes(pdoc.get(), a, b).isEmpty(),
+        CHECK(iris::picking::raycastMeshes(pdoc.get(), a, b).empty(),
               "picking: an unpickable node is not a hit");
-        CHECK(!iris::picking::raycastMeshes(pdoc.get(), a, b, 0, true).isEmpty(),
+        CHECK(!iris::picking::raycastMeshes(pdoc.get(), a, b, 0, true).empty(),
               "picking: ...unless the caller asks for unpickable nodes too");
         cube->setPickable(true);
 
         // pickingGroups stays an ALL-test on the candidates.
         cube->pickingGroups = 0x3;
         pmirror.sync();
-        CHECK(!iris::picking::raycastMeshes(pdoc.get(), a, b, 0x1).isEmpty(),
+        CHECK(!iris::picking::raycastMeshes(pdoc.get(), a, b, 0x1).empty(),
               "picking: pickingGroups 0x3 satisfies a 0x1 mask");
-        CHECK(iris::picking::raycastMeshes(pdoc.get(), a, b, 0x4).isEmpty(),
+        CHECK(iris::picking::raycastMeshes(pdoc.get(), a, b, 0x4).empty(),
               "picking: ...and not a 0x4 one");
         cube->pickingGroups = 0;
 

@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include <QString>
 
 #include <functional>
+#include <vector>
 
 #include "commands/studiocommand.h"
 #include "irisgl/irisglfwd.h"
@@ -59,7 +60,7 @@ public:
         /// survive an undo of the edit that set them — which is the one thing
         /// this command exists to prevent ("going Epic -> High to see what it
         /// looked like was a one-way door").
-        QVector<iris::Vec3> cascadeSet;
+        std::vector<iris::Vec3> cascadeSet;   // the document's own type
         int cascadeInstanceCap = 0;
     };
 

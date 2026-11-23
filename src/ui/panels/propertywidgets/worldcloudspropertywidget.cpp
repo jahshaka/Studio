@@ -118,7 +118,7 @@ QVariant WorldCloudsPropertyWidget::withField(const std::function<void(iris::Clo
     edit(c);
     c = iris::CloudLayer::clamped(c);
     QVariantMap m = qtstd::toVariantMap(c.toJson());
-    if (scene->cloudWeatherMap && !c.weatherMapGuid.isEmpty())
+    if (scene->cloudWeatherMap && !c.weatherMapGuid.empty())
         m.insert(QStringLiteral("weatherPath"), scene->cloudWeatherMap->source);
     return m;
 }
@@ -136,7 +136,7 @@ void WorldCloudsPropertyWidget::onWeatherPicked(const QString &value, const QStr
     if (!guid.isEmpty() && (path.isEmpty() || !QFileInfo::exists(path))) return;
     Q_UNUSED(value)
     iris::CloudLayer c = scene->clouds;
-    c.weatherMapGuid = path.isEmpty() ? QString() : guid;
+    c.weatherMapGuid = (path.isEmpty() ? QString() : guid).toStdString();
     QVariantMap m = qtstd::toVariantMap(iris::CloudLayer::clamped(c).toJson());
     if (!path.isEmpty()) m.insert(QStringLiteral("weatherPath"), path);
     const QVariant before = sceneprops::get(scene, QStringLiteral("clouds"));
@@ -163,7 +163,7 @@ void WorldCloudsPropertyWidget::refreshRows()
     direction->setValue(c.direction);
     altitude->setValue(c.altitude);
     shadow->setValue(c.shadow);
-    weather->setTexture(scene->cloudWeatherMap && !c.weatherMapGuid.isEmpty()
+    weather->setTexture(scene->cloudWeatherMap && !c.weatherMapGuid.empty()
                             ? scene->cloudWeatherMap->source : QString());
     // OVER AN IMAGE SKY THE ROWS ARE DISABLED AND SAY WHY: a photograph carries
     // its own clouds, and the layer is never drawn over one.

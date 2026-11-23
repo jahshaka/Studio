@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <memory>
+#include <string>
 
 #include "irisgl/irisglfwd.h"
 #include "ui/controls/accordionbladewidget.h"
@@ -72,7 +73,7 @@ private:
     /// Re-resolves a guid to CAS bytes and pins it as a project BINDING
     /// (ProjectAssets::AddKind::Binding — never a direct add, so no companion
     /// material is minted for a decal image). Shared by the three pickers.
-    void bindMap(const QString &guid, QString &guidField, QString &pathField);
+    void bindMap(const QString &guid, std::string &guidField, std::string &pathField);
 
     std::shared_ptr<iris::DecalNode> decalNode;
     Database *db = nullptr;

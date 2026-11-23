@@ -472,9 +472,9 @@ void LightPropertyWidget::refreshBindingRows()
     const bool profileRelevant = type == iris::LightType::Spot || type == iris::LightType::Point;
     PropertyRows::setPanelVisible(profileRow, profileRelevant);
     if (profileRelevant) {
-        setBindingLabel(profileLabel, lightNode->iesProfileGuid,
-                        lightNode->iesProfilePath, db);
-        profileClear->setEnabled(!lightNode->iesProfileGuid.isEmpty());
+        setBindingLabel(profileLabel, QString::fromStdString(lightNode->iesProfileGuid),
+                        QString::fromStdString(lightNode->iesProfilePath), db);
+        profileClear->setEnabled(!lightNode->iesProfileGuid.empty());
         // (the note row carries a binding error only: a spot or point light honours
         // its profile, shadowed or not)
         PropertyRows::setPanelVisible(profileNote, false);
@@ -489,7 +489,7 @@ void LightPropertyWidget::refreshBindingRows()
 void LightPropertyWidget::bindProfile(const QString &guid)
 {
     if (!lightNode) return;
-    const QString before = lightNode->iesProfileGuid;
+    const QString before = QString::fromStdString(lightNode->iesProfileGuid);
     if (before == guid) return;
     QString error;
     if (!LightBindings::bindProfile(lightNode, guid, db, project, &error)) {
@@ -549,7 +549,7 @@ void LightPropertyWidget::refreshSunRows()
     PropertyRows::setPanelVisible(followsAtmosphere, isSun);
     followsAtmosphere->setValue(lightNode->followsAtmosphere);
 
-    const QString reason = scene ? scene->sunReason() : QStringLiteral("none");
+    const QString reason = scene ? QString::fromStdString(scene->sunReason()) : QStringLiteral("none");
     QString text;
     if (isSun && reason == QLatin1String("pinned"))
         text = tr("This light IS the sun (chosen by hand in the World panel).");

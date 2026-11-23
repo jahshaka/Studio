@@ -3278,15 +3278,94 @@ static void asyncLanding()
 // clip, a channel and a bone survives the bake exactly; (3) THE PAYLOAD CHECKSUM: one byte flipped at the payload's
 // first byte, its middle, its last and inside the checksum is REFUSED by name; the untouched blob loads (the control);
 // (4) THE THREE INDEX GUARDS: an index of 0x80000000 in the triangle index buffer, a LOD level and the cluster DAG's
-// vertices is REFUSED (each `int(x) >= count` passed it); the untouched model loads.
+// vertices is REFUSED (each `int(x) >= count` passed it); the untouched model loads; (5) A CORRUPT BAKE IS RE-BAKED BY
+// ITSELF WHEN ITS SOURCE IS THERE (refusedBakeRequeued, below).
 static iris::MeshBake::Model bakeTwoObjects(const QTemporaryDir &scratch)
 {
     const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("0123456789abcdef").repeated(4));
     return iris::MeshBake::buildFromFile(writeTwoObjectObj(scratch.path()), fp, scratch.path());
 }
 
+// (5) A CORRUPT BAKE IS RE-BAKED BY ITSELF WHEN ITS SOURCE IS THERE (N3, the lead's ruling): one payload byte flipped,
+// the SIZE and the HEADER intact, so the header-only freshness check still calls it fresh (it reads no payload - that is
+// its cost law, unchanged); the open's READ refuses it (the checksum); takeRefused marks it and the open's stale path
+// re-queues it from the source; the re-bake REPLACES the object (the store's size-only dedup would keep the corrupt bytes
+// forever: the mark is what lets it through); the second read loads the model.
+static void refusedBakeRequeued()
+{
+    QTemporaryDir home, storeRoot;
+    if (!home.isValid() || !storeRoot.isValid()) { std::printf("FAIL: could not create the fixture store\n"); ++failures; return; }
+    AssetStorePaths::setRootOverride(storeRoot.path());
+    Database db;
+    CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")), "fixture database opened");
+    db.createAllTables();
+    QSqlDatabase conn = QSqlDatabase::database();
+    AssetCas::ensureCasSchema(conn);
+    Project project;
+    AssetImportService service(&db, &project);
+    ImportRequest request;
+    request.sourcePath = fixture(QStringLiteral("tests/importer/fixtures/scaled_two_meshes.glb"));
+    const ImportResult result = service.import(request);
+    CHECK_LOUD(result.ok(), "the model imported (it bakes at import)");
+    if (!result.ok()) { AssetStorePaths::setRootOverride(QString()); return; }
+    const QString sourcePath = AssetCas::resolveSource(conn, storeRoot.path(), result.meshGuid);
+    const iris::PrewarmItem plan = MeshBakeStore::planFor(conn, storeRoot.path(), sourcePath);
+    CHECK_LOUD(!plan.bakePath.isEmpty(), "the bake resolves");
+    qint64 sizeBefore = 0;
+    {
+        QFile file(plan.bakePath);
+        CHECK(file.open(QIODevice::ReadWrite), "the bake object opened for one flipped byte");
+        QByteArray bytes = file.readAll();
+        sizeBefore = bytes.size();
+        bytes[bytes.size() / 2] = char(bytes.at(bytes.size() / 2) ^ 0x5a);   // the payload's middle: the header untouched
+        file.seek(0);
+        file.write(bytes);
+        file.close();
+    }
+    CHECK_LOUD(QFileInfo(plan.bakePath).size() == sizeBefore, "the corrupt bake keeps its size (the dedup's only test)");
+    CHECK_LOUD(MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath),
+               "BEFORE ANY READ the header-only freshness check calls it fresh (no payload is read: its cost)");
+    CHECK_LOUD(MeshBakeStore::staleJobsFor(conn, storeRoot.path(), { sourcePath }).isEmpty(),
+               "...so the open's stale pass, which runs before the read, queues nothing");
+
+    iris::MeshPrewarm prewarm;
+    prewarm.parse(plan);
+    CHECK_LOUD(!prewarm.baked(sourcePath), "the open's read REFUSES the corrupt payload (its checksum)");
+    const QStringList refused = MeshBakeStore::takeRefused({ plan }, prewarm);
+    CHECK_LOUD(refused == QStringList{ sourcePath }, "takeRefused names the model the read refused");
+    CHECK_LOUD(!MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath), "after the refusal the bake is not fresh");
+    const QVector<MeshBakeStore::BakeJob> jobs = MeshBakeStore::staleJobsFor(conn, storeRoot.path(), refused);
+    CHECK_LOUD(jobs.size() == 1, "THE STALE PATH RE-QUEUES IT from its source (one job)");
+    MeshBakeStore::rebuildPumped(jobs, std::function<void(int, int)>());
+    CHECK_LOUD(MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath), "the re-bake landed: fresh again");
+    prewarm.parse(MeshBakeStore::planFor(conn, storeRoot.path(), sourcePath));
+    const iris::BakedModelPtr back = prewarm.baked(sourcePath);
+    CHECK_LOUD(back && back->valid && !back->meshes.isEmpty(),
+               "THE SECOND READ LOADS THE MODEL: the re-bake replaced the corrupt object");
+    // THE BOUND (the lead's): a re-bake refused AGAIN is named and NOT re-queued - one re-bake a model, never a loop.
+    {
+        const QString again = MeshBakeStore::planFor(conn, storeRoot.path(), sourcePath).bakePath;
+        QFile file(again);
+        CHECK(file.open(QIODevice::ReadWrite), "the re-baked object opened for a second flipped byte");
+        QByteArray bytes = file.readAll();
+        bytes[bytes.size() / 2] = char(bytes.at(bytes.size() / 2) ^ 0x5a);
+        file.seek(0);
+        file.write(bytes);
+        file.close();
+        iris::MeshPrewarm second;
+        const iris::PrewarmItem plan2 = MeshBakeStore::planFor(conn, storeRoot.path(), sourcePath);
+        second.parse(plan2);
+        CHECK_LOUD(!second.baked(sourcePath), "the corrupt re-bake is refused by the read");
+        CHECK_LOUD(MeshBakeStore::takeRefused({ plan2 }, second).isEmpty(),
+                   "A RE-BAKE REFUSED AGAIN IS NOT RE-QUEUED (named in the log; no loop)");
+    }
+    MeshBakeStore::clear();
+    AssetStorePaths::setRootOverride(QString());
+}
+
 static int roundTripRow()
 {
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);   // a killed row keeps every line it printed (CODING_RULES § 5)
     std::printf("== 1. what we bake reads back equal to the parse ==\n");
     const char *fixtures[] = {"tests/importer/fixtures/scaled_two_meshes.glb", "tests/importer/fixtures/textured_pbr_quad.glb",
                               "tests/importer/fixtures/ticks_anim.glb", "tests/importer/fixtures/colored_quad.ply",
@@ -3299,7 +3378,7 @@ static int roundTripRow()
     iris::MeshBake::Model m = iris::MeshBake::buildFromFile(fixture(QStringLiteral("tests/importer/fixtures/ticks_anim.glb")),
                                                             fp, scratch.path());
     CHECK_LOUD(m.valid, "the fixture bakes (ticks_anim.glb)");
-    if (!m.valid) { std::printf("FAILED: %d of %d check(s)\n", failures, checks); return 1; }
+    if (!m.valid) { std::printf("bake.round_trip: FAILED (%d)\n", failures); return 1; }
     const std::string nodeName = "W\xC3\xBCrfel \xE2\x98\x83 \xF0\x9F\x98\x80";   // U+00FC, U+2603, U+1F600
     const std::string clipName = "Clip \xE2\x98\x83 \xF0\x9F\x98\x80", channelName = "Kn\xC3\xB6" "chel \xF0\x9F\x98\x80";
     m.root.name = QString::fromStdString(nodeName);   // the bake's own node record (the importer's): what the fragment names
@@ -3413,8 +3492,12 @@ static int roundTripRow()
                    qUtf8Printable(QStringLiteral("an index of 0x80000000 in %1 is refused").arg(QString::fromLatin1(where[which]))));
     }
 
-    if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
-    else          std::printf("ALL %d CHECKS PASSED\n", checks);
+    std::printf("== 5. a corrupt bake is re-baked by itself when its source is there ==\n");
+    refusedBakeRequeued();
+
+    std::printf("info: %d check(s)\n", checks);
+    if (failures) std::printf("bake.round_trip: FAILED (%d)\n", failures);   // the verdict, the last line (CODING_RULES § 4)
+    else          std::printf("bake.round_trip: PASSED\n");
     return failures ? 1 : 0;
 }
 

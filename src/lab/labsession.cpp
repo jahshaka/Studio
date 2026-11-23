@@ -1415,7 +1415,7 @@ bool Session::exec(const Command &c)
         }
     } else if (c.verb == "rays") {
         iris::RayTracingMode m;
-        if (!iris::rayTracingModeFromName(QString::fromStdString(a0), m)) {
+        if (!iris::rayTracingModeFromName(a0, m)) {
             ok = false;
             labFail("LAB REFUSED rays '%s' (auto|on|off)\n", a0.c_str());
         } else {

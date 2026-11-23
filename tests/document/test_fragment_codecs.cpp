@@ -50,7 +50,7 @@ static QJsonObject oldCloud(const iris::CloudLayer &c)
     o.insert("direction", double(c.direction));
     o.insert("altitude",  double(c.altitude));
     o.insert("shadow",    double(c.shadow));
-    if (!c.weatherMapGuid.isEmpty()) o.insert("weatherMap", c.weatherMapGuid);
+    if (!c.weatherMapGuid.empty()) o.insert("weatherMap", QString::fromStdString(c.weatherMapGuid));
     return o;
 }
 static QJsonObject oldFog(const iris::HeightFog &h)
@@ -249,7 +249,7 @@ static void testFragments()
         c.direction = seeded(seed, 0.0f, 360.0f);
         c.altitude = seeded(seed, 500.0f, 8000.0f);
         c.shadow = seeded(seed, 0.0f, 1.0f);
-        if (i % 3 == 0) c.weatherMapGuid = QStringLiteral("weather-%1").arg(i);
+        if (i % 3 == 0) c.weatherMapGuid = (QStringLiteral("weather-%1").arg(i)).toStdString();
         c = iris::CloudLayer::clamped(c);
         const iris::Value v = c.toJson();
         CHECK(iris::CloudLayer::fromJson(v) == c && iris::CloudLayer::fromJson(v).toJson() == v,

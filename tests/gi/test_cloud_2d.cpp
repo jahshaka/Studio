@@ -604,7 +604,7 @@ int caseShape() {
         const QString path = QStringLiteral("cloud_2d_halfmap.png");
         CHECK(map.save(path), "S4. the half-black weather map is written");
         r.clouds(true, 1.0f, 1.0f);
-        r.doc->clouds.weatherMapGuid = QStringLiteral("cloud-2d-halfmap");
+        r.doc->clouds.weatherMapGuid = (QStringLiteral("cloud-2d-halfmap")).toStdString();
         r.doc->cloudWeatherMap = iris::Texture2D::load(path);
         r.settle();
         std::vector<float> t4;

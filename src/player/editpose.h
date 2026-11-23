@@ -20,7 +20,8 @@ For more information see the LICENSE file
 // same UI-thread call (ProjectService::save, behind a scope guard on every exit).
 //
 // Pure over the snapshot: templated on the node so a CPU suite drives it with a stand-in node
-// (tests/services/test_editpose.cpp). A node needs `guid`, getLocalPos/Rot/Scale and setLocalPos/Rot/Scale;
+// (tests/services/test_editpose.cpp), the nodes given as the document's guid -> node map. A node needs `guid` (a
+// UTF-8 std::string), getLocalPos/Rot/Scale and setLocalPos/Rot/Scale;
 // a snapshot entry needs `pos`, `rot`, `scale`.
 //
 // ONLY A NODE WHOSE POSE DIFFERS IS WRITTEN: a transform write marks the node moved, and on a STATIC node that
@@ -84,14 +85,15 @@ EditPose<Pose> documentEditPose(std::initializer_list<const Run *> runs, const D
 /// A RUN's PLAY-START SNAPSHOT: every node's local pose, except a node a simulation already running has moved
 /// (Simulate Physics pressed before Play): its pose before that simulation, `held` (the environment's), is the edit
 /// pose — the run's start re-builds the physics world and overwrites the environment's copy with the moved pose.
-template <class Pose, class NodeList, class Held>
-QMap<QString, Pose> playStartSnapshot(const NodeList &nodes, const Held &held)
+template <class Pose, class NodeMap, class Held>
+QMap<QString, Pose> playStartSnapshot(const NodeMap &nodes, const Held &held)
 {
     QMap<QString, Pose> snapshot;
-    for (const auto &node : nodes) {
+    for (const auto &[nodeKey, node] : nodes) {   // the document's guid -> node map (UTF-8 keys)
         if (!node) continue;
+        const QString guid = QString::fromStdString(node->guid);   // the editor's keys stay QString (its edge)
         Pose p;
-        const auto h = held.constFind(node->guid);
+        const auto h = held.constFind(guid);
         if (h != held.constEnd()) {
             p.pos = h->pos;
             p.rot = h->rot;
@@ -101,7 +103,7 @@ QMap<QString, Pose> playStartSnapshot(const NodeList &nodes, const Held &held)
             p.rot = node->getLocalRot();
             p.scale = node->getLocalScale();
         }
-        snapshot.insert(node->guid, p);
+        snapshot.insert(guid, p);
     }
     return snapshot;
 }
@@ -117,16 +119,17 @@ struct Played
 /// Writes the snapshot's pose into every node of `nodes` that has one and stands elsewhere; returns what to put
 /// back. A node with NO snapshot entry was spawned during Play: its guid goes to `spawned` (the save leaves it
 /// out — the play-start set is the document).
-template <class NodePtr, class Snapshot>
-QVector<Played<NodePtr, typename Snapshot::mapped_type>>
-swapIn(const QList<NodePtr> &nodes, const Snapshot &snapshot, QSet<QString> *spawned)
+template <class NodeMap, class Snapshot>
+QVector<Played<typename NodeMap::mapped_type, typename Snapshot::mapped_type>>
+swapIn(const NodeMap &nodes, const Snapshot &snapshot, QSet<QString> *spawned)
 {
-    QVector<Played<NodePtr, typename Snapshot::mapped_type>> played;
-    for (const NodePtr &node : nodes) {
+    QVector<Played<typename NodeMap::mapped_type, typename Snapshot::mapped_type>> played;
+    for (const auto &[nodeKey, node] : nodes) {   // the document's guid -> node map; each put back alone (no order)
         if (!node) continue;
-        const auto it = snapshot.constFind(node->guid);
+        const QString guid = QString::fromStdString(node->guid);
+        const auto it = snapshot.constFind(guid);
         if (it == snapshot.constEnd()) {
-            if (spawned) spawned->insert(node->guid);
+            if (spawned) spawned->insert(guid);
             continue;
         }
         typename Snapshot::mapped_type now;

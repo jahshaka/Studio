@@ -10,6 +10,7 @@
 #include "irisgl/document/srgbcolor.h"
 
 #include <QByteArray>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -22,7 +23,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <string>
 #include <string_view>
+#include <unordered_map>
+#include <vector>
 
 namespace qtstd {
 
@@ -33,6 +37,31 @@ inline QString fromPath(const std::filesystem::path &p) { return QString::fromSt
 
 /// UTF-8 text below the editor -> a QString.
 inline QString toQString(std::string_view utf8) { return QString::fromUtf8(utf8.data(), static_cast<qsizetype>(utf8.size())); }
+
+/// A document's list of UTF-8 strings <-> the editor's QStringList (the same order).
+inline QStringList toQStringList(const std::vector<std::string> &list)
+{
+    QStringList out;
+    out.reserve(static_cast<qsizetype>(list.size()));
+    for (const std::string &s : list) out.append(QString::fromStdString(s));
+    return out;
+}
+inline std::vector<std::string> toStdStrings(const QStringList &list)
+{
+    std::vector<std::string> out;
+    out.reserve(static_cast<std::size_t>(list.size()));
+    for (const QString &s : list) out.push_back(s.toStdString());
+    return out;
+}
+
+/// The editor's guid -> guid map (a paste's, a duplicate's) as the document's.
+inline std::unordered_map<std::string, std::string> toStdStringMap(const QHash<QString, QString> &map)
+{
+    std::unordered_map<std::string, std::string> out;
+    out.reserve(static_cast<std::size_t>(map.size()));
+    for (auto it = map.cbegin(); it != map.cend(); ++it) out.emplace(it.key().toStdString(), it.value().toStdString());
+    return out;
+}
 
 /// A QByteArray's bytes as a view (valid while the array lives and is not changed).
 inline std::string_view toView(const QByteArray &bytes)

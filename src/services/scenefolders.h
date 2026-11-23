@@ -132,7 +132,10 @@ void readEditorBlock(const QJsonObject &editorObj, const iris::ScenePtr &scene);
 
 #include <QJsonArray>
 #include <QSet>
+#include <algorithm>
 #include <functional>
+
+#include "app/qtstd.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -207,8 +210,8 @@ inline QStringList all(const iris::ScenePtr &scene)
         for (const QString &step : chainOf(p))
             if (!seen.contains(step)) { seen.insert(step); out.append(step); }
     };
-    for (const QString &f : scene->folders) add(f);
-    walk(scene->getRootNode(), [&](const iris::SceneNodePtr &n) { add(n->folderPath); });
+    for (const QString &f : qtstd::toQStringList(scene->folders)) add(f);
+    walk(scene->getRootNode(), [&](const iris::SceneNodePtr &n) { add(QString::fromStdString(n->folderPath)); });
     out.sort(Qt::CaseInsensitive);
     return out;
 }
@@ -227,7 +230,7 @@ inline bool create(const iris::ScenePtr &scene, const QString &path)
     if (p.isEmpty()) return false;
     if (exists(scene, p)) return false;
     for (const QString &step : chainOf(p))
-        if (!scene->folders.contains(step)) scene->folders.append(step);
+        if (std::find(scene->folders.begin(), scene->folders.end(), step.toStdString()) == scene->folders.end()) scene->folders.push_back(step.toStdString());
     return true;
 }
 
@@ -240,9 +243,9 @@ inline bool setNodeFolder(const iris::ScenePtr &scene, const iris::SceneNodePtr 
     // exactly how a "New Folder…" from the context menu is expected to behave.
     if (!p.isEmpty() && scene) {
         for (const QString &step : chainOf(p))
-            if (!scene->folders.contains(step)) scene->folders.append(step);
+            if (std::find(scene->folders.begin(), scene->folders.end(), step.toStdString()) == scene->folders.end()) scene->folders.push_back(step.toStdString());
     }
-    node->_setFolderPath(p);
+    node->_setFolderPath(p.toStdString());
     if (scene) normalizeList(scene);
     return true;
 }
@@ -266,19 +269,19 @@ inline bool rename(const iris::ScenePtr &scene, const QString &path, const QStri
     };
 
     QStringList folders;
-    for (const QString &f : scene->folders) {
+    for (const QString &f : qtstd::toQStringList(scene->folders)) {
         const QString moved = repath(normalize(f));
         if (!moved.isEmpty() && !folders.contains(moved)) folders.append(moved);
     }
     // The destination must exist even if the source was only implicit.
     for (const QString &step : chainOf(to))
         if (!folders.contains(step)) folders.append(step);
-    scene->folders = folders;
+    scene->folders = qtstd::toStdStrings(folders);
 
     walk(scene->getRootNode(), [&](const iris::SceneNodePtr &n) {
-        const QString p = normalize(n->folderPath);
+        const QString p = normalize(QString::fromStdString(n->folderPath));
         const QString moved = repath(p);
-        if (moved != n->folderPath) n->_setFolderPath(moved);
+        if (moved.toStdString() != n->folderPath) n->_setFolderPath(moved.toStdString());
     });
     normalizeList(scene);
     return true;
@@ -302,19 +305,19 @@ inline bool remove(const iris::ScenePtr &scene, const QString &path)
     };
 
     QStringList folders;
-    for (const QString &f : scene->folders) {
+    for (const QString &f : qtstd::toQStringList(scene->folders)) {
         const QString p = normalize(f);
         if (p == from) continue;            // the folder itself is gone
         const QString moved = lifted(p);
         if (!moved.isEmpty() && !folders.contains(moved)) folders.append(moved);
     }
-    scene->folders = folders;
+    scene->folders = qtstd::toStdStrings(folders);
 
     walk(scene->getRootNode(), [&](const iris::SceneNodePtr &n) {
-        const QString p = normalize(n->folderPath);
+        const QString p = normalize(QString::fromStdString(n->folderPath));
         if (p.isEmpty()) return;
         const QString moved = lifted(p);
-        if (moved != n->folderPath) n->_setFolderPath(moved);
+        if (moved.toStdString() != n->folderPath) n->_setFolderPath(moved.toStdString());
     });
     normalizeList(scene);
     return true;
@@ -324,14 +327,14 @@ inline void normalizeList(const iris::ScenePtr &scene)
 {
     if (!scene) return;
     QStringList clean;
-    for (const QString &f : scene->folders) {
+    for (const QString &f : qtstd::toQStringList(scene->folders)) {
         const QString p = normalize(f);
         if (p.isEmpty()) continue;
         for (const QString &step : chainOf(p))
             if (!clean.contains(step)) clean.append(step);
     }
     clean.sort(Qt::CaseInsensitive);
-    scene->folders = clean;
+    scene->folders = qtstd::toStdStrings(clean);
 }
 
 inline QList<iris::SceneNodePtr> membersOf(const iris::ScenePtr &scene, const QString &path)
@@ -341,7 +344,7 @@ inline QList<iris::SceneNodePtr> membersOf(const iris::ScenePtr &scene, const QS
     const QString p = normalize(path);
     walk(scene->getRootNode(), [&](const iris::SceneNodePtr &n) {
         if (n == scene->getRootNode()) return;
-        if (normalize(n->folderPath) == p) out.append(n);
+        if (normalize(QString::fromStdString(n->folderPath)) == p) out.append(n);
     });
     return out;
 }
@@ -350,9 +353,9 @@ inline Snapshot snapshot(const iris::ScenePtr &scene)
 {
     Snapshot snap;
     if (!scene) return snap;
-    snap.folders = scene->folders;
+    snap.folders = qtstd::toQStringList(scene->folders);
     walk(scene->getRootNode(), [&](const iris::SceneNodePtr &n) {
-        if (!n->folderPath.isEmpty()) snap.membership.insert(n->getGUID(), n->folderPath);
+        if (!n->folderPath.empty()) snap.membership.insert(QString::fromStdString(n->getGUID()), QString::fromStdString(n->folderPath));
     });
     return snap;
 }
@@ -360,10 +363,10 @@ inline Snapshot snapshot(const iris::ScenePtr &scene)
 inline void restore(const iris::ScenePtr &scene, const Snapshot &snap)
 {
     if (!scene) return;
-    scene->folders = snap.folders;
+    scene->folders = qtstd::toStdStrings(snap.folders);
     walk(scene->getRootNode(), [&](const iris::SceneNodePtr &n) {
-        const QString want = snap.membership.value(n->getGUID());
-        if (n->folderPath != want) n->_setFolderPath(want);
+        const QString want = snap.membership.value(QString::fromStdString(n->getGUID()));
+        if (n->folderPath != want.toStdString()) n->_setFolderPath(want.toStdString());
     });
 }
 
@@ -371,12 +374,12 @@ inline void writeEditorBlock(QJsonObject &editorObj, const iris::ScenePtr &scene
 {
     if (!scene) return;
     QJsonArray list;
-    for (const QString &f : scene->folders) list.append(f);
+    for (const QString &f : qtstd::toQStringList(scene->folders)) list.append(f);
     editorObj["folders"] = list;
 
     QJsonObject membership;
     walk(scene->getRootNode(), [&](const iris::SceneNodePtr &n) {
-        if (!n->folderPath.isEmpty()) membership.insert(n->getGUID(), n->folderPath);
+        if (!n->folderPath.empty()) membership.insert(QString::fromStdString(n->getGUID()), QString::fromStdString(n->folderPath));
     });
     editorObj["nodeFolders"] = membership;
 }
@@ -388,13 +391,13 @@ inline void readEditorBlock(const QJsonObject &editorObj, const iris::ScenePtr &
     const QJsonArray list = editorObj.value(QStringLiteral("folders")).toArray();
     for (const QJsonValue &v : list) {
         const QString p = normalize(v.toString());
-        if (!p.isEmpty() && !scene->folders.contains(p)) scene->folders.append(p);
+        if (!p.isEmpty() && std::find(scene->folders.begin(), scene->folders.end(), p.toStdString()) == scene->folders.end()) scene->folders.push_back(p.toStdString());
     }
     const QJsonObject membership = editorObj.value(QStringLiteral("nodeFolders")).toObject();
     if (!membership.isEmpty()) {
         walk(scene->getRootNode(), [&](const iris::SceneNodePtr &n) {
-            const QString p = normalize(membership.value(n->getGUID()).toString());
-            if (!p.isEmpty()) n->_setFolderPath(p);
+            const QString p = normalize(membership.value(QString::fromStdString(n->getGUID())).toString());
+            if (!p.isEmpty()) n->_setFolderPath(p.toStdString());
         });
     }
     normalizeList(scene);

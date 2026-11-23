@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "modules/avatar/avatarsockets.h"
 
+#include <QHash>
+
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/socket.h"
@@ -128,11 +130,11 @@ QVector<Mapping> installBuiltIns(const iris::MeshNodePtr &node)
         mapping.socket = socketName;
         if (!node) { report.append(mapping); continue; }
 
-        if (const iris::Socket *existing = node->findSocket(socketName)) {
+        if (const iris::Socket *existing = node->findSocket(socketName.toStdString())) {
             // Already there — the user's (or a previous install's) offset stays.
             mapping.existed = true;
             mapping.mapped = true;
-            mapping.bone = existing->boneName;
+            mapping.bone = QString::fromStdString(existing->boneName);
             report.append(mapping);
             continue;
         }
@@ -141,15 +143,15 @@ QVector<Mapping> installBuiltIns(const iris::MeshNodePtr &node)
         if (bone.isEmpty()) { report.append(mapping); continue; }   // fail soft
 
         iris::Socket socket;
-        socket.name = socketName;
-        socket.boneName = bone;
+        socket.name = socketName.toStdString();
+        socket.boneName = bone.toStdString();
         socket.builtIn = true;
         // Identity offset — see the rationale in avatarsockets.h.
         if (node->addSocket(socket)) {
             mapping.mapped = true;
             mapping.bone = bone;
             mapping.owner = node;
-            mapping.ownerGuid = node->getGUID();
+            mapping.ownerGuid = QString::fromStdString(node->getGUID());
         }
         report.append(mapping);
     }
@@ -189,12 +191,12 @@ QVector<Mapping> installBuiltInsInSubtree(const iris::SceneNodePtr &root)
         // findSocketOwner's answer depend on tree order.
         bool done = false;
         for (const iris::MeshNodePtr &piece : pieces) {
-            if (const iris::Socket *existing = piece->findSocket(socketName)) {
+            if (const iris::Socket *existing = piece->findSocket(socketName.toStdString())) {
                 mapping.existed = true;
                 mapping.mapped = true;
-                mapping.bone = existing->boneName;
+                mapping.bone = QString::fromStdString(existing->boneName);
                 mapping.owner = piece;
-                mapping.ownerGuid = piece->getGUID();
+                mapping.ownerGuid = QString::fromStdString(piece->getGUID());
                 done = true;
                 break;
             }
@@ -208,14 +210,14 @@ QVector<Mapping> installBuiltInsInSubtree(const iris::SceneNodePtr &root)
             const QString bone = mapBone(piece->getSkeleton(), socketName);
             if (bone.isEmpty()) continue;
             iris::Socket socket;
-            socket.name = socketName;
-            socket.boneName = bone;
+            socket.name = socketName.toStdString();
+            socket.boneName = bone.toStdString();
             socket.builtIn = true;
             if (piece->addSocket(socket)) {
                 mapping.mapped = true;
                 mapping.bone = bone;
                 mapping.owner = piece;
-                mapping.ownerGuid = piece->getGUID();
+                mapping.ownerGuid = QString::fromStdString(piece->getGUID());
             }
             break;
         }

@@ -27,15 +27,15 @@ namespace sceneformat {
 /// Reads `rows` into `out` (cleared first); rows with fewer than three numbers are not
 /// rows. Returns how many well-formed rows lay past the renderer's ceiling and were
 /// dropped.
-inline int readCascadeSet(const QJsonArray &rows, QVector<iris::Vec3> &out)
+inline int readCascadeSet(const QJsonArray &rows, std::vector<iris::Vec3> &out)
 {
     out.clear();
     int dropped = 0;
     for (const QJsonValue &v : rows) {
         const QJsonArray row = v.toArray();
         if (row.size() < 3) continue;
-        if (out.size() >= jahshaka::engine::kGiTierMaxCascades) { ++dropped; continue; }
-        out.append(iris::Vec3(float(row.at(0).toDouble()), float(row.at(1).toDouble()),
+        if (int(out.size()) >= jahshaka::engine::kGiTierMaxCascades) { ++dropped; continue; }
+        out.push_back(iris::Vec3(float(row.at(0).toDouble()), float(row.at(1).toDouble()),
                               float(row.at(2).toDouble())));
     }
     return dropped;

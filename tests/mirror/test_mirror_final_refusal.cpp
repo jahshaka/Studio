@@ -53,7 +53,7 @@ int main(int argc, char **argv)
     auto lamp = iris::LightNode::create();
     lamp->setName("lamp");
     lamp->setLightType(iris::LightType::Spot);
-    lamp->iesProfilePath = QStringLiteral("/no/such/dir/missing.ies");
+    lamp->iesProfilePath = (QStringLiteral("/no/such/dir/missing.ies")).toStdString();
     doc->getRootNode()->addChild(lamp);
 
     const auto refused = [e] { return e->published().input.messagesRefused; };
@@ -72,7 +72,7 @@ int main(int argc, char **argv)
                              " syncs (" + std::to_string(same) + "); THE CONTROL: it is above zero");
 
         // a CHANGED value (the user fixes the path to another missing one, then clears it) is pushed again
-        lamp->iesProfilePath = QStringLiteral("/no/such/dir/other.ies");
+        lamp->iesProfilePath = (QStringLiteral("/no/such/dir/other.ies")).toStdString();
         lamp->markChanged(iris::NodeChange::Params);
         const unsigned long long beforeChange = refused();
         for (int i = 0; i < 3; ++i) {
@@ -106,7 +106,7 @@ int main(int argc, char **argv)
         const unsigned defs0 = target->published().particleDefinitionsCreated;
         auto emitter = iris::ParticleSystemNode::create();
         emitter->setName("emitter");
-        emitter->colourRampImage = QStringLiteral("/no/such/dir/ramp.png");
+        emitter->colourRampImage = (QStringLiteral("/no/such/dir/ramp.png")).toStdString();
         doc->getRootNode()->addChild(emitter);
         const unsigned long long beforeEmitter = refused();
         for (int i = 0; i < 4; ++i) {
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
         auto good = iris::Texture2D::load(dir + "/final_refusal_texture.png");
         auto ramped = iris::ParticleSystemNode::create();
         ramped->setName("ramped");
-        ramped->colourRampImage = dir + "/final_refusal_ramp.png";
+        ramped->colourRampImage = (dir + "/final_refusal_ramp.png").toStdString();
         ramped->texture = broken;
         doc->getRootNode()->addChild(ramped);
         for (int i = 0; i < 3; ++i) {
@@ -171,7 +171,7 @@ int main(int argc, char **argv)
             auto doomed = iris::LightNode::create();
             doomed->setName("doomed");
             doomed->setLightType(iris::LightType::Point);
-            doomed->iesProfilePath = QStringLiteral("/no/such/dir/doomed.ies");
+            doomed->iesProfilePath = (QStringLiteral("/no/such/dir/doomed.ies")).toStdString();
             doc->getRootNode()->addChild(doomed);
             mirror.sync();
             enginetest::frozenFrames(e, 1);

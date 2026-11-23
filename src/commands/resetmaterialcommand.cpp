@@ -64,7 +64,7 @@ void ResetMaterialCommand::redo()
     createdDefaultEdges.clear();
     const QString projectGuid = project ? project->getProjectGuid() : QString();
     if (!db || projectGuid.isEmpty()) return;
-    const QString nodeGuid = meshNode->getGUID();
+    const QString nodeGuid = QString::fromStdString(meshNode->getGUID());
 
     // The default's own pins, back after an undo took them (the first redo
     // runs right after the default was built, which pinned them already).
@@ -120,7 +120,7 @@ void ResetMaterialCommand::undo()
 
     const QString projectGuid = project ? project->getProjectGuid() : QString();
     if (!db || projectGuid.isEmpty()) return;
-    const QString nodeGuid = meshNode->getGUID();
+    const QString nodeGuid = QString::fromStdString(meshNode->getGUID());
 
     for (const QString &texture : createdDefaultEdges) db->deleteDependency(nodeGuid, texture);
     // Every dropped row again (redo deleted by pair, so a duplicated pair went

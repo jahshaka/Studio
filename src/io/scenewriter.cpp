@@ -107,13 +107,13 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
 	QJsonObject skyDefs;
 	// The document's Values through the editor's edge: QJsonObject orders the keys and QJsonDocument writes the
 	// numbers as it always did (no saved byte moves).
-	for (auto it = scene->skyData.constBegin(); it != scene->skyData.constEnd(); ++it)
-		skyDefs.insert(it.key(), qtstd::toQJsonValue(it.value()));
+	for (auto it = scene->skyData.cbegin(); it != scene->skyData.cend(); ++it)
+		skyDefs.insert(QString::fromStdString(it->first), qtstd::toQJsonValue(it->second));
 
 	sceneObj["skyType"] = static_cast<int>(scene->skyType);
-    sceneObj["skyGuid"] = scene->skyGuid;
+    sceneObj["skyGuid"] = QString::fromStdString(scene->skyGuid);
     // THE SUN PIN: which directional light is the sun; empty = automatic.
-    sceneObj["sunLight"] = scene->sunLightGuid;
+    sceneObj["sunLight"] = QString::fromStdString(scene->sunLightGuid);
     sceneObj["sunDiscVisible"] = scene->sunDiscVisible;
     // THE WORLD SKY's LIGHTING (R5b): written only for a backdrop - an absent key is the default, the sky lights.
     if (!scene->skyLighting) sceneObj["skyLighting"] = false;
@@ -143,7 +143,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // not the default, so every scene that never turned it on is unchanged.
     if (scene->sunContact != iris::SunContact())
         sceneObj["sunContact"] = qtstd::toQJsonValue(scene->sunContact.toJson());
-	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
+	sceneObj["ambientMusicGuid"] = QString::fromStdString(scene->ambientMusicGuid);
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
     sceneObj["gravity"] = scene->gravity;
 
@@ -265,7 +265,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giCards"] = scene->giCards;
     sceneObj["giCardBudgetTexels"] = scene->giCardBudgetTexels;
     sceneObj["giDragMoverChannel"] = scene->giDragMoverChannel;
-    if (!scene->giCascadeSet.isEmpty()) {
+    if (!scene->giCascadeSet.empty()) {
         QJsonArray set;
         for (const iris::Vec3 &c : scene->giCascadeSet)
             set.append(QJsonArray{ double(c.x()), double(c.y()), double(c.z()) });
@@ -288,7 +288,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // The camera PLAY renders through (CAMERAS_SPEC D6). A guid into the scene
     // graph; empty (and absent, in every scene written before cameras existed)
     // means the free viewer.
-    sceneObj["activeCamera"] = scene->activeCameraGuid;
+    sceneObj["activeCamera"] = QString::fromStdString(scene->activeCameraGuid);
 
     // What PLAY does with this scene (AVATAR_LOCOMOTION_SPEC §8.5). A stable
     // string for the same reason giMode is one — the enum ints stay free to be
@@ -346,7 +346,7 @@ SceneFragment SceneWriter::captureFragment(const iris::SceneNodePtr &node)
     // per-document value that a fragment travelling between documents (a paste,
     // a template) has no business pinning.
     if (auto parent = node->getParent()) {
-        if (!parent->isRootNode()) fragment.parentGuid = parent->getGUID();
+        if (!parent->isRootNode()) fragment.parentGuid = QString::fromStdString(parent->getGUID());
         fragment.siblingIndex = node->siblingIndex();
     }
     // The session ids, PRE-ORDER, in lockstep with the child walk below (this
@@ -367,7 +367,7 @@ SceneFragment SceneWriter::captureFragment(const iris::SceneNodePtr &node)
 void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr sceneNode,
                                  const QSet<QString> *omitted)
 {
-	sceneNodeObj["guid"] = sceneNode->getGUID();
+	sceneNodeObj["guid"] = QString::fromStdString(sceneNode->getGUID());
     sceneNodeObj["name"] = QString::fromStdString(sceneNode->getName());
     sceneNodeObj["attached"] = sceneNode->isAttached();
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
@@ -438,8 +438,8 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     // themselves are mesh data and are written by writeMeshData.
     if (sceneNode->isSocketAttached()) {
         QJsonObject attachment;
-        attachment["owner"] = sceneNode->socketOwnerGuid;
-        attachment["socket"] = sceneNode->socketName;
+        attachment["owner"] = QString::fromStdString(sceneNode->socketOwnerGuid);
+        attachment["socket"] = QString::fromStdString(sceneNode->socketName);
         sceneNodeObj["socketAttachment"] = attachment;
     }
 
@@ -489,9 +489,9 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         // scratch avatar with no asset behind it (D10), and writing three
         // empty strings for it would make every such node claim a link.
         if (sceneNode->avatarLink.isLinked()) {
-            avatarObj["asset"] = sceneNode->avatarLink.asset;
-            avatarObj["version"] = sceneNode->avatarLink.version;
-            avatarObj["name"] = sceneNode->avatarLink.name;
+            avatarObj["asset"] = QString::fromStdString(sceneNode->avatarLink.asset);
+            avatarObj["version"] = QString::fromStdString(sceneNode->avatarLink.version);
+            avatarObj["name"] = QString::fromStdString(sceneNode->avatarLink.name);
         }
         sceneNodeObj["avatar"] = avatarObj;
     }
@@ -583,7 +583,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     for (int i = 0; i < kids; ++i) {
         iris::SceneNode *child = sceneNode->childAt(i);
         if (!child) continue;
-        if (omitted && omitted->contains(child->getGUID())) continue;   // spawned during Play (setOmittedNodes)
+        if (omitted && omitted->contains(QString::fromStdString(child->getGUID()))) continue;   // spawned during Play (setOmittedNodes)
         QJsonObject childNodeObj;
         writeSceneNode(childNodeObj, child->weak_from_this().lock(), omitted);
         childrenArray.append(childNodeObj);
@@ -600,7 +600,7 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
     QJsonArray animListObj;
 
     if (!!activeAnim)
-        sceneNodeObj["activeAnimation"] = animations.indexOf(activeAnim);
+        sceneNodeObj["activeAnimation"] = int(std::find(animations.begin(), animations.end(), activeAnim) - animations.begin());
     else
         sceneNodeObj["activeAnimation"] = -1;
 
@@ -686,7 +686,7 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
 void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr meshNode)
 {
     // It's a safe assumption that the filename is safe to use here in queries if need be
-	sceneNodeObject["mesh"]          = meshNode->meshPath;
+	sceneNodeObject["mesh"]          = QString::fromStdString(meshNode->meshPath);
     // `guid` is NOT written here (format v2, rule "one writer per key"):
     // writeSceneNode has already written the node's guid, and MeshNode::getGUID
     // IS that guid — this line re-wrote the same key from a second place, which
@@ -721,12 +721,12 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
     // spelling only: a socket has no historical euler key to stay compatible
     // with, and euler round-tripping is the drift this format already fixed
     // once for node rotations.
-    if (!meshNode->getSockets().isEmpty()) {
+    if (!meshNode->getSockets().empty()) {
         QJsonArray socketArray;
         for (const iris::Socket &socket : meshNode->getSockets()) {
             QJsonObject socketObj;
-            socketObj["name"] = socket.name;
-            socketObj["bone"] = socket.boneName;
+            socketObj["name"] = QString::fromStdString(socket.name);
+            socketObj["bone"] = QString::fromStdString(socket.boneName);
             socketObj["position"] = jsonVector3(socket.position);
             socketObj["rotation"] = jsonQuaternion(socket.rotation.normalized());
             socketObj["scale"] = jsonVector3(socket.scale);
@@ -757,7 +757,7 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     // THE IMAGE'S ASSET, as the node carries it (TEX-REF-1) — never a guid
     // derived back from the loaded file's path. An emitter with no image, or
     // one nobody named (the shipped default with no project open), writes "".
-    sceneNodeObject["texture"]              = node->textureGuid;
+    sceneNodeObject["texture"]              = QString::fromStdString(node->textureGuid);
 
     // ---- ParticleFX2 keys (PARTICLES_FX2_SPEC §5) --------------------------
     // Purely ADDITIVE to the ten keys above, and the reader defaults every one
@@ -774,9 +774,9 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["scaleError"]       = node->scaleError;
     sceneNodeObject["maxParticles"]     = node->maxParticles;
 
-    sceneNodeObject["shape"]            = iris::ParticleSystemNode::shapeName(node->shape);
-    sceneNodeObject["orientation"]      = iris::ParticleSystemNode::orientationName(node->orientation);
-    sceneNodeObject["preset"]           = iris::ParticleSystemNode::presetName(node->preset);
+    sceneNodeObject["shape"]            = QString::fromStdString(iris::ParticleSystemNode::shapeName(node->shape));
+    sceneNodeObject["orientation"]      = QString::fromStdString(iris::ParticleSystemNode::orientationName(node->orientation));
+    sceneNodeObject["preset"]           = QString::fromStdString(iris::ParticleSystemNode::presetName(node->preset));
     sceneNodeObject["coneAngle"]        = node->coneAngle;
     sceneNodeObject["turbulence"]       = node->turbulence;
     sceneNodeObject["rotationSpeedMin"] = node->rotationSpeedMin;
@@ -797,7 +797,7 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["colourFade1"]      = qtstd::colorToJson(node->colourFade1);
     sceneNodeObject["colourFade2"]      = qtstd::colorToJson(node->colourFade2);
     sceneNodeObject["colourFadeSwitch"] = node->colourFadeSwitch;
-    sceneNodeObject["colourRampGuid"]   = node->colourRampGuid;
+    sceneNodeObject["colourRampGuid"]   = QString::fromStdString(node->colourRampGuid);
     sceneNodeObject["scaleRate"]        = node->scaleRate;
     sceneNodeObject["scaleRateMultiply"]= node->scaleRateMultiply;
 
@@ -987,7 +987,7 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
         sceneNodeObject["followsAtmosphere"] = false;
     // The asset BINDING travels as a guid; the resolved path and the profile's
     // photometric scale are runtime state the reader re-derives from the store.
-    sceneNodeObject["iesProfile"] = lightNode->iesProfileGuid;
+    sceneNodeObject["iesProfile"] = QString::fromStdString(lightNode->iesProfileGuid);
     // THE SKY LIGHT's SOURCE (R5b): a dome's six texture guids under their roles; nothing for the default (the sky).
     if (lightNode->lightType == iris::LightType::Sky && lightNode->skySource == iris::SkyLightSource::Cubemap) {
         sceneNodeObject["skySource"] = QStringLiteral("cubemap");
@@ -1006,10 +1006,10 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
 void SceneWriter::writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr decalNode)
 {
     // Guids, not paths: a project moves, the CAS resolves.
-    sceneNodeObject["decalTexture"] = decalNode->textureGuid;
+    sceneNodeObject["decalTexture"] = QString::fromStdString(decalNode->textureGuid);
     // Phase 3 slots, written from phase 1 so files round-trip forward.
-    sceneNodeObject["decalNormal"] = decalNode->normalGuid;
-    sceneNodeObject["decalEmissive"] = decalNode->emissiveGuid;
+    sceneNodeObject["decalNormal"] = QString::fromStdString(decalNode->normalGuid);
+    sceneNodeObject["decalEmissive"] = QString::fromStdString(decalNode->emissiveGuid);
     sceneNodeObject["width"] = decalNode->width;
     sceneNodeObject["height"] = decalNode->height;
     sceneNodeObject["depth"] = decalNode->depth;
@@ -1056,7 +1056,7 @@ void SceneWriter::writeCameraData(QJsonObject& sceneNodeObject, iris::CameraNode
       : cameraNode->focusMode == iris::CameraFocusMode::Off   ? "off"
                                                               : "manual";
     sceneNodeObject["focusDistance"] = cameraNode->focusDistance;
-    sceneNodeObject["focusTarget"] = cameraNode->focusTarget;   // node guid
+    sceneNodeObject["focusTarget"] = QString::fromStdString(cameraNode->focusTarget);   // node guid
     sceneNodeObject["fStop"] = cameraNode->fStop;
     // CAMERA_LENS_SPEC §3 P2, the focus block. Render-inert today and written
     // anyway: a focus pull authored now must survive to the phase that renders

@@ -814,7 +814,7 @@ QVariantMap ProjectApi::exportWeb(const QString &dir)
     jahshaka::engine::Scene *renderer =
         (host.isEngineReady() && host.viewport) ? host.viewport->engineScene() : nullptr;
     const QString musicPath = (host.services && host.services->ambience)
-                                  ? host.services->ambience->fileFor(scene->ambientMusicGuid)
+                                  ? host.services->ambience->fileFor(QString::fromStdString(scene->ambientMusicGuid))
                                   : QString();
     const auto r = ExportService::exportWeb(scene, host.project->getProjectName(), outDir, renderer,
                                             musicPath);

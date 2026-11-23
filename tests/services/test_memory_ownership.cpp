@@ -250,8 +250,8 @@ static void testSceneGraphOwnership()
         CHECK(leaf->hasParent() && leaf->hasScene(), "hasParent()/hasScene() agree with the locks");
         CHECK(!scene->getRootNode()->hasParent(), "the root node has no parent");
         CHECK(scene->getRootNode()->isRootNode(), "...and knows it is the root");
-        CHECK(scene->nodes.count() == 5, "every node registered with the scene (root + 4)");
-        CHECK(scene->lights.count() == 1 && scene->meshes.count() == 1,
+        CHECK(scene->nodes.size() == 5, "every node registered with the scene (root + 4)");
+        CHECK(scene->lights.size() == 1 && scene->meshes.size() == 1,
               "and the typed registries saw the light and the mesh");
     }
     // Every strong reference is now out of scope: the ScenePtr, and the three
@@ -273,7 +273,7 @@ static void testSceneGraphOwnership()
         CHECK(closed.root.expired() && closed.mid.expired() && closed.leaf.expired()
                   && closed.mesh.expired() && closed.light.expired(),
               "cleanup() alone destroyed every node in the world");
-        CHECK(scene->nodes.isEmpty() && scene->lights.isEmpty() && scene->meshes.isEmpty(),
+        CHECK(scene->nodes.empty() && scene->lights.empty() && scene->meshes.empty(),
               "...and emptied the registries that used to keep them (`nodes` was never cleared)");
         CHECK(!closed.scene.expired(), "the scene object itself is still the caller's to hold");
     }
@@ -312,9 +312,9 @@ static void testSceneGraphOwnership()
             auto leaf = iris::SceneNode::create();
             mid->addChild(leaf);
             twig = std::weak_ptr(leaf);
-            CHECK(scene->nodes.count() == 3, "the branch registered with the scene");
+            CHECK(scene->nodes.size() == 3, "the branch registered with the scene");
             mid->removeFromParent();
-            CHECK(scene->nodes.count() == 1,
+            CHECK(scene->nodes.size() == 1,
                   "removeFromParent() unregistered the whole branch, not just its top");
             CHECK(!branch.expired() && !twig.expired(),
                   "...and the branch is still alive while this block holds it");

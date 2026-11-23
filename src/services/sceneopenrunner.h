@@ -168,7 +168,10 @@ signals:
 
 private:
     void runWorker();     ///< worker-thread body: the plan, the stale bakes, the bake read
-    void readBakes(db::Connection &conn);   ///< worker: the bake plan + the bake read
+    /// worker: the bake plan + the bake read; true when a refused bake went back on the stale path (N3: the run is
+    /// rebuildThenRead's now), false when the caller finishes
+    bool readBakes(db::Connection &conn);
+    void rebuildThenRead();   ///< worker: mRebuild's bakes, committed on the UI thread, then the read again
     void finishWorker();  ///< worker: joins the side reads, hands back to the UI thread
     void runNextSlice();  ///< UI thread, one slice per event-loop turn
     void crossSliceBoundary();   ///< see setSliceBoundary

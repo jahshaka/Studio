@@ -122,9 +122,9 @@ SceneInventory collectInventory(const iris::ScenePtr &scene)
             // raw exporter must carry it even though nothing renders it as a
             // material map.
             auto *decal = static_cast<iris::DecalNode *>(node.get());
-            addTextureSource(decal->resolvedTexturePath);
-            addTextureSource(decal->resolvedNormalPath);
-            addTextureSource(decal->resolvedEmissivePath);
+            addTextureSource(QString::fromStdString(decal->resolvedTexturePath));
+            addTextureSource(QString::fromStdString(decal->resolvedNormalPath));
+            addTextureSource(QString::fromStdString(decal->resolvedEmissivePath));
             break;
         }
         case NodeKind::Empty:          ++inv.empties; break;
@@ -136,7 +136,7 @@ SceneInventory collectInventory(const iris::ScenePtr &scene)
     if (scene->skyType == iris::SkyType::EQUIRECTANGULAR && scene->skyTexture)
         addTextureSource(scene->skyTexture->source);
     if (scene->skyType == iris::SkyType::CUBEMAP)
-        for (int i = 0; i < 6; ++i) addTextureSource(scene->skyBoxTextures[i]);
+        for (int i = 0; i < 6; ++i) addTextureSource(QString::fromStdString(scene->skyBoxTextures[i]));
 
     return inv;
 }

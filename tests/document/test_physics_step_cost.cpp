@@ -93,7 +93,7 @@ int gWarmup = 0;             ///< --warmup: the frames the medians skip
 iris::SceneNodePtr box(const QString &guid, const iris::Vec3 &pos, float mass, const iris::Vec3 &scale)
 {
     auto n = iris::MeshNode::create();
-    n->setGUID(guid);
+    n->setGUID(guid.toStdString());
     if (gCube) { n->setMesh(gCube); n->setMaterial(iris::PbrMaterial::create()); }
     n->setLocalPos(pos);
     n->setLocalScale(scale);
@@ -225,7 +225,7 @@ Run runPile(const std::string &arm, int bodies, int frames, Rig *mirrorRig, cons
         if (((f + 1) & f) == 0 || f + 1 == frames) {   // a power of two, and the last
             std::vector<btTransform> at;
             for (const auto &n : pile.bodies)
-                if (btRigidBody *body = env->hashBodies.value(n->getGUID(), nullptr)) at.push_back(body->getWorldTransform());
+                if (btRigidBody *body = env->hashBodies.value(QString::fromStdString(n->getGUID()), nullptr)) at.push_back(body->getWorldTransform());
             r.checkpoints.push_back({ f + 1, std::move(at) });
         }
     }
@@ -241,7 +241,7 @@ Run runPile(const std::string &arm, int bodies, int frames, Rig *mirrorRig, cons
     std::sort(active.begin(), active.end());
     r.activeMedian = active[active.size() / 2];
     for (const auto &n : pile.bodies)
-        if (btRigidBody *body = env->hashBodies.value(n->getGUID(), nullptr)) r.poses.push_back(body->getWorldTransform());
+        if (btRigidBody *body = env->hashBodies.value(QString::fromStdString(n->getGUID()), nullptr)) r.poses.push_back(body->getWorldTransform());
     if (mirror) {
         CHECK(mirror->verifyAgainstFullWalk() == 0, "[%s] in play the full walk after the physics frames pushes nothing",
               arm.c_str());

@@ -248,7 +248,7 @@ QVariantMap EnginePlayerView::playerCameraReport() const
     const iris::Quat rot = cam->getGlobalRotation();
     // The armed camera is a scene NODE and names itself; the free viewer is
     // not in the document at all, so it has no id to give.
-    out[QStringLiteral("id")] = authored ? QVariant(cam->getGUID()) : QVariant();
+    out[QStringLiteral("id")] = authored ? QVariant(QString::fromStdString(cam->getGUID())) : QVariant();
     out[QStringLiteral("name")] = authored ? QVariant(QString::fromStdString(cam->getName())) : QVariant();
     out[QStringLiteral("source")] = authored ? QStringLiteral("active")
                                              : QStringLiteral("viewport");
