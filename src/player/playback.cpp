@@ -111,7 +111,7 @@ void PlayBack::update(iris::Viewport& viewport, float dt)
 	auto scene = editorViewport ? editorViewport->getScene() : this->scene;
 
 	// LATCHED, not per frame (SESSION_LOG_SPEC §8-R2). This used to be a bare
-	// irisLog("Controller mismatch!") right here — i.e. a mutex, a formatted
+	// write of the old Qt logger ("Controller mismatch!") right here — i.e. a mutex, a formatted
 	// QTextStream write, an out->flush() AND a qInfo() to stderr, ONCE PER
 	// FRAME for as long as the mismatch held. And it can hold indefinitely:
 	// the mismatch can hold indefinitely (a controller left on a camera the

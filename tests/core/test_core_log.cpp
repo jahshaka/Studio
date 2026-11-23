@@ -4,9 +4,10 @@
 //      every record arrives whole, once, with its severity (info / warn / error by the record's number). CONTROL: the sink
 //      was called exactly 8000 times.
 //  (2) setSink REPLACES: a record after a second sink is installed reaches the second only; an empty sink is stderr again.
-//  (3) setSink IS SERIALISED WITH THE RECORDS: one thread swaps two unsynchronised sinks back and forth while 8 threads
-//      log 1000 records each: every record reaches exactly ONE of the two sinks, whole, 8000 in all. CONTROL: both sinks
-//      received records (the swaps happened while the records flowed).
+//  (3) setSink IS SERIALISED WITH THE RECORDS: logger thread 0 installs sink A or B before EACH of its own records (A
+//      before an even record, B before an odd one) while threads 1-7 log beside it: every record reaches exactly ONE of
+//      the two sinks, whole, 8000 in all, and each of thread 0's records reaches the sink thread 0 had just installed.
+//      CONTROL: both sinks received records - certain by construction (thread 0 alternates), not by scheduling.
 //  (4) THE SINK setSink REPLACES DIES AFTER THE LOG's LOCK: a sink whose capture LOGS from its destructor is replaced;
 //      that record reaches the new sink (under the lock it would deadlock on the non-recursive mutex). Run in a forked
 //      child bounded by alarm(): a deadlock is a named red, not a hung row. CONTROL: the destructor ran (its record).
@@ -212,28 +213,35 @@ int main()
         std::atomic<long> callsA{ 0 }, callsB{ 0 };
         const iris::log::Sink sinkA = appender(gotA, callsA), sinkB = appender(gotB, callsB);
         iris::log::setSink(sinkA);
-        std::atomic<bool> done{ false };
-        long swaps = 0;
-        std::thread swapper([&] {
-            while (!done.load()) {
-                iris::log::setSink(swaps % 2 ? sinkA : sinkB);
-                ++swaps;
-                std::this_thread::yield();
+        std::vector<std::thread> ts;
+        ts.emplace_back([&] {   // thread 0: the swapper, between its own records
+            for (int i = 0; i < kRecords; ++i) {
+                iris::log::setSink(i % 2 ? sinkB : sinkA);
+                logOne(0, i);
             }
         });
-        runLoggers();
-        done.store(true);
-        swapper.join();
+        for (int t = 1; t < kThreads; ++t)
+            ts.emplace_back([t] { for (int i = 0; i < kRecords; ++i) logOne(t, i); });
+        for (auto &th : ts) th.join();
         iris::log::setSink(nullptr);
         const Received r = judge({ &gotA, &gotB });
-        std::printf("(3) swapping: %ld swaps; sink A %ld calls, sink B %ld (control: both > 0); %ld whole records, %ld torn, "
-                    "%ld with the wrong severity, %ld missing, %ld twice\n", swaps, callsA.load(), callsB.load(), r.whole,
-                    r.torn, r.wrongSeverity, r.missing, r.twice);
+        // thread 0's record i must sit in the sink it installed just before it: A for even i, B for odd
+        long misplaced = 0;
+        for (const auto &[got, odd] : { std::pair<const std::string *, int>{ &gotA, 0 }, { &gotB, 1 } })
+            for (std::string_view line : linesOf(*got)) {
+                int tt = 0, i = 0;
+                if (!line.empty() && parseText(line.substr(1), kRecords, &tt, &i) && tt == 0 && i % 2 != odd) ++misplaced;
+            }
+        std::printf("(3) swapping: thread 0 swapped %d times; sink A %ld calls, sink B %ld (control: both > 0); %ld whole "
+                    "records, %ld torn, %ld with the wrong severity, %ld missing, %ld twice; %ld of thread 0's records "
+                    "in the other sink\n", kRecords, callsA.load(), callsB.load(), r.whole, r.torn, r.wrongSeverity,
+                    r.missing, r.twice, misplaced);
         if (callsA.load() <= 0 || callsB.load() <= 0) fail("(3) the control: one sink received nothing");
         if (callsA.load() + callsB.load() != kThreads * kRecords) fail("(3) the sinks were not called 8000 times in all");
         if (r.torn) fail("(3) a record reached a sink torn while setSink swapped them");
         if (r.wrongSeverity || r.missing || r.twice || r.whole != kThreads * kRecords)
             fail("(3) not every record reached exactly one sink exactly once");
+        if (misplaced) fail("(3) a record of thread 0 reached a sink other than the one it had just installed");
     }
 
     // ---- (4) the replaced sink dies after the log's lock ------------------------------------------------------------
