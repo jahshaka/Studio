@@ -484,8 +484,8 @@ if(JAHSHAKA_ASAN)
     # jahengine_asan (SCRIPT-IN-ENGINE-1 2f) - THE SCRIPTED ENGINE UNDER AddressSanitizer: jahengine's own main.cpp over
     # the script host's ASan twin (JahshakaScriptAsan: the host's archive, JAHSHAKA_ENGINE_SCRIPT_SOURCES, sanitised too -
     # a use-after-free in a command or the registry is a red, not only one in the engine) over JahshakaEngineAsan, and the
-    # MCP adapter's twin (jahengine links it). Built ON DEMAND (out of the default build) by the rows that run it - the
-    # tail moves atom.component_asan onto it (a script on jahengine_asan, label `long`).
+    # MCP adapter's twin (jahengine links it). Built ON DEMAND (out of the default build) by the rows that run it -
+    # atom.component_asan (tests/atom: component.js on jahengine_asan, label `long`).
     add_library(JahshakaScriptAsan STATIC EXCLUDE_FROM_ALL ${JAHSHAKA_ENGINE_SCRIPT_SOURCES})
     target_include_directories(JahshakaScriptAsan PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
     target_link_libraries(JahshakaScriptAsan PUBLIC JahshakaEngineAsan PRIVATE qjs)

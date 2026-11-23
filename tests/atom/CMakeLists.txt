@@ -72,35 +72,23 @@ function(jah_atom_engine_target _t)
     add_dependencies(${_t} JahshakaEngineMedia)
 endfunction()
 
-# atom.component (ATOM-TESTS-BACK-1 stage 3: the plain twin back; test_atom_component.cpp says the law) — Atom is a component
-# of its scene: the pass order per view, the words step once a frame, each scene its own caster state, owners retiring with
-# their objects. Counts only.
-add_executable(test_atom_component test_atom_component.cpp)
-jah_atom_engine_target(test_atom_component)
-jah_gpu_row(atom.component CLASS engine FRAMES 37 COMMAND test_atom_component
+# atom.component (ATOM-TESTS-BACK-1 stage 3; an ENGINE SCRIPT since SCRIPT-IN-ENGINE-1 2f: component.js says the law) — Atom
+# is a component of its scene: the pass order per view, the words step once a frame, each scene its own caster state, owners
+# retiring with their objects. Counts only. component.js run by jahengine (the engine's own script host: no C++ fixture, no
+# Qt; --name: its verdict line names the row); proved equal to the C++ row it replaced, count by count and by its last
+# picture (spikes/script-in-engine-1/train/equality/). 37 frames (the C++ row's count).
+jah_gpu_row(atom.component CLASS engine FRAMES 37
+         COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/component.js" --name atom.component
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.component PROPERTIES TIMEOUT 60 LABELS "engine")
 
-# atom.component_asan — test_atom_component.cpp UNDER THE SANITIZER: the owners' retire windows (a
-# destroyed view's stats ring and a destroyed scene's caster ring, reaped 8 frames later through the
-# device's window) are raw Vulkan memory handed between owners — the use-after-free class a sanitizer is for.
+# atom.component_asan — component.js on jahengine_asan (the engine, the script host and the MCP adapter under the sanitizer:
+# tests/engine/CMakeLists.txt; built on demand by this row): the owners' retire windows (a destroyed view's stats ring and a
+# destroyed scene's caster ring, reaped 8 frames later through the device's window) are raw Vulkan memory handed between
+# owners - the use-after-free class a sanitizer is for.
 if(JAHSHAKA_ASAN)
-    add_executable(test_atom_component_asan test_atom_component.cpp)
-    set_target_properties(test_atom_component_asan PROPERTIES
-        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-        CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-    target_compile_definitions(test_atom_component_asan PRIVATE
-        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-    target_link_libraries(test_atom_component_asan PRIVATE JahshakaEngineAsan)
-    jah_on_demand(test_atom_component_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
-    add_dependencies(test_atom_component_asan JahshakaEngineMedia)
-    target_compile_options(test_atom_component_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-    target_link_options(test_atom_component_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(atom.component_asan CLASS engine COMMAND test_atom_component_asan
+    jah_gpu_row(atom.component_asan CLASS engine
+             COMMAND jahengine_asan --script "${CMAKE_CURRENT_SOURCE_DIR}/component.js" --name atom.component_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # a sanitizer twin whose laws are its plain row's: LONG and a feature end its diff reaches, never FAST (CODING_RULES § 5)
     set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 60 LABELS "engine;long"
