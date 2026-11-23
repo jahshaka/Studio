@@ -24,6 +24,27 @@
 #
 # Two modes: included from the top CMakeLists (defines the target), and run as a script (-P) by the target.
 if(CMAKE_SCRIPT_MODE_FILE)
+    # A BUILD UNDER A RUNNING CHECK FAILS, CLAIMING NOTHING (the errors audit 2026-11-23 B5; DEV_ERRORS 70: a tree rebuilt while its
+    # `spec.sh test` check ran - the check's result discarded, ~30 min of card and wall): the check's mark <git dir>/jah-check.pid
+    # (spec.py CheckMark, URGENT #153; the pre-commit hook refuses a COMMIT under it the same way) names a live pid that is not an
+    # ancestor of this build -> the stamp is removed (nothing claims what this pass built) and the build fails, naming the check.
+    # The check's own builds (its prebuild, a nested call) run under its pid and go on.
+    execute_process(COMMAND git rev-parse --absolute-git-dir WORKING_DIRECTORY "${SRC}" OUTPUT_VARIABLE _jah_gd
+                    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE _jah_grc)
+    if(_jah_grc EQUAL 0 AND EXISTS "${_jah_gd}/jah-check.pid")
+        execute_process(COMMAND sh -c [=[
+pid=$(cut -d' ' -f1 "$1"); case "$pid" in ''|*[!0-9]*) exit 0 ;; esac
+[ "$pid" -gt 1 ] && kill -0 "$pid" 2>/dev/null || exit 0
+p=$$
+while [ -n "$p" ] && [ "$p" -gt 1 ]; do [ "$p" = "$pid" ] && exit 0; p=$(awk '/^PPid:/ {print $2}' "/proc/$p/status" 2>/dev/null); done
+cat "$1"]=] sh "${_jah_gd}/jah-check.pid" OUTPUT_VARIABLE _jah_live OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if(_jah_live)
+            file(REMOVE "${OUT}")
+            message(FATAL_ERROR "BUILT_FROM: REFUSED - a spec.sh test check runs in this tree (its mark ${_jah_gd}/jah-check.pid: "
+                                "${_jah_live}); a build now voids it (DEV_ERRORS 70, the errors audit B5). Nothing is stamped: build "
+                                "after it ends (`spec.sh test <SPEC> --list` says when a check runs).")
+        endif()
+    endif()
     # _jah_head(<dir> <out sha> <out dirty>)
     function(_jah_head dir out_sha out_dirty)
         execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY "${dir}" OUTPUT_VARIABLE sha

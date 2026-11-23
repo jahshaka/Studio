@@ -21,6 +21,7 @@ and B that both depend on one "library" L (lib.txt), each built by a `--target` 
     pass does not claim A (its output is from the edit); a by-reach pass claims it again;
   12 `all` the same way: a DEFAULT target built by hand at an edited state, the edit reverted - a by-reach pass does not carry the
     old `all`; a whole pass claims it again (and says nothing about its own rebuilds);
+  13 a build under a LIVE check's mark (<git dir>/jah-check.pid, not this build's ancestor) fails and leaves no stamp (B5);
   10 THE RECORDS (scripts/gate_runlog.py coverage + stale_build, scripts/row_targets.py): after 6 (A built at the old tip, B at
     this one) a row needing A is `built.uncovered` [A] - its record is never its tip's - and a row needing B is covered.
 No GPU, no display; seconds. usage: built_from_heals.py <source dir>"""
@@ -240,6 +241,29 @@ try:
     rc, out, st = build()
     want("12 a whole pass rebuilds it and claims `all` again", rc == 0 and open(os.path.join(B, "app.txt")).read() == main
          and "all" in st.get("targets", "").split(",") and "no longer claimed" not in out, f"rc {rc} {st}")
+
+    # 13 (the errors audit B5; DEV_ERRORS 70) A BUILD UNDER A RUNNING CHECK FAILS AND CLAIMS NOTHING: the tree's git dir carries a
+    # check's mark (spec.py CheckMark: jah-check.pid) naming a LIVE pid that is not this build's ancestor (a stand-in, alive until
+    # killed by its pid) -> the build exits non-zero, names the check, and leaves NO stamp; a mark naming this process (the
+    # check's own build: an ancestor) builds and stamps; a dead mark is no check (red on the old stamp: the build went through)
+    mark = os.path.join(git(S, "rev-parse", "--absolute-git-dir").strip(), "jah-check.pid")
+    sp = subprocess.Popen(["sleep", "infinity"])
+    try:
+        open(mark, "w").write(f"{sp.pid} 2026-11-23T00:00:00+01:00\n")
+        r = subprocess.run(["cmake", "--build", B], capture_output=True, text=True)
+        gone = not os.path.exists(os.path.join(B, "BUILT_FROM"))
+        open(mark, "w").write(f"{os.getpid()} 2026-11-23T00:00:00+01:00\n")
+        rc2, out2, st2 = build()
+    finally:
+        sp.kill(); sp.wait()
+    open(mark, "w").write(f"{sp.pid} 2026-11-23T00:00:00+01:00\n")
+    rc3, out3, st3 = build()
+    os.remove(mark)
+    want("13 a build under a LIVE check's mark (not its ancestor) fails, names the check and leaves NO stamp; the check's own build "
+         "(an ancestor) and a dead mark build and stamp",
+         r.returncode != 0 and "a spec.sh test check runs in this tree" in r.stdout + r.stderr and gone
+         and rc2 == 0 and st2.get("studio") and rc3 == 0 and st3.get("studio"),
+         f"rc {r.returncode} gone {gone} / {rc2} / {rc3} {(r.stdout + r.stderr)[-300:]}")
 finally:
     shutil.rmtree(T, ignore_errors=True)
 print("tooling.built_from_heals: " + ("PASS" if not fails else f"FAIL ({len(fails)})"), flush=True)
