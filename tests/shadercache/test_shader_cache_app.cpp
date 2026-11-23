@@ -17,6 +17,9 @@
 //                 or no cold-run.json): its laws read run 1's numbers from that file - FIXTURES_SETUP for
 // shadercache.app.cleared (`--cleared`) — run 3 alone, on the home run 2 left warm (it refuses a home
 //                 with no cache to clear);
+// shadercache.app.cold_gate_gap / .warm_gate_gap (`--gap cold|warm`, no launch) — THE GATE's GAP LAW read from run 1's /
+//                 run 2's kept numbers (cold-run.json / warm-run.json, written before any law of the run): its own row, so
+//                 its red never silences the chain (gateGapLaw);
 // shadercache.app.clean (`--clean`, no launch) — the FIXTURES_CLEANUP: the home removed after every
 //                 part that ran (ctest's order, URGENT #133):
 //   run 1, cold : the cache reports itself enabled and located, the startup
@@ -110,9 +113,7 @@ void gateDrawsWhatTheEditorDraws(const char *run, const QJsonObject &after)
                 since("graphicsBuiltInFrame"), since("graphicsCompiledInFrame"), since("lowLevelBuiltInFrame"),
                 since("computeParsedInFrame"), since("computePsoInFrame"));
     CHECK(!at.isEmpty(), "the gate's totals are recorded (app.asyncShaders().atGate)");
-    CHECK(since("graphicsBuiltInFrame") == 0 && since("lowLevelBuiltInFrame") == 0,
-          "the editor's frames built no graphics permutation and no low-level pipeline the gate did not (the gate "
-          "draws what the editor draws)");
+    // (the graphics / low-level law itself is its OWN ROW's: gateGapLaw, --gap - see there)
     // THE GATE DRAWS INTO THE WINDOW's SHAPE (R4 (A)): the passes that write the editor's FINAL target - the display
     // encode and SMAA's blend - key their pipeline on its format and samples. The gate's final-target frames are drawn
     // into an offscreen target of the window's shape (Engine::windowTargetShape), so the editor's frames build none of
@@ -291,6 +292,43 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
 
 int warmLaws(const QString &home, const QString &scripts, const QJsonObject &cold);
 
+/// THE GATE's GAP, ITS OWN ROW (SHADER-SYSTEM-1 7.0, the lead's ruling 2026-11-23: one row per proof). The law: the
+/// editor's frames since the gate built NO graphics permutation and NO low-level pipeline the gate did not - read from a
+/// run's kept numbers (`asyncAfterFrames`: app.asyncShaders() once the script's frames left nothing pending, with its
+/// `atGate`). shadercache.app.cold_gate_gap reads run 1's (cold-run.json), shadercache.app.warm_gate_gap run 2's
+/// (warm-run.json). WHY ITS OWN ROW: the default floor's permutations (the scene's own material: the open's set,
+/// stages 7.1/7.3) keep it red until then, and as a law of the launch rows a red here made ctest skip every row of the
+/// fixture chain behind them (.warm, .cleared: a FAILED setup) - two rows silenced by a law not theirs. THE CONTROL: a run
+/// file that is missing, or lacks the field or the gate's totals, FAILS - the row never passes on nothing.
+int gateGapLaw(const QString &home, const QString &which)
+{
+    const QString file = home + (which == QStringLiteral("cold") ? QStringLiteral("/cold-run.json")
+                                                                 : QStringLiteral("/warm-run.json"));
+    const QString run = which == QStringLiteral("cold") ? QStringLiteral("run 1 (cold)") : QStringLiteral("run 2 (warm)");
+    std::printf("== shadercache.app.%s_gate_gap: the editor's frames since the gate built nothing the gate did not (%s, "
+                "%s)\n", qPrintable(which), qPrintable(run), qPrintable(file));
+    QFile f(file);
+    const QJsonObject runObj = f.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(f.readAll()).object() : QJsonObject();
+    const QJsonObject after = runObj.value("asyncAfterFrames").toObject();
+    const QJsonObject at = after.value("atGate").toObject();
+    CHECK(!runObj.isEmpty(), "the run's numbers were kept (its run file exists and reads)");
+    CHECK(!after.isEmpty() && !at.isEmpty() && after.contains("graphicsBuiltInFrame") &&
+              at.contains("graphicsBuiltInFrame") && after.contains("lowLevelBuiltInFrame") &&
+              at.contains("lowLevelBuiltInFrame"),
+          "the run kept the editor's frames' counts and the gate's totals (asyncAfterFrames, its atGate)");
+    const auto since = [&](const char *k) {
+        return qlonglong(after.value(k).toDouble()) - qlonglong(at.value(k).toDouble());
+    };
+    std::printf("   %s, the editor's frames since the gate (pending %d): graphics built in a frame %lld (compiled %lld), "
+                "low-level pipelines %lld\n", qPrintable(run), after.value("pending").toInt(),
+                since("graphicsBuiltInFrame"), since("graphicsCompiledInFrame"), since("lowLevelBuiltInFrame"));
+    CHECK(!after.isEmpty() && since("graphicsBuiltInFrame") == 0 && since("lowLevelBuiltInFrame") == 0,
+          "the editor's frames built no graphics permutation and no low-level pipeline the gate did not (the gate "
+          "draws what the editor draws)");
+    std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
+    return failures ? 1 : 0;
+}
+
 }  // namespace
 
 int main(int argc, char **argv)
@@ -302,9 +340,12 @@ int main(int argc, char **argv)
     const bool clearedRow = mode == QStringLiteral("--cleared");
     const bool coldRow = mode == QStringLiteral("--cold"), warmRow = mode == QStringLiteral("--warm");
     const bool killedRow = mode == QStringLiteral("--killed");
-    if (!churnRow && !clearedRow && !coldRow && !warmRow && !killedRow && mode != QStringLiteral("--clean")) {
-        std::printf("usage: test_shader_cache_app --cold | --warm | --cleared | --clean | --killed | --churn (one row a "
-                    "launch, URGENT #136)\n");
+    const bool gapRow = mode == QStringLiteral("--gap") && argc > 2 &&
+                        (QString::fromLocal8Bit(argv[2]) == QStringLiteral("cold") ||
+                         QString::fromLocal8Bit(argv[2]) == QStringLiteral("warm"));
+    if (!churnRow && !clearedRow && !coldRow && !warmRow && !killedRow && !gapRow && mode != QStringLiteral("--clean")) {
+        std::printf("usage: test_shader_cache_app --cold | --warm | --cleared | --gap cold|warm | --clean | --killed | "
+                    "--churn (one row a launch, URGENT #136; --gap launches nothing)\n");
         return 64;
     }
 
@@ -312,6 +353,8 @@ int main(int argc, char **argv)
         churnRow    ? QStringLiteral("e2e-home-shadercache-churn")
         : killedRow ? QStringLiteral("e2e-home-shadercache-killed")
                     : QStringLiteral("e2e-home-shadercache"));
+    // THE GAP ROWS READ, THEY LAUNCH NOTHING (no part marker, no home made: a missing home is their FAIL)
+    if (gapRow) return gateGapLaw(home, QString::fromLocal8Bit(argv[2]));
     if (mode == QStringLiteral("--clean")) {
         // THE FIXTURE's CLEANUP (shadercache.app.clean): the home the cold, warm and cleared rows shared, removed after every
         // part that ran - no launch, no card. A PART THAT DID NOT END GREEN (red, or killed at the cap: its `.started`
@@ -328,6 +371,7 @@ int main(int argc, char **argv)
             for (const QFileInfo &f : QDir(home + "/run/logs").entryInfoList(QDir::Files))
                 kept += QFile::copy(f.absoluteFilePath(), ev + "/logs/" + f.fileName()) ? 1 : 0;
             QFile::copy(home + "/cold-run.json", ev + "/cold-run.json");
+            QFile::copy(home + "/warm-run.json", ev + "/warm-run.json");
             std::printf("ok: the part(s) that did not end green (%s): %d app log(s) kept in %s\n",
                         qPrintable(red.join(", ")), kept, qPrintable(QDir::cleanPath(ev)));
         }
@@ -346,6 +390,7 @@ int main(int argc, char **argv)
     if (churnRow || coldRow || killedRow) {
         QDir(home + "/.local/share/Jahshaka").removeRecursively();
         QFile::remove(home + "/cold-run.json");
+        QFile::remove(home + "/warm-run.json");
     }
 
     // THE PART's START (item 6): its `.green` gone, its `.started` written - a kill at the cap leaves exactly this
@@ -548,6 +593,14 @@ int main(int argc, char **argv)
 
     // ---- run 1: cold (shadercache.app.cold) -------------------------------
     const QJsonObject cold = runApp(home, scripts + "e2e_shader_cache_cold.js", {}, &rc);
+    // THE NUMBERS RUN 2's LAWS AND THE GAP ROW READ, KEPT FIRST - before any law of this run (their rows read them
+    // whatever this run's verdict): this run's app.shaderCache() object, its asyncAfterFrames included
+    bool coldKept = false;
+    {
+        QFile f(coldFile);
+        coldKept = f.open(QIODevice::WriteOnly | QIODevice::Truncate)
+                   && f.write(QJsonDocument(cold).toJson(QJsonDocument::Compact)) > 0;
+    }
     CHECK(rc == 0, "run 1 exited cleanly");
     CHECK(cold.value("enabled").toBool(), "the cache is enabled by default");
     CHECK(cold.value("dir").toString().endsWith(QStringLiteral("/shadercache")),
@@ -600,13 +653,7 @@ int main(int argc, char **argv)
     // is back, and 2 would mean something else survived that should not have.
     CHECK(cold.value("afterClearFiles").toInt() == 1,
           "app.clearShaderCache() removed every cache file and kept only the writer lock");
-    // THE NUMBERS RUN 2's LAWS READ, KEPT FOR ITS ROW (shadercache.app.warm): this run's app.shaderCache() object
-    {
-        QFile f(coldFile);
-        const bool kept = f.open(QIODevice::WriteOnly | QIODevice::Truncate)
-                          && f.write(QJsonDocument(cold).toJson(QJsonDocument::Compact)) > 0;
-        CHECK(kept, "run 1's numbers kept for run 2's row (cold-run.json)");
-    }
+    CHECK(coldKept, "run 1's numbers kept for run 2's row and the gap row (cold-run.json, written before any law)");
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
     return finish(failures ? 1 : 0);
 }
@@ -621,7 +668,16 @@ int warmLaws(const QString &home, const QString &scripts, const QJsonObject &col
     // Run 1 cleared its own cache at the end, then quit — and the clean-quit
     // save wrote it back from the session's memory. So run 2 is a genuine warm
     // launch, and it is also a test of that rewrite path.
+    QFile::remove(home + QStringLiteral("/warm-run.json"));   // a gap row never reads an earlier chain's run 2
     const QJsonObject warm = runApp(home, scripts + "e2e_shader_cache_warm.js", {}, &rc);
+    // THE NUMBERS THE GAP ROW READS (shadercache.app.warm_gate_gap), KEPT FIRST - before any law of this run
+    bool warmKept = false;
+    {
+        QFile f(home + QStringLiteral("/warm-run.json"));
+        warmKept = f.open(QIODevice::WriteOnly | QIODevice::Truncate)
+                   && f.write(QJsonDocument(warm).toJson(QJsonDocument::Compact)) > 0;
+    }
+    CHECK(warmKept, "run 2's numbers kept for the gap row (warm-run.json, written before any law)");
     CHECK(rc == 0, "run 2 exited cleanly");
     // The cache did nearly all the work. (This used to allow for a "small,
     // one-off cost": the recorded warm-up SET, replayed on the first warm

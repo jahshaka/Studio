@@ -73,10 +73,26 @@ jah_gpu_row(shadercache.app.cleared SHIP CLASS app TIER document
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app.cleared PROPERTIES TIMEOUT 60 LABELS "shadercache"
     FIXTURES_REQUIRED "shadercacheAppCold;shadercacheAppWarm")
+# shadercache.app.cold_gate_gap / .warm_gate_gap (SHADER-SYSTEM-1 7.0, the lead's ruling 2026-11-23: one row per proof) -
+# THE GATE DRAWS WHAT THE EDITOR DRAWS, read from run 1's / run 2's kept numbers (cold-run.json / warm-run.json, each written
+# before any law of its run): the editor's frames since the gate built no graphics permutation and no low-level pipeline
+# the gate did not. NO LAUNCH, NO CARD: the same binary's --gap mode. Their own rows so the default floor's gap (the open's
+# set: 7.1/7.3, declared) never fails a SETUP of the chain - ctest skipped .warm and .cleared behind a red .cold. A missing
+# run file or field FAILS (gateGapLaw's control). Each requires its run's fixture: ordered after it, before the cleanup.
+add_test(NAME shadercache.app.cold_gate_gap COMMAND test_shader_cache_app --gap cold
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.app.cold_gate_gap PROPERTIES TIMEOUT 60 LABELS "shadercache"
+    FIXTURES_REQUIRED shadercacheAppCold)
+add_test(NAME shadercache.app.warm_gate_gap COMMAND test_shader_cache_app --gap warm
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.app.warm_gate_gap PROPERTIES TIMEOUT 60 LABELS "shadercache"
+    FIXTURES_REQUIRED shadercacheAppWarm)
 add_test(NAME shadercache.app.clean COMMAND test_shader_cache_app --clean WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app.clean PROPERTIES TIMEOUT 60 LABELS "shadercache"
     FIXTURES_CLEANUP "shadercacheAppCold;shadercacheAppWarm")
 jah_no_display(shadercache.app.clean)
+jah_no_display(shadercache.app.cold_gate_gap)
+jah_no_display(shadercache.app.warm_gate_gap)
 jah_ship_row(shadercache.app.clean)   # THE SHIP SET (TEST-CUT-1): the cleanup of two ship rows' fixtures
 # shadercache.app.killed (SHADER-SYSTEM-1 stage 7a, call 9) - A FIRST LAUNCH KILLED RIGHT AFTER ITS GATE KEEPS WHAT THE GATE
 # COMPILED: a wiped data root, SIGKILLed by the harness on the gate's last line, its cache directory read (the manifest,
