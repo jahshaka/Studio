@@ -103,7 +103,7 @@ void casesView(Fixture &f)
         {"engine.view.setCamera", {view, obj({{"nearClip", Value(0.0005)}})}, "camera.nearClip 0.0005 is outside",
          {view, obj({{"nearClip", Value(0.001)}})}},
         {"engine.view.setCamera", {view, obj({{"nearClip", Value(1)}, {"farClip", Value(1.005)}})},
-         "camera.farClip 1.005000 is not 0.01 m past camera.nearClip 1.000000", {view, obj({{"nearClip", Value(1)}, {"farClip", Value(1.02)}})}},
+         "camera.farClip 1.005000 is not 0.01 m past camera.nearClip 1.000000", {view, obj({{"nearClip", Value(1)}, {"farClip", Value(1.01)}})}},
         {"engine.view.setCamera", {view, obj({{"orientation", Value(Value::Array{Value(0), Value(0), Value(0), Value(0)})}})},
          "camera.orientation is a zero quaternion", {view, obj({{"orientation", Value(Value::Array{Value(0), Value(0), Value(0), Value(2)})}})}},
         // THE POST CHAIN: ranges, the laws between members, the measuring arms
@@ -122,6 +122,10 @@ void casesView(Fixture &f)
          "desc.meterLowPercent 95.000000 is above desc.meterHighPercent 90.000000", {view, obj({{"meterLowPercent", Value(90)}})}},
         {"engine.view.setPostFx", {view, obj({{"ditherOff", Value(true)}})}, "desc.ditherOff is a measuring arm", {view, obj({})}},
         {"engine.view.setPostFx", {view, obj({{"ssrSteps", Value(64)}})}, "desc.ssrSteps is a measuring arm", {view, obj({})}},
+        // (EVERY END THAT IS NO WHOLE NUMBER PASSES AT EXACTLY ITSELF - its control: near 0.001, far = near + 0.01, film
+        //  slope 0.01, ssaoScale 0.5 - a bound written as a float would refuse it: the registry compares in double)
+        {"engine.view.setPostFx", {view, obj({{"ssaoScale", Value(0.49)}})}, "desc.ssaoScale 0.49 is outside 0.5..1",
+         {view, obj({{"ssaoScale", Value(0.5)}})}},
         {"engine.view.setPostFx", {view, obj({{"image", obj({{"vignette", Value(2)}})}})}, "desc.image.vignette 2 is outside 0..1",
          {view, obj({})}},
         {"engine.view.setPostFx", {view, obj({{"image", obj({{"whiteTemperature", Value(900)}})}})},
