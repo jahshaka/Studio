@@ -488,7 +488,9 @@ if(JAHSHAKA_ASAN)
     # atom.component_asan (tests/atom: component.js on jahengine_asan, label `long`).
     add_library(JahshakaScriptAsan STATIC EXCLUDE_FROM_ALL ${JAHSHAKA_ENGINE_SCRIPT_SOURCES})
     target_include_directories(JahshakaScriptAsan PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
-    target_link_libraries(JahshakaScriptAsan PUBLIC JahshakaEngineAsan PRIVATE qjs)
+    # its value IS the core's (Script.h names iris::Value, core/value.h: NOQT-CORE-1 stage 3), as the plain JahshakaScript
+    # links it (irisgl/engine/CMakeLists.txt): IrisCore PUBLIC, the real library, as JahshakaEngineAsan links it above
+    target_link_libraries(JahshakaScriptAsan PUBLIC JahshakaEngineAsan IrisCore PRIVATE qjs)
     set_target_properties(JahshakaScriptAsan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
                                                         CXX_STANDARD_REQUIRED ON)
     target_compile_options(JahshakaScriptAsan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
