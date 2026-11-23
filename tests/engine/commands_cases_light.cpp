@@ -4,6 +4,7 @@
 // host's kept record, the engine-wide setter refused for an outside client, and the effect on the headless engine.
 #include "script_commands.h"
 #include "script/records_light.h"
+#include "jahshaka/engine/Published.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -88,6 +89,12 @@ void casesLight(Fixture &f)
     if (!failedWith(huge, "pixels 16384 is outside 256..8192 px")) missed += "\n      16384: " + huge.message;
     // THE CONTROL: a light in its domain passes the arguments' laws; the node's existence, asked of no engine, then FAILS
     const Result inDomain = light({{"type", Value("spot")}, {"spotAngleDegrees", Value(85.0)}});
+    // ...and AT EXACTLY EVERY NON-WHOLE END (the audit's findings 8-12: an end written as a float - 0.001f widens to
+    // 0.0010000000475 - would refuse its own end): range 0.01, sourceRadius 0.001, spotSoftness 0.99, rectWidth 0.01,
+    // rectHeight 0.01 pass the arguments' laws
+    const Result atTheEnds = light({{"range", Value(0.01)}, {"sourceRadius", Value(0.001)}, {"spotSoftness", Value(0.99)},
+                                    {"rectWidth", Value(0.01)}, {"rectHeight", Value(0.01)}});
+    if (!failedWith(atTheEnds, "the node's scene is gone")) missed += "\n      at the ends: " + atTheEnds.message;
     check(missed.empty() && failedWith(inDomain, "the node's scene is gone"),
           "THE LIGHT's DECLARED DOMAIN, each refused by name on the null engine (" + std::to_string(std::size(domains) + 3) +
               " cases; a 3-number colour: '" + colourText + "'); THE CONTROL: a light in its domain passes them (the "
@@ -156,10 +163,18 @@ void casesLight(Fixture &f)
         const Result again = f.headless.call("engine.light.set", {scene, node, Value(Value::Object{{"intensity", Value(2.0)}})});
         const LightDesc *kept = f.live.kept<LightDesc>(raw, KeptKind::Light, Call::idOf(node));
         const bool keptPath = kept && kept->iesProfilePath == ring && kept->intensity == 2.0f;
+        const std::string keptText = kept ? kept->iesProfilePath : std::string("none");   // (the record goes at the remove)
         check(failedWith(missing, "engine.light.setIesProfile: Scene::setLight: light profile not found: /no/such.ies") &&
                   keptPath,
               "A MISSING IES PROFILE FAILS in the engine's words (" + missing.message + "); the host's record keeps the "
               "profile it had (" + (kept ? kept->iesProfilePath : std::string("none")) + ")");
+        // THE EFFECT WHERE THE ENGINE GIVES A READ (the audit's finding 6): the light writes moved the scene's light serial
+        // (Scene::published().lightWriteSerial, Published.h:212; the remove counts elsewhere, mLightsRemoved, unpublished);
+        // the remove's own effect is the engine's next answer - a second remove is refused ("carries no light"). The
+        // shadow side has NO headless read (OgreEngine::rebuildShadowAtlas returns before it records the side on a
+        // headless engine, OgreShadow.cpp:777): the train's card case.
+        f.headless.call("engine.frames", {Value(1)});
+        const std::uint64_t lit = raw->published().lightWriteSerial;
         const Result removed = f.headless.call("engine.light.remove", {scene, node});
         const bool gone = f.live.kept<LightDesc>(raw, KeptKind::Light, Call::idOf(node)) == nullptr;
         const Result after =
@@ -167,15 +182,46 @@ void casesLight(Fixture &f)
         const Result twice = f.headless.call("engine.light.remove", {scene, node});
         const Result side = f.headless.call("engine.light.setShadowResolution", {Value(2048)});
         check(set.status == Status::Ok && set.value == Value(true) && profiled.status == Status::Ok && again.status == Status::Ok &&
-                  keptPath && removed.value == Value(true) && gone &&
+                  keptPath && lit > 0 && removed.value == Value(true) && gone &&
                   failedWith(after, "this host set no light on it (engine.light.set first)") &&
                   twice.status == Status::Refused && twice.value == Value(false) &&
                   twice.message.find("carries no light") != std::string::npos && side.status == Status::Ok,
               "ON THE HEADLESS ENGINE a light answers: set (" + set.message + "), its IES path set by setIesProfile and KEPT "
-              "by the next engine.light.set (the host's record: '" + (kept ? kept->iesProfilePath : std::string("none")) +
-                  "'), removed with the record (then setIesProfile FAILS: " + after.message +
-                  "; a second remove is refused: " + twice.message + "); the shadow side set");
+              "by the next engine.light.set (the host's record: '" + keptText + "'), the light serial moved by the writes (" +
+                  std::to_string(lit) + "), removed with the record (then setIesProfile FAILS: " + after.message +
+                  "; a second remove is refused by the engine: " + twice.message + "); the shadow side answered");
         std::remove(ring.c_str());
+    }
+
+    // 4b. A REFUSAL IS ATOMIC (the audit's finding 4, the lead's ruling): a directional light, an IES path set on it
+    //     (accepted: a directional reads no profile), then the light made a spot - REFUSED (the spot reads the kept
+    //     missing profile) and NOTHING of the light changed: the scene's light serial (published().lightWriteSerial,
+    //     Engine.h:809-814: every light write advances it) stands still, and the host's record (directional) is what the
+    //     engine holds. THE CONTROL: the accepted writes before it moved the serial.
+    {
+        const Value lamp = f.headless.call("engine.node.create", {scene}).value;
+        const Value::Object directional{{"type", Value("directional")}};
+        const std::uint64_t s0 = raw->published().lightWriteSerial;
+        const Result made = f.headless.call("engine.light.set", {scene, lamp, Value(directional)});
+        const Result pathed =
+            f.headless.call("engine.light.setIesProfile", {scene, lamp, Value(Value::Object{{"path", Value("/no/such/atomic.ies")}})});
+        f.headless.call("engine.frames", {Value(1)});
+        const std::uint64_t s1 = raw->published().lightWriteSerial;
+        const Result spot = f.headless.call("engine.light.set",
+                                            {scene, lamp, Value(Value::Object{{"type", Value("spot")}, {"intensity", Value(5.0)}})});
+        f.headless.call("engine.frames", {Value(1)});
+        const std::uint64_t s2 = raw->published().lightWriteSerial;
+        const LightDesc *kept = f.live.kept<LightDesc>(raw, KeptKind::Light, Call::idOf(lamp));
+        check(made.value == Value(true) && pathed.value == Value(true) && s1 > s0 && spot.status == Status::Refused &&
+                  spot.message.find("light profile not found: /no/such/atomic.ies") != std::string::npos && s2 == s1 &&
+                  kept && kept->type == LightType::Directional,
+              "A REFUSAL IS ATOMIC: a directional light given a missing IES path (accepted: " + pathed.message + "), then "
+              "made a spot: REFUSED (" + spot.message + ") and the light serial stood still (" + std::to_string(s1) +
+                  " -> " + std::to_string(s2) + "): nothing of the light changed, the host's record (" +
+                  (kept && kept->type == LightType::Directional ? "directional" : "not directional") +
+                  ") is the engine's; THE CONTROL: the accepted writes moved it (" + std::to_string(s0) + " -> " +
+                  std::to_string(s1) + ")");
+        f.headless.call("engine.node.destroy", {scene, lamp});
     }
 
     // 5. THE HANDLES: a destroyed node, another host's node handle and a handle of the wrong kind each FAIL by name;

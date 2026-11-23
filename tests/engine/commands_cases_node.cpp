@@ -3,6 +3,8 @@
 // name on the null engine, the stale / foreign / wrong-kind handle, a handed-in scene's node not this host's to change,
 // and the effect on the headless engine where it answers there.
 #include "script_commands.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Skeleton.h"
 
 namespace scriptcommands {
 
@@ -54,6 +56,23 @@ void casesNode(Fixture &f)
         }
         check(missed.empty(), "ON THE HEADLESS ENGINE the node's flags (visible, movable, helper: on and off) and its "
                               "four face culls each answer on a node this host made" + missed);
+    }
+
+    // 2b. THE EFFECT WHERE THE HEADLESS ENGINE GIVES A READ (the audit's finding 6): engine.node.setMovable moves the
+    //     scene's published mobility count (Scene::published().mobility.movableNodes, Published.h:205, Skeleton.h:84-88):
+    //     1 with the node movable, 0 when it is not. (setVisible, setHelper and setFaceCull have no headless read: the
+    //     train's card cases, named in the STATE.)
+    {
+        Scene *raw = f.headless.registry().object<Scene>(scene.asInt());
+        f.headless.call("engine.node.setMovable", {scene, node, Value(true)});
+        f.headless.call("engine.frames", {Value(1)});
+        const std::size_t movable = raw->published().mobility.movableNodes;
+        f.headless.call("engine.node.setMovable", {scene, node, Value(false)});
+        f.headless.call("engine.frames", {Value(1)});
+        const std::size_t still = raw->published().mobility.movableNodes;
+        check(movable == 1 && still == 0, "engine.node.setMovable REACHES THE ENGINE: the published movable nodes read " +
+                                              std::to_string(movable) + " with the flag set, " + std::to_string(still) +
+                                              " with it cleared");
     }
 
     // 3. THE HANDLES: a destroyed node, another host's node handle, a mesh given as a node - each FAILS by name before

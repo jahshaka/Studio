@@ -52,3 +52,18 @@ jah_document_graph(test_shader_clock)
 add_test(NAME mirror.shader_clock_steps COMMAND test_shader_clock WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.shader_clock_steps PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
 jah_no_display(mirror.shader_clock_steps)
+
+# mirror.final_refusal — A REFUSAL THE ENGINE WILL GIVE AGAIN IS TAKEN ONCE (SCRIPT-IN-ENGINE-1 2e e1, the audit's finding
+# 1; test_mirror_final_refusal.cpp says the law): a document spot light naming a missing .ies, synced 8 times, is pushed
+# and refused ONCE; a changed value is pushed again. A real SceneMirror on the NULL engine: no display, no card.
+add_executable(test_mirror_final_refusal test_mirror_final_refusal.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_mirror_final_refusal PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_mirror_final_refusal PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_mirror_final_refusal PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_mirror_final_refusal)
+add_test(NAME mirror.final_refusal COMMAND test_mirror_final_refusal WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.final_refusal PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
+jah_no_display(mirror.final_refusal)

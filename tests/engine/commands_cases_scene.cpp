@@ -125,6 +125,21 @@ void casesScene(Fixture &f)
                   " cases); THE CONTROL: arguments in their domain reach the body (no engine there)" + missed + reached);
     }
 
+    // 1b. THE SHADOW REQUEST IS ENGINE-WIDE (the audit's finding 3: OgreScene::setShadowSettings writes the engine's ONE
+    //     filter and atlas - "the last scene to ask owns them"): a host for an outside client refuses it by name, before
+    //     anything; THE CONTROL: a host that serves no outside client reaches the engine (absent here: FAILS so)
+    {
+        const std::int64_t outsideScene = f.outside.registry().hold<Scene>(kScene, std::shared_ptr<Scene>(raw, [](Scene *) {}));
+        const Value request(Value::Object{{"hasFilter", Value(true)}, {"filter", Value("hard")}, {"resolution", Value(8192)}});
+        const Result outside = f.outside.call("engine.scene.setShadowSettings", {Value(outsideScene), request});
+        const Result inside = f.none.call("engine.scene.setShadowSettings", {ns, request});
+        check(failedWith(outside, "engine.scene.setShadowSettings: engine-wide: this host serves an outside client") &&
+                  failedWith(inside, "the engine did not start"),
+              "engine.scene.setShadowSettings is ENGINE-WIDE: an outside client's host refuses it (" + outside.message +
+                  "); THE CONTROL: a host for no outside client reaches the engine (" + inside.message + ")");
+        f.outside.registry().release(outsideScene);
+    }
+
     // 2. THE TABLES: every record in declaration order; the default and a record with every field changed round-trip
     {
         std::string missed;
