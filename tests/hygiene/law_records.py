@@ -8,7 +8,8 @@ engine fixture's `  FAIL (n) <law>` line is one (it never was). AND A ROW CTEST 
 (`Failed test dependencies: <row>` then `***Not Run`) is recorded NOTRUN with `behind`, its status "behind <row>" and its
 fail line "NOT RUN behind <row>" (URGENT #123); one Not Run for another reason carries no `behind`. A POOL's ARM LINES
 (`ARM <pool>.<arm> <verdict> <ms>`) are each an arm record, one printed past the cap too, and an arm's echoed output
-(`<pool>.<arm>| ...`, tests/support/run_pool.py) is never one (TE7).
+(`<pool>.<arm>| ...`, tests/support/run_pool.py) is never one (TE7). EVERY record keeps its row's LAST 40 LINES (`tail`, green or red,
+past the cap too: the errors audit B7).
 usage: law_records.py <the tree's scripts/gate_runlog.py> (named on the command line: the selector reaches the row from it)"""
 import glob
 import json
@@ -91,5 +92,11 @@ with tempfile.TemporaryDirectory(prefix="law-records-") as tmp:
          "a row not run behind its red fixture: NOTRUN, behind [fake.fixture], status 'behind fake.fixture' (#123) (%s)"
          % {k: b.get(k) for k in ("verdict", "behind", "status", "failLine")})
     want(d.get("verdict") == "NOTRUN" and "behind" not in d, "a row not run for another reason (disabled) carries no behind")
+    # B7 (the errors audit 2026-11-23): EVERY record keeps its row's last 40 lines, green or red, past the output cap too
+    want(g.get("tail") == ["LAW k14.breaking 1.86 % <= 1", "an ordinary line", "LAW sky.teleport nan %R", "LAW bad 1x codes"],
+         "a GREEN row's record keeps its last lines (its own figures readable after a pass) (%s)" % g.get("tail"))
+    want(len(r.get("tail") or []) == 40 and r["tail"][-1] == "FAIL: the rest frame outweighs a tile frame"
+         and r["tail"][-2] == "LAW rest.trace 4.63 ms <= 3.31",
+         "a red row's tail is its LAST 40 lines, printed past the 256-KB cap (%s)" % (r.get("tail") or [])[-2:])
 print("tooling.law_records: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)
