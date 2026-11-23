@@ -671,6 +671,15 @@ jah_gpu_row(script.trace_rays_mask CLASS engine FRAMES 4
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(script.trace_rays_mask PROPERTIES TIMEOUT 60 LABELS "engine")
 
+# script.reflector_attach_quiet (SCRIPT-IN-ENGINE-1 2f, the train's card: P14, the lead's ruling) — A MESH ATTACHED TO AN
+# ARMED REFLECTOR THAT CANNOT RE-ARM PUBLISHES NO REFUSAL: attachMesh answers true and leaves no error (OgreMaterials.cpp's
+# restore), so input.messagesRefused does not move and reflectorArms reads 1 -> 1; THE CONTROL: arming the same two-sided
+# mesh is refused in the reflector's own words. A script run by jahengine. 7 frames.
+jah_gpu_row(script.reflector_attach_quiet CLASS engine FRAMES 7
+         COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/script_reflector_attach_quiet.js" --name script.reflector_attach_quiet
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(script.reflector_attach_quiet PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # script.json — THE SCRIPT VALUE IN JSON, ITS LAWS ON THE CPU (MCP-ON-HOST-1 stage 1; test_script_json.cpp says them):
 # every kind round-trips with its kind, numbers by their bits, strict UTF-8, the text's shape, bytes as {"$bytes"} capped
 # at 1 MiB. The codec alone (jahshaka/engine/ScriptJson.h): no device, a code row.
