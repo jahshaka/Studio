@@ -26,7 +26,7 @@
 // MEASURED (2026-10-27): the orange reference's ground 0.1423 0.0371 0.0039 and the dome's the same; the backdrop's 0.
 // A fixture (the engine and the mirror, one 96 x 96 offscreen view; 10 s budget). Counted in frames.
 #include <QDir>
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 #include <QGuiApplication>
 #include <QImage>
 
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
 
     auto doc = iris::Scene::create();
     doc->skyType = iris::SkyType::SINGLE_COLOR;
-    doc->skyColor = iris::toSrgbColor(kSky);
+    doc->skyColor = qtstd::toSrgbColor(kSky);
     doc->sunDiscVisible = false;
     doc->fogEnabled = false;
     doc->hdrEnabled = false;
@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
         }
         return still >= 3;
     };
-    const iris::LinearColor want = iris::linearOf(iris::toSrgbColor(kSky));
+    const iris::LinearColor want = iris::linearOf(qtstd::toSrgbColor(kSky));
     const double code = 1.0 / 255.0;
     for (const bool gi : { false }) {
         doc->giMode = gi ? iris::GiMode::VCT : iris::GiMode::OFF;
@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
         // the reference: no Sky Light under a uniform ORANGE World sky - what an orange dome must light the ground as
         const QColor kDome(220, 120, 40);
         if (skyLight->getParent()) doc->getRootNode()->removeChild(skyLight);
-        doc->skyColor = iris::toSrgbColor(kDome);
+        doc->skyColor = qtstd::toSrgbColor(kDome);
         Reading orange;
         const bool s3 = settle(orange);
         // the dome: the World sky blue again, a white Sky Light of 1 whose source is six orange faces
@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
             paths[i] = QDir(dir).filePath(QStringLiteral("face%1.png").arg(i));
             face.save(paths[i]);
         }
-        doc->skyColor = iris::toSrgbColor(kSky);
+        doc->skyColor = qtstd::toSrgbColor(kSky);
         skyLight->intensity = 1.0f;
         skyLight->skySource = iris::SkyLightSource::Cubemap;
         skyLight->skyCubeTexture = imagedecode::loadCubeMap(paths[0], paths[1], paths[2], paths[3], paths[4],

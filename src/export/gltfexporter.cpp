@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/quat.h"
 #include "app/qtstd.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 #include "irisgl/core/math/vec.h"
 #include "export/gltfexporter.h"
 #include "services/imagedecode.h"
@@ -818,7 +818,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
     switch (scene->skyType) {
     case iris::SkyType::SINGLE_COLOR:
         sky["type"] = "color";
-        sky["color"] = iris::toQColor(scene->skyColor).name();
+        sky["color"] = qtstd::toQColor(scene->skyColor).name();
         break;
     case iris::SkyType::GRADIENT:
         sky["type"] = "equirect";
@@ -833,7 +833,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
         const QString src = scene->skyTexture ? QString::fromStdString(scene->skyTexture->source) : QString();
         const QImage img = loadDocumentImage(src, c);
         if (!img.isNull()) sky["image"] = imageToDataUri(img, true);
-        else { sky["type"] = "color"; sky["color"] = iris::toQColor(scene->skyColor).name();
+        else { sky["type"] = "color"; sky["color"] = qtstd::toQColor(scene->skyColor).name();
                c.warnings.append(QStringLiteral("equirect sky image missing: %1").arg(src)); }
         break;
     }
@@ -856,7 +856,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
             if (ok) stitched = stitchCubemapToEquirect(faces);
         }
         if (!stitched.isNull()) sky["image"] = imageToDataUri(stitched, true);
-        else { sky["type"] = "color"; sky["color"] = iris::toQColor(scene->skyColor).name();
+        else { sky["type"] = "color"; sky["color"] = qtstd::toQColor(scene->skyColor).name();
                c.warnings.append(QStringLiteral("cubemap sky faces missing — exported flat colour")); }
         break;
     }
@@ -896,7 +896,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
     case iris::SkyType::MATERIAL:
     default:
         sky["type"] = "color";
-        sky["color"] = iris::toQColor(scene->skyColor).name();
+        sky["color"] = qtstd::toQColor(scene->skyColor).name();
         break;
     }
     return sky;
@@ -1105,7 +1105,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 QJsonObject area;
                 area["width"] = double(light->rectWidth);
                 area["height"] = double(light->rectHeight);
-                area["color"] = iris::toQColor(light->color).name();
+                area["color"] = qtstd::toQColor(light->color).name();
                 area["intensity"] = double(light->intensity * kLightIntensityScale);
                 area["doubleSided"] = light->doubleSided;
                 QJsonObject shim = orientationShimNode(QString::fromStdString(node->getName() + ".orient"));
@@ -1488,7 +1488,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // height layer and breakthrough have no three.js equivalent at all, so
         // they are exported for information only.
         QJsonObject fog;
-        fog["color"] = iris::toQColor(scene->fogColor).name();
+        fog["color"] = qtstd::toQColor(scene->fogColor).name();
         fog["density"] = double(scene->fogDensity);
         fog["exp2Density"] = 0.83255461 * double(scene->fogDensity);
         if (scene->fogHeightDensity > 0.0f) {
@@ -1571,7 +1571,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     if (const auto sky = scene->skyLight()) {
         QJsonObject skyLight;
         skyLight["intensity"] = double(sky->intensity);
-        skyLight["tint"] = iris::toQColor(sky->color).name();
+        skyLight["tint"] = qtstd::toQColor(sky->color).name();
         jahScene["skyLight"] = skyLight;
     }
     jahScene["antiAliasing"] = scene->antiAliasing;

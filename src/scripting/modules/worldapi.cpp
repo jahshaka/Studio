@@ -10,7 +10,6 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/vec.h"
-#include "irisgl/document/qt/colour.h"
 #include "app/qtstd.h"
 #include "irisgl/core/text.h"
 #include "app/qtstdgui.h"
@@ -802,9 +801,9 @@ bool WorldApi::fog(const QVariantMap &params)
     if (params.contains("enabled")) scene->fogEnabled = params.value("enabled").toBool();
     if (params.contains("color")) {
         bool ok = false;
-        const QColor c = colorFromJs(params.value("color"), iris::toQColor(scene->fogColor), &ok);
+        const QColor c = colorFromJs(params.value("color"), qtstd::toQColor(scene->fogColor), &ok);
         if (!ok) return fail(QStringLiteral("world.fog: %1").arg(colorHelp(params.value("color"))));
-        scene->fogColor = iris::toSrgbColor(c);
+        scene->fogColor = qtstd::toSrgbColor(c);
     }
     // (`start` and `end` are GONE — the retired linear pair's two document
     // fields are deleted, CRUD law. A script that wants the fog those two
@@ -2925,7 +2924,7 @@ QVariantMap WorldApi::skyLight()
     out[QStringLiteral("light")] = light ? QString::fromStdString(light->getGUID()) : QString();
     out[QStringLiteral("name")] = light ? QString::fromStdString(light->getName()) : QString();
     out[QStringLiteral("intensity")] = light ? double(light->intensity) : 0.0;
-    out[QStringLiteral("tint")] = light ? colorToJs(iris::toQColor(light->color)) : QVariant();
+    out[QStringLiteral("tint")] = light ? colorToJs(qtstd::toQColor(light->color)) : QVariant();
     out[QStringLiteral("reason")] = QString::fromStdString(scene->skyLightReason());
     const int typeIndex = qBound(0, int(scene->skyType), int(scene->skyTypeToStr.size()) - 1);
     out[QStringLiteral("skyType")] = QString::fromStdString(scene->skyTypeToStr.at(typeIndex));
@@ -3721,15 +3720,15 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
     if (t == "color" || t == "singlecolor") {
         // As everywhere else: omitting the colour keeps the scene's, a colour
         // that was given and cannot be read is refused.
-        QColor c = iris::toQColor(scene->skyColor);
+        QColor c = qtstd::toQColor(scene->skyColor);
         if (params.contains("color")) {
             bool ok = false;
-            c = colorFromJs(params.value("color"), iris::toQColor(scene->skyColor), &ok);
+            c = colorFromJs(params.value("color"), qtstd::toQColor(scene->skyColor), &ok);
             if (!ok) return fail(QStringLiteral("world.sky: %1").arg(colorHelp(params.value("color"))));
         }
-        scene->skyColor = iris::toSrgbColor(c);
+        scene->skyColor = qtstd::toSrgbColor(c);
         QJsonObject def;
-        def.insert("skyColor", qtstd::colorToJson(iris::toSrgbColor(c)));
+        def.insert("skyColor", qtstd::colorToJson(qtstd::toSrgbColor(c)));
         scene->skyData.insert_or_assign("SingleColor", qtstd::fromQJsonObject(def));
         scene->skyType = iris::SkyType::SINGLE_COLOR;
     } else if (t == "gradient") {
@@ -3743,11 +3742,11 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
             if (!params.contains(key)) continue;   // omitted = keep this stop
             const QVariant given = params.value(key);
             bool ok = false;
-            const QColor c = colorFromJs(given, iris::toQColor(*stop.field), &ok);
+            const QColor c = colorFromJs(given, qtstd::toQColor(*stop.field), &ok);
             if (!ok)
                 return fail(QStringLiteral("world.sky: %1 (gradient stop '%2')")
                                 .arg(colorHelp(given), key));
-            *stop.field = iris::toSrgbColor(c);
+            *stop.field = qtstd::toSrgbColor(c);
         }
         if (params.contains("offset")) scene->gradientOffset = params.value("offset").toFloat();
         QJsonObject def;
@@ -3908,7 +3907,7 @@ QVariantMap WorldApi::get()
         // force: "sky" under the realistic sky (its own scattering colours every
         // fog layer — FOG-ATMO-1), "authored" (`color`) under the others.
         QVariantMap fog{ { "enabled", scene->fogEnabled },
-                         { "color", colorToJs(iris::toQColor(scene->fogColor)) },
+                         { "color", colorToJs(qtstd::toQColor(scene->fogColor)) },
                          { "colorFrom", worldmodes::fogColourAuthored(scene)
                                             ? QStringLiteral("authored") : QStringLiteral("sky") } };
         for (const worldmodes::ParamRow &p : worldmodes::fogParams()) fog[QString::fromStdString(p.id)] = p.get(scene);
@@ -3952,7 +3951,7 @@ QVariantMap WorldApi::get()
     const int typeIndex = qBound(0, int(scene->skyType), int(scene->skyTypeToStr.size()) - 1);
     sky["type"] = QString::fromStdString(scene->skyTypeToStr.at(typeIndex));
     sky["data"] = qtstd::toVariantMap(iris::valueOr(scene->skyData, scene->skyTypeToStr.at(typeIndex)));
-    if (scene->skyType == iris::SkyType::SINGLE_COLOR) sky["color"] = colorToJs(iris::toQColor(scene->skyColor));
+    if (scene->skyType == iris::SkyType::SINGLE_COLOR) sky["color"] = colorToJs(qtstd::toQColor(scene->skyColor));
     // The sun PIN (which directional light is the sun), empty = automatic. The
     // sky's own sun dials and its steering switch are gone (D15) — world.sun()
     // is where the sun's direction is read now.

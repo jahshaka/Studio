@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "bakeprogram.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 #include "app/qtstd.h"
 
 #include <QDebug>
@@ -568,7 +568,7 @@ struct Compiler
 			op.hasLiteral = true;
 		}
 		else if (type == "color") {
-			const QColor c = iris::toQColor(qtstd::colorFromJson(node->serializeWidgetValue().toObject(), iris::toSrgbColor(QColor(Qt::black))));
+			const QColor c = qtstd::toQColor(qtstd::colorFromJson(node->serializeWidgetValue().toObject(), qtstd::toSrgbColor(QColor(Qt::black))));
 			const Value rgba(c.redF(), c.greenF(), c.blueF(), c.alphaF());
 			// out 0 is RGBA; 1-4 are the R,G,B,A channels
 			op.literal = op.outIndex == 0 ? rgba : Value(rgba.component(op.outIndex - 1));

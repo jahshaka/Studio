@@ -7,7 +7,7 @@
 // a green material must show green; the background colour must reach the
 // corner pixel; release() must detach cleanly.
 #include <QApplication>
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 #include <QColor>
 #include <QDir>
 #include <QImage>

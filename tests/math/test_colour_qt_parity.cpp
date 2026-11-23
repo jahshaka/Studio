@@ -5,7 +5,7 @@
 // math.parity links it for the math types). What the type carries, each compared over its whole domain:
 //   * the 8-bit constructor (every value 0..255, and the out-of-range ones -> invalid) - its 16-bit store;
 //   * every 16-bit channel value (65,536): the 8-bit reduction red()..alpha(), redF()..alphaF() bit for bit, and the
-//     editor's edge both ways (iris::toQColor / iris::toSrgbColor) - the same QColor back;
+//     editor's edge both ways (qtstd::toQColor / qtstd::toSrgbColor) - the same QColor back;
 //   * 100,000 seeded floats in 0..1 (plus 0 and 1): fromRgbF's 16-bit store and its F accessors;
 //   * the invalid state: what it reads (alpha 1, colour 0) and that it round-trips;
 //   * linearOf: the decode of the 8-bit value the picker showed (core/color.h's table) - equal on both;
@@ -22,7 +22,7 @@
 #include <random>
 
 #include "irisgl/document/srgbcolor.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 
 static int failures = 0;
 static long compared = 0;
@@ -49,9 +49,9 @@ static bool same(const iris::SrgbColor &s, const QColor &q)
         return false;
     // the editor's edge, both ways: the same QColor back, the same SrgbColor back. AN INVALID COLOUR crosses as THE
     // invalid colour (QColor() / SrgbColor(): alpha 1): the alpha 0 an out-of-range QColor(-1, ...) keeps is not
-    // carried across (document/qt/colour.h says so).
-    if (!s.isValid()) return !iris::toQColor(s).isValid() && !iris::toSrgbColor(q).isValid();
-    if (iris::toQColor(s) != q || iris::toSrgbColor(q) != s) return false;
+    // carried across (src/app/qtstdgui.h says so).
+    if (!s.isValid()) return !qtstd::toQColor(s).isValid() && !qtstd::toSrgbColor(q).isValid();
+    if (qtstd::toQColor(s) != q || qtstd::toSrgbColor(q) != s) return false;
     return true;
 }
 
@@ -145,7 +145,7 @@ int main()
         CHECK(hsvWhite.rgba64() == rgbWhite.rgba64() && hsvWhite != rgbWhite,
               "the named difference, Qt's side: an HSV white and an Rgb white have the same channels and are UNEQUAL");
         ++compared;
-        CHECK(iris::toSrgbColor(hsvWhite) == iris::SrgbColor(255, 255, 255),
+        CHECK(qtstd::toSrgbColor(hsvWhite) == iris::SrgbColor(255, 255, 255),
               "the named difference, the type's side: the same channels are EQUAL (the type carries no spec)");
     }
     // ---- the control -----------------------------------------------------------------------------------------

@@ -17,7 +17,6 @@ For more information see the LICENSE file
 // "#rrggbb" strings or {r,g,b} maps with 0..1 channels — D10's one encoding).
 
 #include "irisgl/core/math/quat.h"
-#include "irisgl/document/qt/colour.h"
 #include "irisgl/core/math/vec.h"
 #include <QColor>
 #include <QVector3D>
@@ -325,7 +324,7 @@ inline QVariantMap propertyRowToJs(iris::Property *prop)
     // an int, a float, a bool, a string).
     switch (prop->type) {
     case iris::PropertyType::Color:
-        row["value"] = colorToJs(iris::toQColor(static_cast<const iris::ColorProperty *>(prop)->value));
+        row["value"] = colorToJs(qtstd::toQColor(static_cast<const iris::ColorProperty *>(prop)->value));
         break;
     case iris::PropertyType::Vec3:
         row["value"] = vecToJs(static_cast<const iris::Vec3Property *>(prop)->value);
@@ -445,7 +444,7 @@ inline QVariantMap lightToJs(const iris::SceneNodePtr &node)
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Light) return m;
     auto light = std::static_pointer_cast<iris::LightNode>(node);
     m["lightType"] = lightTypeName(light->lightType);
-    m["color"] = colorToJs(iris::toQColor(light->color));
+    m["color"] = colorToJs(qtstd::toQColor(light->color));
     m["intensity"] = light->intensity;
     // THE SKY LIGHT HAS TWO ROWS AND NO OTHERS (SKY_LIGHT_SPEC.md §2): colour
     // is the tint, intensity the strength, and every other LightNode field is
@@ -493,10 +492,10 @@ inline QVariantMap materialSummaryToJs(const iris::SceneNodePtr &node)
         static const char *kAlphaModes[] = { "opaque", "cutout", "blend", "glass",
                                              "additive", "modulate", "refractive" };
         m["class"] = QStringLiteral("pbr");
-        m["baseColor"] = colorToJs(iris::toQColor(pbr->baseColor));
+        m["baseColor"] = colorToJs(qtstd::toQColor(pbr->baseColor));
         m["metallic"] = pbr->metallicFactor;
         m["roughness"] = pbr->roughnessFactor;
-        m["emissiveColor"] = colorToJs(iris::toQColor(pbr->emissiveColor));
+        m["emissiveColor"] = colorToJs(qtstd::toQColor(pbr->emissiveColor));
         m["emissiveIntensity"] = pbr->emissiveIntensity;
         m["alpha"] = pbr->alpha;
         m["alphaMode"] = kAlphaModes[qBound(0, pbr->alphaMode, 6)];

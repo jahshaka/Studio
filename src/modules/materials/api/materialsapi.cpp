@@ -1979,7 +1979,7 @@ QVariantMap MaterialApi::get(const QString &nodeId)
     for (auto prop : declaredProperties(material)) {
         const QString key = qtstd::toQString(prop->name);
         if (prop->type == iris::PropertyType::Color)
-            out[key] = colorToJs(iris::toQColor(static_cast<const iris::ColorProperty *>(prop)->value));
+            out[key] = colorToJs(qtstd::toQColor(static_cast<const iris::ColorProperty *>(prop)->value));
         else if (prop->type == iris::PropertyType::Vec3)
             out[key] = vecToJs(static_cast<const iris::Vec3Property *>(prop)->value);
         else

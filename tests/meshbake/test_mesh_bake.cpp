@@ -45,7 +45,7 @@
 #include <QCryptographicHash>
 
 #include "../support/testmesh.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 #include "../support/proceduralshell.h"
 #include <QDir>
 #include <QFile>

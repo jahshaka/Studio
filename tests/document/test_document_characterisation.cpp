@@ -62,7 +62,7 @@
 // The scene FILE format's retired-node-type table (header-only, no reader).
 #include "io/sceneformat.h"
 #include "services/imagedecode.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 
 #include "../support/documentgraph.h"
 #include <cstdint>
