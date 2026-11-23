@@ -13,7 +13,8 @@ For more information see the LICENSE file
 #include "app/qtstd.h"
 
 #include <QFileInfo>
-#include <QSqlDatabase>
+
+#include "services/services.h"
 
 #include "commands/scenepropertycommand.h"
 #include "data/project.h"
@@ -130,9 +131,8 @@ void WorldCloudsPropertyWidget::onWeatherPicked(const QString &value, const QStr
 {
     if (loading || !scene) return;
     QString path;
-    if (!guid.isEmpty() && project)
-        path = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
-                                       project->getProjectGuid(), guid);
+    if (!guid.isEmpty() && project && services && services->resolvePinned)
+        path = services->resolvePinned(project->getProjectGuid(), guid);
     if (!guid.isEmpty() && (path.isEmpty() || !QFileInfo::exists(path))) return;
     Q_UNUSED(value)
     iris::CloudLayer c = scene->clouds;
@@ -177,4 +177,10 @@ void WorldCloudsPropertyWidget::refreshRows()
         ? QStringLiteral("Runs at every tier and in VR.")
         : QStringLiteral("Not drawn over an image sky: a photograph carries its own clouds."));
     loading = false;
+}
+
+void WorldCloudsPropertyWidget::setServices(StudioServices *s)
+{
+    services = s;
+    if (weather) weather->services = s;
 }

@@ -1441,8 +1441,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
             // pin world no longer populates (the drop was dead code).
             QString texPath;
             if (mDatabase) {
-                QSqlDatabase conn = QSqlDatabase::database();
-                texPath = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
+                texPath = AssetCas::resolvePinned(mDatabase->connection(), AssetStorePaths::root(),
                                                   mProject ? mProject->getProjectGuid() : QString(),
                                                   textureGuid);
             }

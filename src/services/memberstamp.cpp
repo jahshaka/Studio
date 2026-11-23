@@ -14,8 +14,8 @@ For more information see the LICENSE file
 
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
-#include <QSqlQuery>
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 
 #include "data/database/database.h"
 
@@ -93,15 +93,14 @@ bool unstamp(Database *db, const QString &guid)
 QString stampedTextureFor(Database *db, const QString &oid)
 {
     if (!db || oid.isEmpty()) return QString();
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     if (!conn.isOpen()) return QString();
 
     // Only a 'source' row of a TEXTURE counts, the same content identity the
     // material picker's import uses (ShippedAssets::libraryTextureFor): an
     // imported model's embedded copy of the same image is a 'texture'-role
     // file of an Object, not a texture a material may name.
-    QSqlQuery query(conn);
-    query.prepare("SELECT AF.asset_guid FROM asset_files AF "
+    db::Statement query(conn, dbqt::utf8("SELECT AF.asset_guid FROM asset_files AF "
                   "JOIN assets A ON A.guid = AF.asset_guid "
                   "WHERE AF.oid = ? AND AF.role = 'source' AND A.type = ? "
                   "AND A.listed = 1 "
@@ -109,12 +108,12 @@ QString stampedTextureFor(Database *db, const QString &oid)
                   // The row that FIRST brought the picture in: makeUnique re-ingests
                   // the same bytes under a second stamped row (a material's private
                   // copy), and the user's import must claim the original, not that.
-                  "ORDER BY A.date_created ASC, A.rowid ASC");
-    query.addBindValue(oid);
-    query.addBindValue(static_cast<int>(ModelTypes::Texture));
-    if (!query.exec()) return QString();
-    while (query.next()) {
-        const QString guid = query.value(0).toString();
+                  "ORDER BY A.date_created ASC, A.rowid ASC"));
+    dbqt::bindText(query, 1, oid);
+    query.bindInt(2, static_cast<int>(ModelTypes::Texture));
+    db::Error e;
+    while (query.step(&e)) {
+        const QString guid = dbqt::text(query, 0);
         if (isStamped(db, guid)) return guid;
     }
     return QString();

@@ -22,6 +22,7 @@ namespace Ui {
 }
 
 class Project;
+struct StudioServices;
 
 class TexturePickerWidget : public BaseWidget
 {
@@ -41,6 +42,9 @@ public:
 	/// The one live Project (Phase 4: was the Globals::project static). Set by
 	/// the panel that builds this control; read by dropEvent().
 	Project *project = nullptr;
+	/// The shell's services (ruling 15: the drop resolves through StudioServices::resolvePinned, never the Qt
+	/// global). Set beside `project` by the panel that builds this control and by its setServices.
+	StudioServices *services = nullptr;
 
 	explicit TexturePickerWidget(QWidget *parent = 0);
 	~TexturePickerWidget();

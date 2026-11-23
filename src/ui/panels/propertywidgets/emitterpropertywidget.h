@@ -58,7 +58,7 @@ public:
     /// The undo stack (debt L6). Every scalar row is one reflected property, so
     /// each gesture is one SetNodePropertyCommand; the ramps and the preset —
     /// which rewrite a whole recipe — record what this panel can edit, whole.
-    void setServices(StudioServices *s) { services = s; }
+    void setServices(StudioServices *s);   ///< also the picker's: its drop resolves through it (ruling 15)
 
 protected slots:
     void onPresetChanged(const QString &name);

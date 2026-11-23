@@ -31,7 +31,6 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
-#include <QSqlDatabase>
 #include "services/thumbnailmanager.h"
 #include "data/project.h"
 #include "data/settingsmanager.h"
@@ -53,9 +52,9 @@ void MaterialReader::setSource(TextureSource texSrc)
 	textureSource = texSrc;
 }
 
-QString MaterialReader::resolveTextureGuid(const QString &guid)
+QString MaterialReader::resolveTextureGuid(Database *db, const QString &guid)
 {
-	if (guid.isEmpty()) return QString();
+	if (guid.isEmpty() || !db) return QString();
 	// Pin first in a project (resolvePinned falls back to the library source
 	// itself), the library source for a store preview. THAT IS ALL (plan item
 	// 15c). Two by-NAME fallbacks followed until then — `projectFolder +
@@ -67,7 +66,7 @@ QString MaterialReader::resolveTextureGuid(const QString &guid)
 	// was that asymmetry between this reader and the writer). The tile is a
 	// pinned store object now, like every texture, and both fallbacks went
 	// with it; so did the folder parameter the GlobalAssets half carried.
-	QSqlDatabase conn = QSqlDatabase::database();
+	db::Connection &conn = db->connection();
 	const QString root = AssetStorePaths::root();
 	if (textureSource == TextureSource::Project && project && !project->getProjectGuid().isEmpty())
 		return AssetCas::resolvePinned(conn, root, project->getProjectGuid(), guid);
@@ -146,7 +145,7 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			// path arm (a definition stores no path).
 			const QString stored = val.toString();
 			mat->setValue(prop->name, iris::Material::textureRef(
-				stored.isEmpty() ? std::string() : resolveTextureGuid(stored).toStdString(), stored.toStdString()));
+				stored.isEmpty() ? std::string() : resolveTextureGuid(db, stored).toStdString(), stored.toStdString()));
 			break;
 		}
 		default:

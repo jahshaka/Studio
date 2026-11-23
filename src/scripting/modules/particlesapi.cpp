@@ -26,7 +26,6 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/projectassets.h"
-#include <QSqlDatabase>
 
 using namespace scriptmod;
 
@@ -228,7 +227,7 @@ bool ParticlesApi::setColourRamp(const QString &id, const QString &assetGuid)
     host.db->createDependency(static_cast<int>(ModelTypes::ParticleSystem),
                               static_cast<int>(ModelTypes::Texture),
                               ps->getGUID(), guid, host.project->getProjectGuid());
-    const QString path = AssetCas::resolvePinned(QSqlDatabase::database(),
+    const QString path = AssetCas::resolvePinned(host.db->connection(),
                                                  AssetStorePaths::root(),
                                                  host.project->getProjectGuid(), guid);
     if (path.isEmpty())

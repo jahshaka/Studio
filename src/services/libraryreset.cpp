@@ -15,11 +15,12 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
-#include <QSqlQuery>
 
 #include "app/firstrun.h"
 #include "services/jahlog.h"
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "io/assetrefs.h"
 #include "data/project.h"
 #include "services/assetgc.h"
@@ -88,16 +89,14 @@ int thumbnailCount(Database *db)
 {
     if (!db) return 0;
     int total = 0;
-    const auto count = [&total](const QString &sql) {
-        QSqlQuery query;
-        if (!query.exec(sql)) return;
-        if (query.next()) total += query.value(0).toInt();
+    const auto count = [&total, db](const char *sql) {
+        db::Statement query(db->connection(), sql);
+        db::Error e;
+        if (query.step(&e)) total += int(query.int64(0));
     };
-    count(QStringLiteral("SELECT COUNT(*) FROM assets WHERE thumbnail IS NOT NULL "
-                         "AND LENGTH(thumbnail) > 0"));
-    count(QStringLiteral("SELECT COUNT(*) FROM projects WHERE thumbnail IS NOT NULL "
-                         "AND LENGTH(thumbnail) > 0"));
-    count(QStringLiteral("SELECT COUNT(*) FROM thumbnails"));
+    count("SELECT COUNT(*) FROM assets WHERE thumbnail IS NOT NULL AND LENGTH(thumbnail) > 0");
+    count("SELECT COUNT(*) FROM projects WHERE thumbnail IS NOT NULL AND LENGTH(thumbnail) > 0");
+    count("SELECT COUNT(*) FROM thumbnails");
     return total;
 }
 
@@ -300,7 +299,7 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
         options.homes = keep.homes();
         options.dropDerived = keep.dropDerived;
         const AssetMigration::RebuildReport rebuilt =
-            AssetMigration::rebuildCatalog(db->getDb().databaseName(), storeRoot, options);
+            AssetMigration::rebuildCatalog(db->filePath(), storeRoot, options);
         if (!rebuilt.ok) {
             if (result.error.isEmpty())
                 result.error = QStringLiteral("the kept storages could not be rebuilt: %1")
@@ -312,7 +311,7 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
             result.kept.objects = AssetMigration::keptObjects(storeRoot, options).size();
         }
         const AssetGc::Report collected =
-            AssetGc::sweep(db->getDb(), storeRoot, /*dryRun*/ false, /*force*/ true);
+            AssetGc::sweep(db->connection(), storeRoot, /*dryRun*/ false, /*force*/ true);
         if (!collected.ok && result.error.isEmpty() && !collected.error.isEmpty())
             result.error = QStringLiteral("the store could not be collected: %1")
                                .arg(collected.error);

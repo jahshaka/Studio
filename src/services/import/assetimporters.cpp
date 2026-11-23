@@ -429,11 +429,11 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // pinned in memory for the session (BISTRO-ENGINE-1, the 5d read's CRUD).
     const QString mainGuid = out.mainGuid;
     const QString fileName = sourceInfo.fileName();
-    out.registerSession = [mainGuid, fileName]() {
+    out.registerSession = [mainGuid, fileName, db]() {
         auto assetObject = std::make_unique<AssetNodeObject>();
         assetObject->fileName = fileName;
         assetObject->assetGuid = mainGuid;
-        assetObject->path = AssetCas::resolveSource(QSqlDatabase::database(),
+        assetObject->path = AssetCas::resolveSource(db->connection(),
                                                     AssetStorePaths::root(), mainGuid);
         AssetManager::addAsset(std::move(assetObject));
     };

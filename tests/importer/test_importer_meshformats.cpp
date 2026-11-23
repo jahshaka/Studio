@@ -324,7 +324,7 @@ int main(int argc, char **argv)
                   QString("4: %1 lands as an Object row").arg(f).toUtf8().constData());
             CHECK(!result.meshGuid.isEmpty(),
                   QString("4: %1 gets a Mesh member row").arg(f).toUtf8().constData());
-            CHECK(!AssetCas::resolveSource(conn, root, result.assetGuid).isEmpty(),
+            CHECK(!AssetCas::resolveSource(db.connection(), root, result.assetGuid).isEmpty(),
                   QString("4: %1's source blob is in the CAS").arg(f).toUtf8().constData());
             // The object's stored BLOB is what every consumer instantiates from
             // now — the Assets page's completion tail included (smoke S6); the

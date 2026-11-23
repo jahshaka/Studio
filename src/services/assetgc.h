@@ -64,7 +64,7 @@ For more information see the LICENSE file
 #include <QVariantMap>
 #include <QVector>
 
-class QSqlDatabase;
+namespace db { class Connection; }
 
 namespace AssetGc
 {
@@ -122,12 +122,12 @@ struct Report
 /// Find every reapable artifact WITHOUT touching the store. `conn` is the
 /// catalog, `root` the store root (explicit, so a rehearsal against a copied
 /// library never goes near the live one — same contract as AssetMigration).
-Report collect(QSqlDatabase conn, const QString &root, bool force = false);
+Report collect(db::Connection &conn, const QString &root, bool force = false);
 
 /// collect(), then — when `dryRun` is false — unlink exactly what it found.
 /// The database rows for reaped objects (`files`) go with them, inside one
 /// transaction that is committed only if the row deletes succeed.
-Report sweep(QSqlDatabase conn, const QString &root, bool dryRun, bool force = false);
+Report sweep(db::Connection &conn, const QString &root, bool dryRun, bool force = false);
 
 /// Stale-staging cut-off: a `.tmp-<pid>-<n>` sibling younger than this may
 /// belong to an import running right now.

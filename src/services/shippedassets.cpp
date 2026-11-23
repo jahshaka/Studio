@@ -16,11 +16,11 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QTemporaryDir>
 
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "data/project.h"
 #include "services/apppaths.h"
 #include "services/assetcas.h"
@@ -53,11 +53,10 @@ namespace {
 /// is a row of that material's home, the platform's file a platform row — a
 /// home never names a row another home owns (a Clear Database that keeps one
 /// storage and clears another would leave it pointing at nothing).
-QString libraryTextureForOn(QSqlDatabase conn, const QString &oid, const QString &projectGuid,
+QString libraryTextureForOn(db::Connection &conn, const QString &oid, const QString &projectGuid,
                             const assethome::Home &home)
 {
-    QSqlQuery query(conn);
-    query.prepare(QStringLiteral(
+    db::Statement query(conn, dbqt::utf8(QStringLiteral(
                       "SELECT AF.asset_guid FROM asset_files AF "
                       "JOIN assets A ON A.guid = AF.asset_guid "
                       "LEFT JOIN project_assets PA ON PA.asset_guid = AF.asset_guid "
@@ -66,23 +65,24 @@ QString libraryTextureForOn(QSqlDatabase conn, const QString &oid, const QString
                       "AND A.view_filter = ?%1 "
                       "ORDER BY (PA.asset_guid IS NOT NULL) DESC, A.listed DESC, AF.asset_guid")
                       .arg(home.isProject() ? QStringLiteral(" AND A.project_guid = ?")
-                                            : QString()));
-    query.addBindValue(projectGuid);
-    query.addBindValue(oid);
-    query.addBindValue(static_cast<int>(ModelTypes::Texture));
-    query.addBindValue(home.stored());
-    if (home.isProject()) query.addBindValue(home.projectGuid);
-    if (query.exec() && query.next()) return query.value(0).toString();
+                                            : QString())));
+    dbqt::bindText(query, 1, projectGuid);
+    dbqt::bindText(query, 2, oid);
+    query.bindInt(3, static_cast<int>(ModelTypes::Texture));
+    query.bindInt(4, home.stored());
+    if (home.isProject()) dbqt::bindText(query, 5, home.projectGuid);
+    db::Error e;
+    if (query.step(&e)) return dbqt::text(query, 0);
     return QString();
 }
 
 } // namespace
 
-QString libraryTextureFor(const QString &oid, const assethome::Home &home,
+QString libraryTextureFor(Database *db, const QString &oid, const assethome::Home &home,
                           const QString &projectGuid)
 {
-    if (oid.isEmpty()) return QString();
-    return libraryTextureForOn(QSqlDatabase::database(), oid, projectGuid, home);
+    if (oid.isEmpty() || !db) return QString();
+    return libraryTextureForOn(db->connection(), oid, projectGuid, home);
 }
 
 namespace {
@@ -119,7 +119,7 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
         return out;
     }
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
     const QString projectGuid = haveProject ? project->getProjectGuid() : QString();
 

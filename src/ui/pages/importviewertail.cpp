@@ -19,7 +19,6 @@ For more information see the LICENSE file
 #include <QDebug>
 
 #include "data/database/database.h"
-#include <QSqlDatabase>
 
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
@@ -85,11 +84,11 @@ ImportMeshTail::Outcome ImportMeshTail::run(Database *db, IAssetViewer *viewer,
     // the asset's fit, which is what makes this preview agree with a tile
     // double-click, with the thumbnail, and with the editor's drop.
     QString storedModel = AssetCas::resolveFile(
-        QSqlDatabase::database(), AssetStorePaths::root(),
+        db->connection(), AssetStorePaths::root(),
         guid, QFileInfo(fileName).fileName());
     if (storedModel.isEmpty())
         storedModel = AssetCas::resolveSource(
-            QSqlDatabase::database(), AssetStorePaths::root(), guid);
+            db->connection(), AssetStorePaths::root(), guid);
     viewer->loadModel(storedModel, guid);
     outcome.previewed = true;
 

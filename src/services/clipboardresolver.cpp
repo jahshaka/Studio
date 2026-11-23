@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QSqlDatabase>
 #include <QTemporaryDir>
 
 #include <memory>
@@ -430,7 +429,7 @@ bool ClipboardResolver::registerAsset(const ClipAsset &asset,
                                       const QVector<QPair<ClipFile, QString>> &files,
                                       QString *errorOut) const
 {
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
 
     // The import spine's commit shape, minus the importers: one transaction

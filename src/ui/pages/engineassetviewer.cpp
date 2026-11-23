@@ -8,7 +8,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMouseEvent>
-#include <QSqlDatabase>
 #include <QShowEvent>
 #include <QStandardPaths>
 #include <QKeyEvent>
@@ -321,8 +320,8 @@ void EngineAssetViewer::applyJafSky(const QString &guid)
     // owns is turning a texture-asset guid into a path.
     const QStringList dependees = mDb->fetchAssetDependeesByType(guid, ModelTypes::Texture);
     skyassets::applyToScene(scene, type, skyData,
-                            [](const QString &textureGuid) {
-                                return AssetCas::resolveSource(QSqlDatabase::database(),
+                            [this](const QString &textureGuid) {
+                                return AssetCas::resolveSource(mDb->connection(),
                                                                AssetStorePaths::root(), textureGuid);
                             },
                             dependees);

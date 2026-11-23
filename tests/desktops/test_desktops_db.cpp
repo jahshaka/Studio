@@ -298,12 +298,12 @@ int main(int argc, char **argv)
         // A member takes its owner's home (ASSETS-HOME-1).
         row("lib-member", tex, "lib-obj", assethome::assets());
         QString oid, err;
-        CHECK(AssetCas::ingestFile(QSqlDatabase::database(), AssetStorePaths::root(), "own-pic.png",
+        CHECK(AssetCas::ingestFile(db.connection(), AssetStorePaths::root(), "own-pic.png",
                                    "own-tex", "source", "own-pic.png", &oid, &err),
               qPrintable("the owned picture's bytes are stored: " + err));
         for (const char *g : { "own-mat", "own-tex", "own-shared", "lib-obj", "lib-member" })
-            AssetCas::writePin(QSqlDatabase::database(), "guid-own", g, QString());
-        AssetCas::writePin(QSqlDatabase::database(), "guid-other", "own-shared", QString());
+            AssetCas::writePin(db.connection(), "guid-own", g, QString());
+        AssetCas::writePin(db.connection(), "guid-other", "own-shared", QString());
         auto filesOf = [](const QString &g) {
             QSqlQuery q;
             q.prepare("SELECT COUNT(*) FROM asset_files WHERE asset_guid = ?");

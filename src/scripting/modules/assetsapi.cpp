@@ -23,7 +23,6 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QImage>
 #include <QPixmap>
-#include <QSqlDatabase>
 #include <QStandardPaths>
 #include <cmath>
 
@@ -111,9 +110,9 @@ QString typeName(int type)
 // The asset's stored bytes, by guid — the CAS resolver, never the retired
 // <root>/<guid>/ view (deep audit 2026-09, area 6). Falls back to the legacy
 // folder itself for stores that still have one (AssetCas::resolveSource).
-QString storeFileFor(const QString &guid)
+QString storeFileFor(Database *db, const QString &guid)
 {
-    return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
+    return db ? AssetCas::resolveSource(db->connection(), AssetStorePaths::root(), guid) : QString();
 }
 
 /// THE IMPORT-SETTINGS OPTIONS, from a verb's option map to the JSON record
@@ -737,7 +736,7 @@ QVariantList AssetsApi::meshLods(const QString &guid)
         fail(QStringLiteral("assets.meshLods: no asset with guid '%1'").arg(guid));
         return out;
     }
-    const QString source = storeFileFor(guid);
+    const QString source = storeFileFor(host.db, guid);
     if (source.isEmpty()) {
         fail(QStringLiteral("assets.meshLods: '%1' has no stored source file").arg(guid));
         return out;
@@ -747,7 +746,7 @@ QVariantList AssetsApi::meshLods(const QString &guid)
     // is parsed at open and gets no chain at all. BY THIS ROW (the second
     // read's F9): a path alone resolves that content's DEFAULT settings
     // variant, which is a different bake for an asset with its own settings.
-    iris::BakedModelPtr baked = MeshBakeStore::load(source, guid);
+    iris::BakedModelPtr baked = MeshBakeStore::load(host.db->connection(), source, guid);
     if (!baked) return out;   // no usable bake: an empty list, not an error
     for (int m = 0; m < baked->meshes.size(); ++m) {
         const iris::MeshPtr &mesh = baked->meshes.at(m);
@@ -805,14 +804,14 @@ QVariantList AssetsApi::meshCards(const QString &guid)
         fail(QStringLiteral("assets.meshCards: no asset with guid '%1'").arg(guid));
         return out;
     }
-    const QString source = storeFileFor(guid);
+    const QString source = storeFileFor(host.db, guid);
     if (source.isEmpty()) {
         fail(QStringLiteral("assets.meshCards: '%1' has no stored source file").arg(guid));
         return out;
     }
     // Same read as assets.meshLods and for the same reason: the BAKE is where
     // the card list lives, and a model with no fresh bake gets none at open.
-    iris::BakedModelPtr baked = MeshBakeStore::load(source, guid);
+    iris::BakedModelPtr baked = MeshBakeStore::load(host.db->connection(), source, guid);
     if (!baked) return out;   // no usable bake: an empty list, not an error
     static const char *kAxisNames[] = { "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
     for (int m = 0; m < baked->meshes.size(); ++m) {
@@ -949,7 +948,7 @@ QStringList AssetsApi::clips(const QString &guid)
     }
     // The SCENE READER's own extraction, so the names are the ones a clip
     // reference resolves against — one rule, not a second copy of it.
-    SceneReader reader;
+    SceneReader reader(host.db->connection());
     reader.setDatabaseHandle(host.db);
     reader.setProject(host.project);
     reader.setLibrarySource();
@@ -1272,7 +1271,7 @@ QString AssetsApi::createSky(const QVariantMap &options)
         const QString guid = raw.toString().trimmed();
         const AssetRecord rec = host.db->fetchAsset(guid);
         const bool stored = !guid.isEmpty() && rec.type == static_cast<int>(ModelTypes::Texture)
-            && !AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+            && !AssetCas::resolvePinned(host.db->connection(), AssetStorePaths::root(),
                                         host.project->getProjectGuid(), guid).isEmpty();
         if (!stored)
             return fail(QStringLiteral("%1: %2 '%3' is not a texture asset with stored bytes "
@@ -1539,7 +1538,7 @@ QVariantMap AssetsApi::updateFromLibrary(const QString &guid)
         fail(QStringLiteral("assets.updateFromLibrary: no asset with guid '%1'").arg(guid));
         return out;
     }
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = host.db->connection();
     if (AssetCas::pinnedOid(conn, host.project->getProjectGuid(), guid).isEmpty()) {
         fail(QStringLiteral("assets.updateFromLibrary: '%1' is not in this project — there is no "
                             "pin to update (assets.addToProject adds it)").arg(record.name));
@@ -2057,7 +2056,7 @@ QVariantMap AssetsApi::gc(const QVariantMap &options)
     const bool force  = options.value("force", false).toBool();
     const QString root = options.value("root", AssetStorePaths::root()).toString();
 
-    const auto report = AssetGc::sweep(QSqlDatabase::database(), root, dryRun, force);
+    const auto report = AssetGc::sweep(host.db->connection(), root, dryRun, force);
     if (!report.ok && !report.error.isEmpty())
         fail(QStringLiteral("assets.gc: %1").arg(report.error));
     return report.toMap();
@@ -2089,7 +2088,7 @@ QVariantMap AssetsApi::importSettings(const QString &guid)
     record[QStringLiteral("name")] = row.name;
     {
         QString sourceName;
-        AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid,
+        AssetCas::resolveSource(host.db->connection(), AssetStorePaths::root(), guid,
                                 &sourceName);
         record[QStringLiteral("sourceName")] = sourceName.isEmpty() ? row.name : sourceName;
     }
@@ -2175,7 +2174,7 @@ QVariantMap AssetsApi::bakeState(const QString &guid)
         fail(QStringLiteral("assets.bakeState: no asset with guid '%1'").arg(guid));
         return out;
     }
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = host.db->connection();
     const QString root = AssetStorePaths::root();
     const QString source = MeshBakeStore::modelSourceFor(conn, root, guid);
     out.insert(QStringLiteral("source"), source);
@@ -2203,7 +2202,7 @@ QVariantMap AssetsApi::bakeAll(const QVariantMap &options)
     if (!host.db) { fail("assets: not available in this session"); return out; }
     const bool dryRun = options.value(QStringLiteral("dryRun"), true).toBool();
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = host.db->connection();
     const QString root = AssetStorePaths::root();
     // BY (file, ROW): an asset's import settings are half the bake key, so two
     // rows over one store object with different settings are two bakes and a

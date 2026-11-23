@@ -370,7 +370,7 @@ int main(int argc, char **argv)
         const QString atRequest = keyNow(true), atRequestUnstamped = keyNow(false);
         Probe pi;
         {
-            DbTransaction edit(QSqlDatabase::database());
+            DbTransaction edit(db.connection());
             check(edit.isActive(), "i: the UI's edit takes the write lock");
             check(writer.submit(race, solid(qRgb(9, 9, 9)), atRequest, pi.done()),
                   "i: the preview drawn from the blob before the edit is submitted under it");

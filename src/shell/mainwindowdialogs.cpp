@@ -28,6 +28,7 @@ For more information see the LICENSE file
 // open and deleted on close.
 
 #include "shell/mainwindow.h"
+#include "data/database/database.h"
 
 #include "ui/dialogs/aboutdialog.h"
 #include "ui/dialogs/donatedialog.h"
@@ -49,7 +50,6 @@ For more information see the LICENSE file
 
 #include <QFileInfo>
 #include <QImage>
-#include <QSqlDatabase>
 #include <QLayout>
 #include <QMessageBox>
 
@@ -256,7 +256,7 @@ ImportSettingsDialog *MainWindow::openImportSettings(const QString &guid, QStrin
     // names its objects by content hash, so the read carries the recorded
     // source file's extension as its format hint — both of them from the verb
     // (`sourceName`), not from a reach past it into the database and the CAS.
-    const QString source = AssetCas::resolveSource(QSqlDatabase::database(),
+    const QString source = !db ? QString() : AssetCas::resolveSource(db->connection(),
                                                    AssetStorePaths::root(), guid);
     if (!source.isEmpty() && QFileInfo::exists(source))
         dialog->startPreRead(

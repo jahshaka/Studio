@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #include "services/jahlog.h"
 
 #include <QJsonDocument>
-#include <QSqlDatabase>
 #include <QObject>
 
 #include "irisgl/core/guid.h"
@@ -90,7 +89,7 @@ void PresetCopyCommand::redo()
     // batch, an import slice), which is the correct nesting behaviour. The
     // BYTES the definition write publishes are content-addressed and are
     // collected by `assets.gc` if the rows never land — the harmless direction.
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = mDb->connection();
     DbTransaction tx(conn);
     const QString mintedBefore = mCopyGuid;
 
@@ -143,7 +142,7 @@ void PresetCopyCommand::undo()
     {
         // One transaction here too, for the reason it is one in `redo`: half an
         // undo is a project pinning a material whose row is gone.
-        QSqlDatabase conn = QSqlDatabase::database();
+        db::Connection &conn = mDb->connection();
         DbTransaction tx(conn);
 
         // Exactly the four steps, backwards. The edges first: nothing may point

@@ -42,18 +42,16 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include <QPointer>
 #include <QSignalBlocker>
-#include <QSqlDatabase>
 #include <QTimer>
 
 namespace {
 // Sky texture references are asset guids: resolve them through the CAS (the
 // pinned bytes in project context, else the library source). The legacy
 // projectFolder + row-name join that followed is gone (plan item 15c).
-QString resolveSkyAssetFile(Project *project, const QString &guid)
+QString resolveSkyAssetFile(StudioServices *services, Project *project, const QString &guid)
 {
-    if (guid.isEmpty() || !project) return QString();
-    return AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
-                                   project->getProjectGuid(), guid);
+    if (guid.isEmpty() || !project || !services || !services->resolvePinned) return QString();
+    return services->resolvePinned(project->getProjectGuid(), guid);   // the shell's one resolver (ruling 15)
 }
 
 // The asset a picked sky image IS is the guid the picker carries — the row the
@@ -286,6 +284,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 		case iris::SkyType::EQUIRECTANGULAR: {
 			equiTexture = this->addTexturePicker("Equi Map");
+			equiTexture->services = services;
 
 			// There are no default values, this definition gets set whenever we change the texture
 			setEquiMap(skyDefinition.value("equiSkyGuid").toString());
@@ -314,6 +313,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 		case iris::SkyType::CUBEMAP: {
 			cubeMapWidget = this->addCubeMapWidget();
+			cubeMapWidget->services = services;
 
 			connect(cubeMapWidget, &CubeMapWidget::valuesChanged, this,
 			        [this](QString value, QString guid, CubeMapPosition pos) {
@@ -544,7 +544,7 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
 {
     if (guid.isEmpty()) return;
 	equiSkyDefinition.insert("equiSkyGuid", guid);
-    auto image = resolveSkyAssetFile(project, guid);
+    auto image = resolveSkyAssetFile(services, project, guid);
     if (equiTexture) equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
     if (auto live = liveScene()) live->setSkyTexture(iris::Texture2D::load(image));
 	updateAssetAndKeys();
@@ -552,12 +552,12 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
 
 void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 {
-	auto front = resolveSkyAssetFile(project, skyDataDefinition["front"].toString());
-	auto back = resolveSkyAssetFile(project, skyDataDefinition["back"].toString());
-	auto left = resolveSkyAssetFile(project, skyDataDefinition["left"].toString());
-	auto right = resolveSkyAssetFile(project, skyDataDefinition["right"].toString());
-	auto top = resolveSkyAssetFile(project, skyDataDefinition["top"].toString());
-	auto bottom = resolveSkyAssetFile(project, skyDataDefinition["bottom"].toString());
+	auto front = resolveSkyAssetFile(services, project, skyDataDefinition["front"].toString());
+	auto back = resolveSkyAssetFile(services, project, skyDataDefinition["back"].toString());
+	auto left = resolveSkyAssetFile(services, project, skyDataDefinition["left"].toString());
+	auto right = resolveSkyAssetFile(services, project, skyDataDefinition["right"].toString());
+	auto top = resolveSkyAssetFile(services, project, skyDataDefinition["top"].toString());
+	auto bottom = resolveSkyAssetFile(services, project, skyDataDefinition["bottom"].toString());
 
 	cubeMapDefinition.insert("front", skyDataDefinition["front"].toString());
 	cubeMapDefinition.insert("back", skyDataDefinition["back"].toString());
@@ -666,4 +666,11 @@ void SkyPropertyWidget::onGradientOffsetChanged(float offset)
 	gradientDefinition.insert("gradientOffset", offset);
 	if (auto live = liveScene()) live->gradientOffset = offset;
 	updateAssetAndKeys();
+}
+
+void SkyPropertyWidget::setServices(StudioServices *s)
+{
+    this->services = s;
+    if (equiTexture) equiTexture->services = s;
+    if (cubeMapWidget) cubeMapWidget->services = s;
 }

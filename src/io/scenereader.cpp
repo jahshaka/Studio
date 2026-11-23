@@ -43,12 +43,12 @@ For more information see the LICENSE file
 #include "services/imagedecode.h"
 #include "services/lightbindings.h"
 #include "services/loadtimeline.h"
-#include <QSqlQuery>
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "services/meshbakestore.h"
 #include "services/primitiveassets.h"
 
 #include <functional>
-#include <QSqlDatabase>
 
 #include "viewport/editordata.h"
 
@@ -269,18 +269,20 @@ QStringList SceneReader::collectClipSources(const QJsonObject &projectObj)
     QStringList out;
     // A CLIP FILE IS AN ANIMATION ROW: the type read on this reader's connection
     // (the open's plan runs this on the runner's worker).
-    QSqlQuery typeOf(conn());
-    typeOf.prepare(QStringLiteral("SELECT type FROM assets WHERE guid = ?"));
+    db::Statement typeOf(conn(), "SELECT type FROM assets WHERE guid = ?");
     std::function<void(const QJsonObject &)> walk = [&](const QJsonObject &nodeObj) {
         for (const auto &anim : nodeObj.value(QLatin1String("animations")).toArray()) {
             const QJsonObject skel =
                 anim.toObject().value(QLatin1String("skeletalAnimation")).toObject();
             const QString guid = skel.value(QLatin1String("guid")).toString();
             if (guid.isEmpty()) continue;
-            typeOf.bindValue(0, guid);
-            if (!typeOf.exec() || !typeOf.next() ||
-                typeOf.value(0).toInt() != static_cast<int>(ModelTypes::Animation))
-                continue;
+            typeOf.reset();
+            dbqt::bindText(typeOf, 1, guid);
+            db::Error e;
+            const bool row = typeOf.step(&e);
+            const bool clip = row && int(typeOf.int64(0)) == static_cast<int>(ModelTypes::Animation);
+            typeOf.reset();   // never left active across the resolution below
+            if (!clip) continue;
             const QString path = resolveAssetPath(guid);
             if (!path.isEmpty() && !out.contains(path)) out.append(path);
         }
@@ -1860,7 +1862,7 @@ QString SceneReader::settingsHash(const QString &filePath, const QString &assetG
     const QString key = filePath + QLatin1Char('|') + assetGuid;
     const auto known = mSettingsHashes.constFind(key);
     if (known != mSettingsHashes.constEnd()) return known.value();
-    const QString hash = MeshBakeStore::settingsHashFor(filePath, assetGuid);
+    const QString hash = MeshBakeStore::settingsHashFor(conn(), AssetStorePaths::root(), filePath, assetGuid);
     mSettingsHashes.insert(key, hash);
     return hash;
 }
@@ -1896,7 +1898,7 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
         LoadTimeline::Accumulate bakeAttempt(QStringLiteral("bake:sceneReader"));
         iris::BakedModelPtr baked = (prewarm && prewarmUsable) ? prewarm->baked(filePath)
                                                                : iris::BakedModelPtr();
-        if (!baked) baked = MeshBakeStore::load(filePath, assetGuid);
+        if (!baked) baked = MeshBakeStore::load(conn(), filePath, assetGuid);
         if (baked) {
             meshList = baked->meshes;
             animationss = baked->animations;
@@ -1915,10 +1917,10 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
         if (!assetGuid.isEmpty() && handle
             && handle->fetchAsset(assetGuid).type == static_cast<int>(ModelTypes::Animation)) {
             LoadTimeline::Accumulate clip(QStringLiteral("bake:clipFile"));
-            if (const iris::BakedClipPtr baked = MeshBakeStore::loadClip(filePath)) {
+            if (const iris::BakedClipPtr baked = MeshBakeStore::loadClip(conn(), filePath)) {
                 // The clip ROW's own uniform factor — what its parse was handed.
                 animationss = iris::MeshBake::clipAnimations(
-                    *baked, MeshBakeStore::transformFor(filePath, assetGuid).keysOnly(), filePath);
+                    *baked, MeshBakeStore::transformFor(conn(), AssetStorePaths::root(), filePath, assetGuid).keysOnly(), filePath);
             } else {
                 JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("scene reader: the clip '%1' has no current clip bake — its "
                                                                                  "animation is missing from this open")

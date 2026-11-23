@@ -13,14 +13,14 @@ For more information see the LICENSE file
 
 // Content-addressed store primitives (ASSET_PIPELINE_SPEC §3.1.3, phase 2).
 //
-// Everything here is parameterized by an explicit QSqlDatabase connection and
+// Everything here is parameterized by an explicit db::Connection (the layer's) and
 // store root, so the same code serves the live library (default connection +
 // active root) AND the migration rehearsal against a copied library
 // (preflight §3.2). Object content is immutable (invariant I3): storeObject
 // hardlinks when it can (same filesystem — ~0 bytes), copies otherwise, and
 // an object that already exists is simply reused — the dedup.
 
-#include <QSqlDatabase>
+#include "data/db/connection.h"
 #include <QString>
 #include <QVector>
 
@@ -44,7 +44,7 @@ bool storeObject(const QString &srcPath, const QString &root,
                  const QString &oid, const QString &ext, QString *errorOut);
 
 /// Ensure the CAS tables/triggers/user_version exist on this connection.
-void ensureCasSchema(QSqlDatabase conn);
+void ensureCasSchema(db::Connection &conn);
 
 // --- The two-phase ingest (FSYNC-1) ---------------------------------------
 //
@@ -56,7 +56,7 @@ void ensureCasSchema(QSqlDatabase conn);
 // of frozen window, once per object, on the UI thread (ledger 474).
 //
 // It cannot simply move: the DATABASE cannot. Every Database method rides the
-// implicit default QSqlDatabase connection, which belongs to the thread that
+// editor's library connection (a db::Connection), which belongs to the thread that
 // opened it, and ProjectArchiver's header says in so many words that there is
 // no per-thread connection here and there must not be one.
 //
@@ -131,10 +131,10 @@ quint64 deviceWaits();
 void noteDeviceWait();
 
 /// Publish `file` (rename) and record its rows against `guid`. The DB thread.
-bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
+bool commitStaged(db::Connection &conn, const QString &root, const QString &guid,
                   Staged &file, QString *errorOut);
 /// The object half of commitStaged with no asset_files link (ARCHIVE-GUIDS-1).
-bool commitStagedObject(QSqlDatabase conn, const QString &root, Staged &file, QString *errorOut);
+bool commitStagedObject(db::Connection &conn, const QString &root, Staged &file, QString *errorOut);
 
 /// Delete whatever `files` staged — a cancelled or failed batch. Any thread.
 void discardStaged(QVector<Staged> &files);
@@ -147,7 +147,7 @@ void discardStaged(QVector<Staged> &files);
 /// `oidOut` (optional) receives the content id. `knownOid` (optional) is a
 /// precomputed sha256 of srcPath — the import pipeline hashes on a worker
 /// thread and passes it here so the DB-thread store stage never re-hashes.
-bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
+bool ingestFile(db::Connection &conn, const QString &root, const QString &srcPath,
                 const QString &guid, const QString &role, const QString &name,
                 QString *oidOut, QString *errorOut,
                 const QString &knownOid = QString());
@@ -163,18 +163,18 @@ bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
 /// only source row". Refcounts stay honest: the UPDATE fires the delete and
 /// insert triggers via a delete+insert pair rather than a bare UPDATE, which
 /// the triggers do not watch.
-bool moveSourcePointer(QSqlDatabase conn, const QString &guid, const QString &oid,
+bool moveSourcePointer(db::Connection &conn, const QString &guid, const QString &oid,
                        const QString &name, QString *errorOut);
 
 /// The asset's current LIBRARY 'source' oid — the version the library points
 /// at right now, independent of any project's pin. Empty when it has none.
-QString sourceOid(QSqlDatabase conn, const QString &guid);
+QString sourceOid(db::Connection &conn, const QString &guid);
 
 /// Resolve an asset's PRIMARY ('source'-role) file to an absolute path;
 /// `nameOut` (optional) receives its display name. Falls back to the single
 /// file when no row carries the source role. Empty when the asset has no
 /// stored bytes.
-QString resolveSource(QSqlDatabase conn, const QString &root,
+QString resolveSource(db::Connection &conn, const QString &root,
                       const QString &guid, QString *nameOut = nullptr);
 
 // --- Reference-with-pin (phase 4, spec §3.1.5) -----------------------------
@@ -182,29 +182,29 @@ QString resolveSource(QSqlDatabase conn, const QString &root,
 /// Record (or move) a project's pin of an asset: the content the project
 /// renders with, frozen at add time (or at an explicit update). Idempotent
 /// upsert; empty oid = a DB-only asset (no stored bytes).
-bool writePin(QSqlDatabase conn, const QString &projectGuid,
+bool writePin(db::Connection &conn, const QString &projectGuid,
               const QString &assetGuid, const QString &oid);
 
 /// The pinned oid for (project, asset); empty when no pin row exists.
-QString pinnedOid(QSqlDatabase conn, const QString &projectGuid,
+QString pinnedOid(db::Connection &conn, const QString &projectGuid,
                   const QString &assetGuid);
 
 /// Project-context resolution: the PINNED bytes when a pin exists and the
 /// object is present, else the asset's current source (a project asset
 /// created before pinning, or a pin whose object was purged). `nameOut`
 /// receives the display name. Empty when the asset has no bytes anywhere.
-QString resolvePinned(QSqlDatabase conn, const QString &root,
+QString resolvePinned(db::Connection &conn, const QString &root,
                       const QString &projectGuid, const QString &guid,
                       QString *nameOut = nullptr);
 
 /// Write <root>/sidecar/<guid>.json — the catalog-rebuild record (invariant
 /// I2): identity, organization, metadata and the file manifest.
-bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
+bool writeSidecar(db::Connection &conn, const QString &root, const QString &guid,
                   QString *errorOut);
 
 /// Resolve an asset's file to an absolute path: asset_files → objects/ when
 /// the object exists. Empty otherwise.
-QString resolveFile(QSqlDatabase conn, const QString &root,
+QString resolveFile(db::Connection &conn, const QString &root,
                     const QString &guid, const QString &name);
 
 /// Write/refresh <root>/store.json (store id + format version — the sanity

@@ -19,7 +19,7 @@ For more information see the LICENSE file
 // sources, the bake lookups), the session registration (three queries per asset — measured on Bistro
 // Exterior, 539 assets in 68 slices of 8: 2.4 s), and the scene blob once more for the reader. All of
 // it is read here instead, on the open runner's worker, each half with a read-only connection of its
-// own to the library file (QSqlDatabase connections are per thread):
+// own to the library file (a db::Connection belongs to its thread):
 //   * readPlan    — the Object rows of the session set (their paths ARE the pinned models' plan), the
 //                   scene blob (read ONCE, parsed ONCE) and its mesh and clip sources;
 //   * readSession — the session set's other types, one query per type, beside the bake read.
@@ -27,11 +27,11 @@ For more information see the LICENSE file
 // (ProjectAssets::registerSessionRow) and the document built from the parsed blob (SceneReader).
 
 #include <QJsonObject>
-#include <QSqlDatabase>
 #include <QString>
 #include <QStringList>
 #include <QVector>
 
+#include "data/db/connection.h"
 #include "services/projectassets.h"
 
 class Project;
@@ -65,31 +65,30 @@ struct Reads
 };
 
 /// The UI-thread half of the setup: the three values a worker needs (the project, the store root, the
-/// library file). Call on the thread that owns the default connection.
-Reads prepare(Project *project);
+/// library file `dbPath`: Database::filePath()).
+Reads prepare(Project *project, const QString &dbPath);
 
-/// A read-only connection of the CALLING thread to the library file, removed with this object.
+/// A read-only connection of the CALLING thread to the library file, OPENED BY THE LAYER (busy timeout
+/// db::kEditorBusyMs) and closed with this object; one that cannot open is said and answers isOpen() false.
 class ReadConnection
 {
 public:
     explicit ReadConnection(const QString &dbPath);
-    ~ReadConnection();
     ReadConnection(const ReadConnection &) = delete;
     ReadConnection &operator=(const ReadConnection &) = delete;
-    QSqlDatabase &db() { return mDb; }
+    db::Connection &db() { return mDb; }
     bool isOpen() const { return mDb.isOpen(); }
 
 private:
-    QString mName;
-    QSqlDatabase mDb;
+    db::Connection mDb;
 };
 
 /// THE PLAN HALF (any thread; `conn` of that thread): fills objectRows, projectObj/found, modelPaths and
 /// clipPaths. Counted in the open's ledger: db:sessionRows (its one query), db:sceneBlob, worker:plan.
-void readPlan(QSqlDatabase conn, Project *project, Reads &reads);
+void readPlan(db::Connection &conn, Project *project, Reads &reads);
 
 /// THE SESSION HALF (any thread): fills otherRows — one query per remaining session type.
-void readSession(QSqlDatabase conn, Reads &reads);
+void readSession(db::Connection &conn, Reads &reads);
 
 }   // namespace openreads
 

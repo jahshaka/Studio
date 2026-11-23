@@ -56,7 +56,7 @@ public:
     /// The undo stack (debt L6). Every row on this blade writes a REFLECTED
     /// light property, so each becomes one SetNodePropertyCommand — the same
     /// command node.setProperty pushes. Nullable.
-    void setServices(StudioServices *s) { services = s; }
+    void setServices(StudioServices *s);   ///< also the dome faces': their drops resolve through it (ruling 15)
 
 protected slots:
 

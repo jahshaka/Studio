@@ -96,6 +96,7 @@ TexturePickerWidget* PropertyWidget::addTexturePicker(const QString& name)
 {
     auto texpicker = new TexturePickerWidget();
     texpicker->project = project;
+    texpicker->services = services;
     texpicker->ui->label->setText(name);
     progressiveHeight += texpicker->height() + stretch;
 

@@ -682,7 +682,8 @@ static void storeIntegration()
     CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")),
                "fixture database opened");
     db.createAllTables();
-    QSqlDatabase conn = QSqlDatabase::database();
+    QSqlDatabase qconn = QSqlDatabase::database();   // the test's own statements (stage 3 moves them)
+    db::Connection &conn = db.connection();          // the services'
     AssetCas::ensureCasSchema(conn);
 
     Project project;
@@ -702,7 +703,7 @@ static void storeIntegration()
     // is what makes it reachable (and reapable) through the ordinary
     // asset_files reachability the GC already implements.
     const auto bakeRowsFor = [&](const QString &guid) {
-        QSqlQuery q(conn);
+        QSqlQuery q(qconn);
         q.prepare("SELECT oid, name FROM asset_files WHERE asset_guid = ? AND role = 'bake'");
         q.addBindValue(guid);
         QStringList rows;
@@ -769,7 +770,7 @@ static void storeIntegration()
         MeshBakeStore::clear();
         const int parsesBefore = iris::ParseCensus::snapshot().workerParses
                                  + iris::ParseCensus::snapshot().mainThreadParses;
-        CHECK_LOUD(MeshBakeStore::load(sourcePath) == nullptr,
+        CHECK_LOUD(MeshBakeStore::load(conn, sourcePath) == nullptr,
                    "MeshBakeStore::load REFUSES the stale bake (null, no geometry)");
         CHECK_LOUD(iris::ParseCensus::snapshot().workerParses
                            + iris::ParseCensus::snapshot().mainThreadParses == parsesBefore,
@@ -821,7 +822,7 @@ static void storeIntegration()
                                             iris::MeshBake::fileNameFor(sourceOid),
                                             nullptr, &casError) && ingested;
         }
-        QSqlQuery drop(conn);
+        QSqlQuery drop(qconn);
         drop.prepare("DELETE FROM asset_files WHERE role = ? AND oid = ?");
         drop.addBindValue(iris::MeshBake::casRole());
         drop.addBindValue(freshOid);
@@ -888,17 +889,17 @@ static void storeIntegration()
     // model under a non-'source' role, so an Object-row-driven sweep sees no
     // model at all and reports a library with no bakes as fully baked.
     {
-        QSqlQuery reshape(conn);
+        QSqlQuery reshape(qconn);
         reshape.prepare("UPDATE asset_files SET role = 'file' WHERE asset_guid = ? AND role = 'source'");
         reshape.addBindValue(result.assetGuid);
         CHECK_LOUD(reshape.exec(), "reshaped the Object row to the archive-import shape");
-        QSqlQuery rename(conn);
+        QSqlQuery rename(qconn);
         rename.prepare("UPDATE assets SET name = 'scaled_two_meshes' WHERE guid = ?");
         rename.addBindValue(result.assetGuid);
         rename.exec();
 
         // Drop the bake so the sweep has something to find.
-        QSqlQuery drop(conn);
+        QSqlQuery drop(qconn);
         drop.prepare("DELETE FROM asset_files WHERE role = 'bake'");
         drop.exec();
         MeshBakeStore::clear();
@@ -1348,7 +1349,8 @@ static void primitivesBaked()
     CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")),
                "fixture database opened");
     db.createAllTables();
-    QSqlDatabase conn = QSqlDatabase::database();
+    QSqlDatabase qconn = QSqlDatabase::database();   // the test's own statements (stage 3 moves them)
+    db::Connection &conn = db.connection();          // the services'
     AssetCas::ensureCasSchema(conn);
 
     PrimitiveAssets::clearCache();
@@ -1468,7 +1470,8 @@ static void rebakeGeneration()
     CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")),
                "fixture database opened");
     db.createAllTables();
-    QSqlDatabase conn = QSqlDatabase::database();
+    QSqlDatabase qconn = QSqlDatabase::database();   // the test's own statements (stage 3 moves them)
+    db::Connection &conn = db.connection();          // the services'
     AssetCas::ensureCasSchema(conn);
 
     Project project;
@@ -1484,7 +1487,7 @@ static void rebakeGeneration()
     }
 
     const auto bakeRows = [&](const QString &guid) {
-        QSqlQuery q(conn);
+        QSqlQuery q(qconn);
         q.prepare("SELECT oid, name FROM asset_files WHERE asset_guid = ? AND role = 'bake'");
         q.addBindValue(guid);
         QVector<QPair<QString, QString>> rows;
@@ -1493,7 +1496,7 @@ static void rebakeGeneration()
         return rows;
     };
     const auto refcountOf = [&](const QString &oid) {
-        QSqlQuery q(conn);
+        QSqlQuery q(qconn);
         q.prepare("SELECT refcount FROM files WHERE oid = ?");
         q.addBindValue(oid);
         return (q.exec() && q.next()) ? q.value(0).toInt() : -1;
@@ -1533,12 +1536,12 @@ static void rebakeGeneration()
                                    QStringLiteral("bake"), QStringLiteral("stale-generation.jmb"),
                                    &staleOid, &casError),
               "the stale generation was ingested as a bake object");
-        QSqlQuery drop(conn);
+        QSqlQuery drop(qconn);
         drop.prepare("DELETE FROM asset_files WHERE asset_guid = ? AND role = 'bake' AND name = ?");
         drop.addBindValue(owner);
         drop.addBindValue(bakeName);
         CHECK(drop.exec(), "the current generation's row was removed");
-        QSqlQuery rename(conn);
+        QSqlQuery rename(qconn);
         rename.prepare("UPDATE asset_files SET name = ? WHERE asset_guid = ? AND role = 'bake' "
                        "AND name = ?");
         rename.addBindValue(bakeName);
@@ -1557,7 +1560,7 @@ static void rebakeGeneration()
     // which is precisely why the silent drop was invisible. The fingerprint lives
     // in the FILE, and that is what refuses.
     MeshBakeStore::clear();
-    CHECK_LOUD(!MeshBakeStore::load(source, imported.assetGuid),
+    CHECK_LOUD(!MeshBakeStore::load(conn, source, imported.assetGuid),
                "…and this build cannot READ that bake (exactly a format bump)");
 
     // THE RE-BAKE MUST SUPERSEDE IT.
@@ -1584,7 +1587,7 @@ static void rebakeGeneration()
     // AND THE SUPERSEDED OBJECT IS REAPABLE: nothing links it any more, which is
     // what hands it to `assets.gc` (the refcount triggers are AFTER INSERT and
     // AFTER DELETE on asset_files — an UPDATE would have left it inflated).
-    QSqlQuery stillLinked(conn);
+    QSqlQuery stillLinked(qconn);
     stillLinked.prepare("SELECT COUNT(*) FROM asset_files WHERE oid = ?");
     stillLinked.addBindValue(staleOid);
     int links = -1;
@@ -3124,7 +3127,8 @@ static void asyncLanding()
     Database db;
     CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")), "fixture database opened");
     db.createAllTables();
-    QSqlDatabase conn = QSqlDatabase::database();
+    QSqlDatabase qconn = QSqlDatabase::database();   // the test's own statements (stage 3 moves them)
+    db::Connection &conn = db.connection();          // the services'
     AssetCas::ensureCasSchema(conn);
 
     Project project;
@@ -3139,7 +3143,7 @@ static void asyncLanding()
 
     // A STALE BAKE: the bake rows go (every owner), so a landing has something to build.
     const auto dropBakes = [&]() {
-        QSqlQuery q(conn);
+        QSqlQuery q(qconn);
         q.exec(QStringLiteral("DELETE FROM asset_files WHERE role = 'bake'"));
         MeshBakeStore::clear();
     };
@@ -3205,7 +3209,7 @@ static void asyncLanding()
 
     // ---- F6: every row over the baked file --------------------------------------------------
     landed.clear();
-    const int started = MeshBakeStore::bakeLandedAsync({ imported.assetGuid, imported.meshGuid });
+    const int started = MeshBakeStore::bakeLandedAsync(conn, { imported.assetGuid, imported.meshGuid });
     CHECK_LOUD(started == 1, qUtf8Printable(QStringLiteral("F6: ONE bake for the two rows over one content "
                                                            "and settings (started %1)").arg(started)));
     pumpUntilLanded();
@@ -3220,7 +3224,7 @@ static void asyncLanding()
     dropBakes();
     bool called = false, fresh = true;
     QString dropped;
-    const bool began = MeshBakeStore::ensureFreshAsync(source, imported.assetGuid, &context,
+    const bool began = MeshBakeStore::ensureFreshAsync(conn, source, imported.assetGuid, &context,
         [&](bool f, const QString &why) { called = true; fresh = f; dropped = why; });
     CHECK_LOUD(began, "F7: a stale model's rebuild began asynchronously");
     MeshBakeStore::stopBackgroundRebuild();   // a reset / a shutdown: the epoch moves
@@ -3234,7 +3238,7 @@ static void asyncLanding()
     // ---- F8: the store root moved while the worker staged ------------------------------------
     landed.clear();
     called = false; dropped.clear();
-    const bool began8 = MeshBakeStore::ensureFreshAsync(source, imported.assetGuid, &context,
+    const bool began8 = MeshBakeStore::ensureFreshAsync(conn, source, imported.assetGuid, &context,
         [&](bool f, const QString &why) { called = true; fresh = f; dropped = why; });
     CHECK_LOUD(began8, "F8: a rebuild began under the store root (its job staged into that root)");
     AssetStorePaths::setRootOverride(otherRoot.path());   // the store moves before the landing

@@ -380,7 +380,7 @@ int main(int argc, char **argv)
               "cancel-after-ingest: content shared with a committed asset SURVIVED");
         CHECK(countObjects(root) == objectsBefore,
               "cancel-after-ingest: the store is byte-for-byte back where it started");
-        CHECK(!AssetCas::resolveSource(conn, root, sharedResult.assetGuid).isEmpty(),
+        CHECK(!AssetCas::resolveSource(db.connection(), root, sharedResult.assetGuid).isEmpty(),
               "cancel-after-ingest: the earlier asset still resolves its source");
     }
 

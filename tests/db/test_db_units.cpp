@@ -119,7 +119,7 @@ int child(const char *file, bool commitFirst)
 {
     Database database;
     if (!database.initializeDatabase(QString::fromLocal8Bit(file))) return 3;
-    DbTransaction tx(database.getDb());
+    DbTransaction tx(database.connection());
     if (commitFirst) {
         database.createFolder(QStringLiteral("done-1"), QString(), QStringLiteral("done1"), QString());
         database.createFolder(QStringLiteral("done-2"), QString(), QStringLiteral("done2"), QString());
@@ -177,7 +177,7 @@ int main(int argc, char **argv)
         holder.exec("INSERT INTO folders (name, guid) VALUES ('held', 'h')", &e);
         gWarnings.clear();
         {
-            DbTransaction tx(database.getDb());
+            DbTransaction tx(database.connection());
             const QString said = gWarnings.join(QLatin1Char('\n'));
             check(said.contains(QStringLiteral("could NOT BEGIN")) && said.contains(QStringLiteral("holder (the test's hold)"))
                       && said.contains(QStringLiteral("its first write: INSERT INTO folders")),
@@ -215,7 +215,7 @@ int main(int argc, char **argv)
         }
         check(folders(side, QStringLiteral("batched")) == 0, QStringLiteral("CONTROL: the batch's row is not committed yet"));
         {
-            DbTransaction tx(database.getDb());
+            DbTransaction tx(database.connection());
             check(okCommits == 1 && !database.batchTransactionLive(),
                   QStringLiteral("a unit makes the batch commit and stand down (the listener fired %1 time)").arg(okCommits));
             check(folders(side, QStringLiteral("batched")) == 1, QStringLiteral("...its row committed BEFORE the unit's"));
@@ -232,7 +232,7 @@ int main(int argc, char **argv)
         db::Connection side = openSide("dump");
         const std::string before = dump(side);
         {
-            DbTransaction tx(database.getDb());
+            DbTransaction tx(database.connection());
             database.createFolder(QStringLiteral("dropped-1"), QString(), QStringLiteral("d1"), QString());
             database.renameFolder(QStringLiteral("a"), QStringLiteral("renamed"));
         }
@@ -240,7 +240,7 @@ int main(int argc, char **argv)
         check(!before.empty() && after == before,
               QStringLiteral("a dropped unit leaves the logical content byte-equal (%1 bytes of rows)").arg(before.size()));
         {
-            DbTransaction tx(database.getDb());
+            DbTransaction tx(database.connection());
             database.createFolder(QStringLiteral("kept"), QString(), QStringLiteral("k"), QString());
             tx.commit();
         }

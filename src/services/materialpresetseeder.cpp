@@ -149,7 +149,7 @@ void MaterialPresetSeeder::importMapsThenRows()
     for (const auto &entry : mPrepared.mapOwners) {
         const QString oid = mPrepared.mapOids.value(entry.first);
         if (oid.isEmpty()) continue;
-        if (!ShippedAssets::libraryTextureFor(oid, assethome::platform()).isEmpty()) continue;
+        if (!ShippedAssets::libraryTextureFor(mDb, oid, assethome::platform()).isEmpty()) continue;
         // ONE PICTURE, ONE ROW — INSIDE THIS BATCH TOO (SEED-STAMP-1,
         // measured). The library test above is asked BEFORE anything is
         // imported, so two shipped files with the same BYTES both answered

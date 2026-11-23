@@ -34,6 +34,9 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
+#include <QSqlDriver>
+#include <QSqlError>
+#include <QSqlQuery>
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QMessageBox>
@@ -822,7 +825,7 @@ bool Database::borrowConnection(const QVariant &driverHandle, QString *errorOut)
 {
     QString why;
     db::Error error;
-    *mConnection = db::Connection::borrow(databasereads::systemHandle(driverHandle, &why), "editor", &error);
+    *mConnection = db::Connection::borrow(databasereads::systemHandle(driverHandle, &why), kEditorConnection, &error);
     if (!error) return true;
     *errorOut = QStringLiteral("this build cannot open the library until NOQT-DATABASE-1 stage 3 (the layer cannot "
                                "borrow the Qt driver's SQLite: %1; %2)")
@@ -1019,7 +1022,7 @@ bool Database::createFavoritesTable()
 
 void Database::createAllTables()
 {
-    DbTransaction tx(db);
+    DbTransaction tx(connection());
     if (!checkIfTableExists("projects"))        createProjectsTable();
     if (!checkIfTableExists("thumbnails"))      createThumbnailsTable();
     if (!checkIfTableExists("collections"))     createCollectionsTable();
@@ -1852,7 +1855,7 @@ QString Database::getAuthorName()
 // MUTATE Globals::project to delete a project that is not the open one.
 bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *deferred)
 {
-    DbTransaction tx(db);
+    DbTransaction tx(connection());
     const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
     DbQuery query(connection(), "DELETE FROM projects WHERE guid = ?");
@@ -1955,7 +1958,7 @@ bool Database::destroyTable(const QString &table)
 
 void Database::wipeDatabase()
 {
-	DbTransaction tx(db);
+	DbTransaction tx(connection());
 	destroyTable("projects");
 	destroyTable("thumbnails");
 	destroyTable("collections");
@@ -2017,7 +2020,7 @@ void Database::refreshSidecar(const QString &guid)
 {
     if (!sidecarBelongsHere(guid)) return;
     QString error;
-    AssetCas::writeSidecar(db, AssetStorePaths::root(), guid, &error);   // no row = quiet no-op
+    AssetCas::writeSidecar(connection(), AssetStorePaths::root(), guid, &error);   // no row = quiet no-op
 }
 
 void Database::dropSidecar(const QString &guid)
@@ -2162,7 +2165,7 @@ int Database::flushPendingAssetDeletes()
     // rollback could bring back, so we simply wait for the next flush point.
     // (A GESTURE BATCH is not "somebody else": it stands down for this guard
     // and reopens afterwards — CLOSE-2. So a flush inside a script run works.)
-    DbTransaction tx(db);
+    DbTransaction tx(connection());
     if (!tx.isActive()) return 0;
 
     // Taken out of the member first: nothing below appends, but a failed
@@ -2236,7 +2239,7 @@ bool Database::deleteAssetRow(const QString &guid, bool force,
     // prove this store and this catalog belong together (sidecarBelongsHere).
     const bool ownsSidecar = sidecarBelongsHere(guid);
 
-    DbTransaction tx(db);
+    DbTransaction tx(connection());
     // Whether the rows this call deletes become DURABLE at its own commit, or
     // only when an outer transaction commits (the guard degrades to a no-op
     // when the connection is already in one).
@@ -2294,7 +2297,7 @@ bool Database::deleteCollection(const int &collectionId)
     const QVector<int> subtree = fetchCollectionSubtree(collectionId);
     if (subtree.isEmpty()) return false;   // no such drawer
 
-    DbTransaction tx(db);
+    DbTransaction tx(connection());
 
     QStringList placeholders;
     for (int i = 0; i < subtree.size(); ++i) placeholders << "?";
@@ -3887,7 +3890,7 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok,
 	// matching deleteAssetAndDependencies. Without it a failure partway through
 	// left some folders deleted, some assets deleted and the rest of the
 	// subtree pointing at parents that no longer exist.
-	DbTransaction tx(db);
+	DbTransaction tx(connection());
 	const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
 	// A CLOSURE READ THAT FAILED is reported (the delete did not fully complete), never a shorter closure; a pin
@@ -3966,7 +3969,7 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 	// scrubs wait for this transaction's commit.
 	QVector<PendingAssetScrub> scrubs;
 
-	DbTransaction tx(db);
+	DbTransaction tx(connection());
 	const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
 	// A closure read that failed / a pin count that could not be read: as deleteFolderAndDependencies.
@@ -4100,7 +4103,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
 
     // One transaction around the whole multi-row import (phase 0): a failed
     // import leaves nothing behind, and per-row autocommit fsyncs are gone.
-    DbTransaction tx(db);
+    DbTransaction tx(connection());
 
     // NO STAMP IS READ FROM THE ARCHIVE (D0, lead decision): an import is a
     // WRITE into this library, so the row is stamped with the import moment

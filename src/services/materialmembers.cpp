@@ -15,11 +15,11 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QSet>
 
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "services/assetcas.h"
@@ -33,7 +33,7 @@ namespace {
 qint64 storedBytes(Database *db, Project *project, const QString &guid)
 {
     Q_UNUSED(db);
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
     QString path;
     if (project && !project->getProjectGuid().isEmpty())
@@ -194,12 +194,11 @@ QVector<Unused> unused(Database *db, Project *project, const QString &materialGu
         }
         QStringList children;
         {
-            QSqlQuery query(QSqlDatabase::database());
-            query.prepare(QStringLiteral("SELECT guid FROM assets WHERE parent = ? AND type = ?"));
-            query.addBindValue(materialGuid);
-            query.addBindValue(static_cast<int>(ModelTypes::Texture));
-            if (query.exec())
-                while (query.next()) children << query.value(0).toString();
+            db::Statement query(db->connection(), "SELECT guid FROM assets WHERE parent = ? AND type = ?");
+            dbqt::bindText(query, 1, materialGuid);
+            query.bindInt(2, static_cast<int>(ModelTypes::Texture));
+            db::Error e;
+            while (query.step(&e)) children << dbqt::text(query, 0);
         }
         for (const QString &child : children) {
             if (named.contains(child)) continue;                            // still a member
@@ -261,14 +260,13 @@ QString projectCopyName(Database *db, const QString &projectGuid, const QString 
     if (!db || projectGuid.isEmpty() || source.isEmpty()) return source;
     QSet<QString> taken;
     {
-        QSqlQuery query(QSqlDatabase::database());
-        query.prepare(QStringLiteral(
+        db::Statement query(db->connection(),
             "SELECT a.name FROM assets a JOIN project_assets p ON p.asset_guid = a.guid "
-            "WHERE p.project_guid = ? AND a.type = ?"));
-        query.addBindValue(projectGuid);
-        query.addBindValue(static_cast<int>(ModelTypes::Material));
-        if (query.exec())
-            while (query.next()) taken.insert(query.value(0).toString().trimmed().toCaseFolded());
+            "WHERE p.project_guid = ? AND a.type = ?");
+        dbqt::bindText(query, 1, projectGuid);
+        query.bindInt(2, static_cast<int>(ModelTypes::Material));
+        db::Error e;
+        while (query.step(&e)) taken.insert(dbqt::text(query, 0).trimmed().toCaseFolded());
     }
     if (!taken.contains(source.toCaseFolded())) return source;
     // THE SUFFIX IS APPENDED, NEVER PARSED OUT OF THE NAME: "Brick 2024" is a
@@ -408,12 +406,11 @@ QVector<Unused> reapExclusiveMembers(Database *db, const QString &materialGuid)
     // question (and one `unused` has already asked).
     QStringList children;
     {
-        QSqlQuery query(QSqlDatabase::database());
-        query.prepare(QStringLiteral("SELECT guid FROM assets WHERE parent = ? AND type = ?"));
-        query.addBindValue(materialGuid);
-        query.addBindValue(static_cast<int>(ModelTypes::Texture));
-        if (query.exec())
-            while (query.next()) children << query.value(0).toString();
+        db::Statement query(db->connection(), "SELECT guid FROM assets WHERE parent = ? AND type = ?");
+        dbqt::bindText(query, 1, materialGuid);
+        query.bindInt(2, static_cast<int>(ModelTypes::Texture));
+        db::Error e;
+        while (query.step(&e)) children << dbqt::text(query, 0);
     }
     for (const QString &child : children) {
         if (!db->hasMultipleDependers(child).isEmpty()) continue;   // somebody uses it
@@ -450,7 +447,7 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
     if (!MaterialBundle::memberGuids(definition).contains(textureGuid))
         return fail(QStringLiteral("'%1' is not a member of this material").arg(texture.name));
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
     // THE BYTES THIS CALLER IS LOOKING AT, not the library's (fix round F16's
     // nit): with a project open the copy must be of the version that project

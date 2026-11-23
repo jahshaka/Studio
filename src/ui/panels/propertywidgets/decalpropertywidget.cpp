@@ -11,7 +11,6 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertywidgets/decalpropertywidget.h"
 
-#include <QSqlDatabase>
 
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
@@ -127,8 +126,8 @@ void DecalPropertyWidget::bindMap(const QString &guid, QString &guidField, QStri
     // BINDING membership: binding an image to a decal must NOT mint the
     // companion PBR material a direct add would (ProjectAssets::AddKind).
     ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Binding);
-    pathField = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
-                                        project->getProjectGuid(), guid);
+    pathField = services && services->resolvePinned ? services->resolvePinned(project->getProjectGuid(), guid)
+                                                    : QString();
 }
 
 // One map rebind, undoable. The service owns the dependency ROW (it knows the
@@ -191,3 +190,10 @@ void DecalPropertyWidget::onDepthChanged(float v) { Q_UNUSED(v) }
 void DecalPropertyWidget::onMetalnessChanged(float v) { Q_UNUSED(v) }
 void DecalPropertyWidget::onRoughnessChanged(float v) { Q_UNUSED(v) }
 void DecalPropertyWidget::onIgnoreAlphaChanged(bool v) { Q_UNUSED(v) }
+
+void DecalPropertyWidget::setServices(StudioServices *services)
+{
+    this->services = services;
+    for (TexturePickerWidget *picker : { image, normalImage, emissiveImage })
+        if (picker) picker->services = services;
+}

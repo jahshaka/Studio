@@ -17,10 +17,10 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
-#include <QSqlError>
-#include <QSqlQuery>
-#include <QUuid>
+#include "data/database/dbqt.h"
+#include "data/db/connection.h"
+#include "data/db/statement.h"
+#include "data/db/transaction.h"
 
 #include "data/database/casschema.h"
 #include "data/database/database.h"
@@ -67,30 +67,18 @@ QVariantMap RebuildReport::toMap() const
 
 namespace
 {
-// Every tool opens its OWN named connection on the explicit db path —
-// never the app's default connection (rehearsal isolation).
-class ScopedConnection
+// Every tool opens its OWN connection on the explicit db path, OPENED BY THE LAYER (NOQT-DATABASE-1 stage 2:
+// its ScopedConnection copy deleted) - never the app's default connection (rehearsal isolation).
+db::Connection openOwn(const QString &dbPath, QString *errorOut)
 {
-public:
-    explicit ScopedConnection(const QString &dbPath)
-        : name(QStringLiteral("AssetMigration-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces)))
-    {
-        db = QSqlDatabase::addDatabase("QSQLITE", name);
-        db.setDatabaseName(dbPath);
-        opened = db.open();
-    }
-    ~ScopedConnection()
-    {
-        if (opened) db.close();
-        db = QSqlDatabase();
-        QSqlDatabase::removeDatabase(name);
-    }
-    bool opened = false;
-    QSqlDatabase db;
-
-private:
-    QString name;
-};
+    db::Options options;
+    options.busyMs = db::kEditorBusyMs;
+    options.name = "AssetMigration";
+    db::Error error;
+    db::Connection conn = db::Connection::open(dbPath.toStdString(), options, &error);
+    if (!conn.isOpen()) *errorOut = QStringLiteral("cannot open %1 (%2)").arg(dbPath, dbqt::describe(error));
+    return conn;
+}
 } // namespace
 
 VerifyReport verify(const QString &dbPath, const QString &storeRoot)
@@ -99,21 +87,15 @@ VerifyReport verify(const QString &dbPath, const QString &storeRoot)
     QElapsedTimer timer;
     timer.start();
 
-    ScopedConnection scoped(dbPath);
-    if (!scoped.opened) {
-        report.error = QStringLiteral("cannot open %1").arg(dbPath);
-        return report;
-    }
+    db::Connection conn = openOwn(dbPath, &report.error);
+    if (!conn.isOpen()) return report;
 
-    QSqlQuery query(scoped.db);
-    if (!query.exec("SELECT oid, size, ext FROM files")) {
-        report.error = QStringLiteral("no files table — migrate first (%1)").arg(query.lastError().text());
-        return report;
-    }
-    while (query.next()) {
-        const QString oid = query.value(0).toString();
-        const qint64 size = query.value(1).toLongLong();
-        const QString ext = query.value(2).toString();
+    db::Statement query(conn, "SELECT oid, size, ext FROM files");
+    db::Error e;
+    while (query.step(&e)) {
+        const QString oid = dbqt::text(query, 0);
+        const qint64 size = query.int64(1);
+        const QString ext = dbqt::text(query, 2);
         ++report.objects;
 
         const QString path = AssetStorePaths::objectPathIn(storeRoot, oid, ext);
@@ -126,21 +108,27 @@ VerifyReport verify(const QString &dbPath, const QString &storeRoot)
             report.corrupt << oid;
         }
     }
+    if (e) {
+        report.error = QStringLiteral("no files table — migrate first (%1)").arg(dbqt::describe(e));
+        return report;
+    }
 
     // EVERY STORAGE ROW HAS ITS SIDECAR (ASSETS-HOME-1): a row of Assets, the
     // Materials or the Avatar storage without one is a row a Clear Database or
     // a format bump cannot rebuild — it would be lost, so it is a finding.
-    QSqlQuery rows(scoped.db);
-    rows.prepare("SELECT guid FROM assets WHERE view_filter IN (?, ?, ?)");
-    rows.addBindValue(static_cast<int>(assethome::StoredAssets));
-    rows.addBindValue(static_cast<int>(assethome::StoredMaterialsLibrary));
-    rows.addBindValue(static_cast<int>(assethome::StoredAvatarLibrary));
-    if (rows.exec())
-        while (rows.next()) {
-            const QString guid = rows.value(0).toString();
-            if (!QFileInfo::exists(AssetStorePaths::sidecarPathIn(storeRoot, guid)))
-                report.missingSidecars << guid;
-        }
+    db::Statement rows(conn, "SELECT guid FROM assets WHERE view_filter IN (?, ?, ?)");
+    rows.bindInt(1, static_cast<int>(assethome::StoredAssets));
+    rows.bindInt(2, static_cast<int>(assethome::StoredMaterialsLibrary));
+    rows.bindInt(3, static_cast<int>(assethome::StoredAvatarLibrary));
+    while (rows.step(&e)) {
+        const QString guid = dbqt::text(rows, 0);
+        if (!QFileInfo::exists(AssetStorePaths::sidecarPathIn(storeRoot, guid)))
+            report.missingSidecars << guid;
+    }
+    if (e) {   // the sidecar finding from a failed read is no finding: said
+        report.error = QStringLiteral("the storage rows could not be read: %1").arg(dbqt::describe(e));
+        return report;
+    }
 
     report.elapsedMs = timer.elapsed();
     // `ok` stays the BYTES' verdict (every object present and bit-identical);
@@ -307,22 +295,21 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
         return report;
     }
 
-    ScopedConnection scoped(dbPath);
-    if (!scoped.opened) {
-        report.error = QStringLiteral("cannot open %1").arg(dbPath);
-        return report;
-    }
-    QSqlDatabase conn = scoped.db;
+    db::Connection conn = openOwn(dbPath, &report.error);
+    if (!conn.isOpen()) return report;
 
-    // A fresh recovery DB needs the assets and dependencies tables too.
-    QSqlQuery(CasSchema::kAssetsTableForRebuild, conn);
-    QSqlQuery(CasSchema::kDependenciesTableForRebuild, conn);
+    // A fresh recovery DB needs the assets and dependencies tables too (IF NOT EXISTS: an existing one answers
+    // nothing).
+    db::Error schemaError;
+    conn.exec(CasSchema::kAssetsTableForRebuild, &schemaError);
+    conn.exec(CasSchema::kDependenciesTableForRebuild, &schemaError);
     AssetCas::ensureCasSchema(conn);
 
     const QVector<QJsonObject> sidecars = restorable(storeRoot, options, &report);
     const bool keepPins = options.homes.isEmpty() || options.homes.contains(assethome::Kind::Project);
 
-    conn.transaction();
+    // ONE UNIT (the layer's door: source.no_raw_transaction), named as the lock's holder.
+    db::Transaction unit(conn, "the catalog rebuild");
     QSet<QString> restored;
     for (const QJsonObject &sidecar : sidecars) {
         const QString guid = sidecar.value("guid").toString();
@@ -334,54 +321,51 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
         const QByteArray blob = sidecar.contains("asset")
             ? QJsonDocument(sidecar.value("asset").toObject()).toJson(QJsonDocument::Compact)
             : QByteArray();
-        QSqlQuery insertAsset(conn);
-        insertAsset.prepare("INSERT OR IGNORE INTO assets (guid, name, type, view_filter, project_guid, "
+        db::Statement insertAsset(conn, "INSERT OR IGNORE INTO assets (guid, name, type, view_filter, project_guid, "
                             "origin, parent, asset, hash, collection, author, license, properties, tags, "
                             "listed, date_created, last_updated, times_used) "
                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(), ?)");
-        insertAsset.addBindValue(guid);
-        insertAsset.addBindValue(sidecar.value("name").toString());
-        insertAsset.addBindValue(sidecar.value("type").toInt());
-        insertAsset.addBindValue(home.stored());
-        insertAsset.addBindValue(home.isProject() ? QVariant(home.projectGuid)
-                                                  : QVariant(QMetaType(QMetaType::QString)));
-        insertAsset.addBindValue(sidecar.value("origin").toString());
-        insertAsset.addBindValue(sidecar.value("parent").toString());
-        insertAsset.addBindValue(blob);
-        insertAsset.addBindValue(Database::blobStamp(blob));
-        insertAsset.addBindValue(sidecar.value("collection").toInt());
-        insertAsset.addBindValue(sidecar.value("author").toString());
-        insertAsset.addBindValue(sidecar.value("license").toString());
-        insertAsset.addBindValue(sidecar.contains("properties")
+        dbqt::bindText(insertAsset, 1, guid);
+        dbqt::bindText(insertAsset, 2, sidecar.value("name").toString());
+        insertAsset.bindInt(3, sidecar.value("type").toInt());
+        insertAsset.bindInt(4, home.stored());
+        dbqt::bindText(insertAsset, 5, home.isProject() ? home.projectGuid : QString());
+        dbqt::bindText(insertAsset, 6, sidecar.value("origin").toString());
+        dbqt::bindText(insertAsset, 7, sidecar.value("parent").toString());
+        dbqt::bindBytes(insertAsset, 8, blob);
+        dbqt::bindText(insertAsset, 9, Database::blobStamp(blob));
+        insertAsset.bindInt(10, sidecar.value("collection").toInt());
+        dbqt::bindText(insertAsset, 11, sidecar.value("author").toString());
+        dbqt::bindText(insertAsset, 12, sidecar.value("license").toString());
+        dbqt::bindBytes(insertAsset, 13, sidecar.contains("properties")
             ? QJsonDocument(sidecar.value("properties").toObject()).toJson(QJsonDocument::Compact)
             : QByteArray());
-        insertAsset.addBindValue(sidecar.contains("tags")
+        dbqt::bindBytes(insertAsset, 14, sidecar.contains("tags")
             ? QJsonDocument(sidecar.value("tags").toObject()).toJson(QJsonDocument::Compact)
             : QByteArray());
-        insertAsset.addBindValue(sidecar.value("listed").toBool(true) ? 1 : 0);
-        insertAsset.addBindValue(sidecar.value("dateCreated").toString());
-        insertAsset.addBindValue(sidecar.value("timesUsed").toInt());
-        if (insertAsset.exec() && insertAsset.numRowsAffected() > 0) ++report.assets;
+        insertAsset.bindInt(15, sidecar.value("listed").toBool(true) ? 1 : 0);
+        dbqt::bindText(insertAsset, 16, sidecar.value("dateCreated").toString());
+        insertAsset.bindInt(17, sidecar.value("timesUsed").toInt());
+        db::Error e;
+        if (insertAsset.run(&e) && conn.changes() > 0) ++report.assets;
         restored.insert(guid);
 
         for (const auto &value : sidecar.value("files").toArray()) {
             const QJsonObject fileObj = value.toObject();
             if (options.dropDerived && isDerivedRole(fileObj.value("role").toString())) continue;
 
-            QSqlQuery insertFile(conn);
-            insertFile.prepare("INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
-            insertFile.addBindValue(fileObj.value("oid").toString());
-            insertFile.addBindValue(qint64(fileObj.value("size").toDouble()));
-            insertFile.addBindValue(fileObj.value("ext").toString());
-            if (insertFile.exec() && insertFile.numRowsAffected() > 0) ++report.files;
+            db::Statement insertFile(conn, "INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
+            dbqt::bindText(insertFile, 1, fileObj.value("oid").toString());
+            insertFile.bindInt(2, qint64(fileObj.value("size").toDouble()));
+            dbqt::bindText(insertFile, 3, fileObj.value("ext").toString());
+            if (insertFile.run(&e) && conn.changes() > 0) ++report.files;
 
-            QSqlQuery insertLink(conn);
-            insertLink.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
-            insertLink.addBindValue(guid);
-            insertLink.addBindValue(fileObj.value("role").toString());
-            insertLink.addBindValue(fileObj.value("oid").toString());
-            insertLink.addBindValue(fileObj.value("name").toString());
-            if (insertLink.exec() && insertLink.numRowsAffected() > 0) ++report.links;
+            db::Statement insertLink(conn, "INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
+            dbqt::bindText(insertLink, 1, guid);
+            dbqt::bindText(insertLink, 2, fileObj.value("role").toString());
+            dbqt::bindText(insertLink, 3, fileObj.value("oid").toString());
+            dbqt::bindText(insertLink, 4, fileObj.value("name").toString());
+            if (insertLink.run(&e) && conn.changes() > 0) ++report.links;
         }
 
         // PINS (item 1c'): a project's version of this asset — restored only
@@ -396,20 +380,19 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
                     storeRoot, oid, pinObj.value("ext").toString())))
                 continue;   // the pinned bytes are gone; do not pin at a hole
 
-            QSqlQuery insertFile(conn);
-            insertFile.prepare("INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
-            insertFile.addBindValue(oid);
-            insertFile.addBindValue(qint64(pinObj.value("size").toDouble()));
-            insertFile.addBindValue(pinObj.value("ext").toString());
-            if (insertFile.exec() && insertFile.numRowsAffected() > 0) ++report.files;
+            db::Statement insertFile(conn, "INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
+            dbqt::bindText(insertFile, 1, oid);
+            insertFile.bindInt(2, qint64(pinObj.value("size").toDouble()));
+            dbqt::bindText(insertFile, 3, pinObj.value("ext").toString());
+            db::Error e;
+            if (insertFile.run(&e) && conn.changes() > 0) ++report.files;
 
-            QSqlQuery insertPin(conn);
-            insertPin.prepare("INSERT OR IGNORE INTO project_assets (project_guid, asset_guid, oid_pin) "
-                              "VALUES (?, ?, ?)");
-            insertPin.addBindValue(projectGuid);
-            insertPin.addBindValue(guid);
-            insertPin.addBindValue(oid);
-            if (insertPin.exec() && insertPin.numRowsAffected() > 0) ++report.pins;
+            db::Statement insertPin(conn, "INSERT OR IGNORE INTO project_assets (project_guid, asset_guid, oid_pin) "
+                                          "VALUES (?, ?, ?)");
+            dbqt::bindText(insertPin, 1, projectGuid);
+            dbqt::bindText(insertPin, 2, guid);
+            dbqt::bindText(insertPin, 3, oid);
+            if (insertPin.run(&e) && conn.changes() > 0) ++report.pins;
         }
     }
 
@@ -424,29 +407,30 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
             if (dependee.isEmpty() || !restored.contains(dependee)) continue;
             bool known = false;
             {
-                // Block-scoped: finished before the write (source.no_live_read_at_write).
-                QSqlQuery have(conn);
-                have.prepare("SELECT 1 FROM dependencies WHERE depender = ? AND dependee = ? "
-                             "AND project_guid IS NULL");
-                have.addBindValue(guid);
-                have.addBindValue(dependee);
-                known = have.exec() && have.next();
+                // Block-scoped: finished before the write.
+                db::Statement have(conn, "SELECT 1 FROM dependencies WHERE depender = ? AND dependee = ? "
+                                         "AND project_guid IS NULL");
+                dbqt::bindText(have, 1, guid);
+                dbqt::bindText(have, 2, dependee);
+                db::Error e;
+                known = have.step(&e);
             }
             if (known) continue;
-            QSqlQuery insertEdge(conn);
-            insertEdge.prepare("INSERT INTO dependencies (depender_type, dependee_type, project_guid, "
-                               "depender, dependee, id) VALUES (?, ?, NULL, ?, ?, ?)");
-            insertEdge.addBindValue(type);
-            insertEdge.addBindValue(edge.value("dependeeType").toInt());
-            insertEdge.addBindValue(guid);
-            insertEdge.addBindValue(dependee);
-            insertEdge.addBindValue(QString::fromStdString(iris::newGuid()));
-            if (insertEdge.exec()) ++report.edges;
+            db::Statement insertEdge(conn, "INSERT INTO dependencies (depender_type, dependee_type, project_guid, "
+                                           "depender, dependee, id) VALUES (?, ?, NULL, ?, ?, ?)");
+            insertEdge.bindInt(1, type);
+            insertEdge.bindInt(2, edge.value("dependeeType").toInt());
+            dbqt::bindText(insertEdge, 3, guid);
+            dbqt::bindText(insertEdge, 4, dependee);
+            dbqt::bindText(insertEdge, 5, QString::fromStdString(iris::newGuid()));
+            db::Error e;
+            if (insertEdge.run(&e)) ++report.edges;
         }
     }
 
-    if (!conn.commit()) {
-        report.error = QStringLiteral("commit failed: %1").arg(conn.lastError().text());
+    db::Error commitError;
+    if (!unit.commit(&commitError)) {
+        report.error = QStringLiteral("commit failed: %1").arg(dbqt::describe(commitError));
         return report;
     }
 

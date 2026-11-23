@@ -49,7 +49,8 @@ public:
 
     void setDatabase(Database *db) { this->db = db; }
     void setProject(Project *project);
-    void setServices(StudioServices *services) { this->services = services; }
+    /// Also hands it to the texture pickers: their drops resolve through it (ruling 15).
+    void setServices(StudioServices *services);
 
     void setSceneNode(std::shared_ptr<iris::SceneNode> sceneNode);
 

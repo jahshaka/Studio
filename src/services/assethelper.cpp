@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/assethelper.h"
+#include "data/db/connection.h"
 
 #include <QSet>
 
@@ -33,7 +34,6 @@ For more information see the LICENSE file
 #include "irisgl/import/modelsceneinfo.h"
 #include "irisgl/import/scenelights.h"
 #include "irisgl/import/nodeclips.h"
-#include <QSqlDatabase>
 #include "app/qtstd.h"
 #include "app/qtstdgui.h"
 
@@ -48,10 +48,10 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     // binds the store file the guid resolves to AND the guid (TEX-REF-1), so
     // the identity reaches the next save. A guid that does not resolve stays
     // bound with no file (texture.missing); there is no path arm.
-    Q_UNUSED(db);
-    const auto textureRef = [](const QString &stored) -> iris::Value {
+    const auto textureRef = [db](const QString &stored) -> iris::Value {
         if (stored.isEmpty()) return iris::Material::textureRef(std::string(), std::string());
-        QSqlDatabase conn = QSqlDatabase::database();
+        if (!db) return iris::Material::textureRef(std::string(), stored.toStdString());   // no library: bound with no file
+        db::Connection &conn = db->connection();
         return iris::Material::textureRef(
             AssetCas::resolveSource(conn, AssetStorePaths::root(), stored).toStdString(), stored.toStdString());
     };
@@ -122,23 +122,6 @@ QByteArray AssetHelper::makeBlobFromPixmap(const QPixmap &thumbnail)
     buffer.open(QIODevice::WriteOnly);
     thumbnail.save(&buffer, "PNG");
     return thumbnailBytes;
-}
-
-// Moved here from the materials exporter (Exporter::getAssetPath, smoke L10
-// item 7) so it can be tested — and fixed. EVERY view filter resolves through
-// the store, by guid. The EDITOR filter used to be spelled inline as
-// <Documents>/Jahshaka/<name>: the flat per-project copy the reference-with-pin
-// program deleted (2026-08-31), under a root the data-root override does not
-// move. A model's textures are registered Editor-filtered
-// (import/assetimporters.cpp), so an exported material that used one shipped
-// without it, silently.
-QString AssetHelper::storedFilePath(const AssetRecord &asset)
-{
-    if (asset.guid.isEmpty()) return QString();
-    const QString byName = AssetCas::resolveFile(QSqlDatabase::database(), AssetStorePaths::root(),
-                                                 asset.guid, asset.name);
-    if (!byName.isEmpty()) return byName;
-    return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), asset.guid);
 }
 
 QStringList AssetHelper::fetchAssetAndAllDependencies(const QString &guid, Database *db)

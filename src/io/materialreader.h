@@ -50,7 +50,8 @@ public:
 	/// folder-by-recorded-NAME fallbacks (the project folder's and the
 	/// "global source folder"'s) are gone with the files they looked for
 	/// (plan item 15c: no asset file is ever copied into a folder by name).
-	QString resolveTextureGuid(const QString &guid);
+	/// `guid`'s file on `db`'s library: the project's pin, else the library source.
+	QString resolveTextureGuid(Database *db, const QString &guid);
 
 
 	// Dispatches on the "materialType" tag SceneWriter stamps on every saved

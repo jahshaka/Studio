@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
-#include <QSqlDatabase>
+#include "services/services.h"
 #include "services/thumbnailmanager.h"
 #include "ui/controls/assetpickerwidget.h"
 #include <QMimeData>
@@ -77,9 +77,9 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 		// display name — a file no project folder holds since the store landed,
 		// so a dropped texture reached the material as a path to nothing (plan
 		// item 15c removed the last files that join could find).
-		changeMap(AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
-		                                  project ? project->getProjectGuid() : QString(),
-		                                  textureGuid));
+		changeMap(services && services->resolvePinned
+		              ? services->resolvePinned(project ? project->getProjectGuid() : QString(), textureGuid)
+		              : QString());
 	}
 
 	event->acceptProposedAction();

@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "services/avatarassets.h"
 #include "app/qtstd.h"
 
-#include <QSqlQuery>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -20,10 +19,12 @@ For more information see the LICENSE file
 #include <QRegularExpression>
 #include <QJsonDocument>
 #include <QSet>
-#include <QSqlDatabase>
 #include <QTemporaryDir>
 
 #include "data/database/database.h"
+#include "services/jahlog.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "services/assethome.h"
@@ -68,22 +69,23 @@ bool AvatarAssets::isAvatarRow(const QString &guid, Database *db)
     return db->fetchAsset(guid).type == static_cast<int>(ModelTypes::Avatar);
 }
 
-QString AvatarAssets::libraryVersion(const QString &guid)
+QString AvatarAssets::libraryVersion(Database *db, const QString &guid)
 {
-    return AssetCas::sourceOid(QSqlDatabase::database(), guid);
+    if (!db) return QString();
+    return AssetCas::sourceOid(db->connection(), guid);
 }
 
-QString AvatarAssets::projectVersion(const QString &guid, Project *project)
+QString AvatarAssets::projectVersion(Database *db, const QString &guid, Project *project)
 {
-    if (!project || project->getProjectGuid().isEmpty()) return QString();
-    return AssetCas::pinnedOid(QSqlDatabase::database(), project->getProjectGuid(), guid);
+    if (!db || !project || project->getProjectGuid().isEmpty()) return QString();
+    return AssetCas::pinnedOid(db->connection(), project->getProjectGuid(), guid);
 }
 
-bool AvatarAssets::isEdited(const QString &guid, Project *project)
+bool AvatarAssets::isEdited(Database *db, const QString &guid, Project *project)
 {
-    const QString pinned = projectVersion(guid, project);
+    const QString pinned = projectVersion(db, guid, project);
     if (pinned.isEmpty()) return false;          // not in the project at all
-    return pinned != libraryVersion(guid);
+    return pinned != libraryVersion(db, guid);
 }
 
 QString AvatarAssets::stageDefinition(const iris::AvatarDefinition &definition,
@@ -206,7 +208,7 @@ QString AvatarAssets::create(const QString &objectGuid, Scope scope, Database *d
     if (stagingPath.isEmpty()) return QString();
     const QString stagingDir = QFileInfo(stagingPath).absolutePath();
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     QString oid;
     QString ingestError;
     const bool ingested = AssetCas::ingestFile(conn, AssetStorePaths::root(), stagingPath, guid,
@@ -256,7 +258,7 @@ AvatarAssets::Loaded AvatarAssets::load(const QString &guid, Scope scope, Databa
     }
     out.name = record.name;
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
     QString path;
     if (scope == Scope::Project) {
@@ -323,7 +325,7 @@ QString AvatarAssets::save(const QString &guid, Scope scope,
     }
 
     QString name;
-    AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid, &name);
+    AssetCas::resolveSource(db->connection(), AssetStorePaths::root(), guid, &name);
     if (name.isEmpty()) name = definitionFileName(definition.name);
 
     QString stagingPath = stageDefinition(definition, name, errorOut);
@@ -345,7 +347,7 @@ QString AvatarAssets::save(const QString &guid, Scope scope,
         // A LIBRARY save PUBLISHES: the bytes become an object and the
         // library's own source pointer moves to them. No pin moves, so a
         // project that pinned the old version keeps rendering it (§1).
-        QSqlDatabase conn = QSqlDatabase::database();
+        db::Connection &conn = db->connection();
         if (AssetCas::ingestFile(conn, AssetStorePaths::root(), stagingPath, guid,
                                  QStringLiteral("source"), name, &oid, &error))
             if (!AssetCas::moveSourcePointer(conn, guid, oid, name, &error)) oid.clear();
@@ -371,7 +373,7 @@ QString AvatarAssets::save(const QString &guid, Scope scope,
         props.remove(QStringLiteral("metadata"));
         db->updateAssetProperties(guid, QJsonDocument(props).toJson());
     }
-    AssetCas::writeSidecar(QSqlDatabase::database(), AssetStorePaths::root(), guid, nullptr);
+    AssetCas::writeSidecar(db->connection(), AssetStorePaths::root(), guid, nullptr);
     return oid;
 }
 
@@ -391,7 +393,7 @@ QString AvatarAssets::saveToLibrary(const QString &guid, Database *db, Project *
     if (record.type != static_cast<int>(ModelTypes::Avatar))
         return refuse(QStringLiteral("'%1' is not an avatar asset").arg(record.name));
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString pinned = AssetCas::pinnedOid(conn, project->getProjectGuid(), guid);
     if (pinned.isEmpty())
         return refuse(QStringLiteral("'%1' is not in this project, so there is no project "
@@ -406,10 +408,12 @@ QString AvatarAssets::saveToLibrary(const QString &guid, Database *db, Project *
         // Its membership becomes the avatar's own (intrinsic) with it, as
         // reconcileDependencies writes for a storage avatar.
         {
-            QSqlQuery restamp(QSqlDatabase::database());
-            restamp.prepare("UPDATE dependencies SET project_guid = NULL WHERE depender = ?");
-            restamp.addBindValue(guid);
-            restamp.exec();
+            db::Statement restamp(db->connection(), "UPDATE dependencies SET project_guid = NULL WHERE depender = ?");
+            dbqt::bindText(restamp, 1, guid);
+            db::Error e;
+            if (!restamp.run(&e))   // the edges stay the project's: said, the save goes on as it always did
+                JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                    QStringLiteral("avatar: the edges of %1 could not be made intrinsic: %2").arg(guid, dbqt::describe(e)));
         }
         // Its dependencies are project rows too when they were imported here;
         // they stay where they are (a library avatar may depend on a project

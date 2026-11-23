@@ -65,7 +65,8 @@ public:
     QPushButton *resetMaterialButton() const { return resetButton.data(); }
     void setWidgetProperties();
 
-    void setServices(StudioServices *s) { services = s; }
+    /// Also hands it to the property rows: their texture pickers' drops resolve through it (ruling 15).
+    void setServices(StudioServices *s);
     void setDatabase(Database *db) {
         this->db = db;
     }

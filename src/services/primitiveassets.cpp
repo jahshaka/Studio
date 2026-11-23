@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QMutex>
 #include <QMutexLocker>
-#include <QSqlDatabase>
 
 #include "data/database/database.h"
 #include "data/primitives.h"
@@ -52,7 +51,7 @@ QHash<QString, iris::MeshPtr> &cache()
 /// The row exists and its source bytes are in the store: the path to them.
 /// (The seed half has its own copy — one function, two translation units, and it
 /// is four lines: the alternative is a third TU for it.)
-QString storedSource(QSqlDatabase conn, const QString &root, Database *db, const QString &guid)
+QString storedSource(db::Connection &conn, const QString &root, Database *db, const QString &guid)
 {
     if (!db) return QString();
     const AssetRecord row = db->fetchAsset(guid);
@@ -85,14 +84,14 @@ iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db)
     // document, dock or verb asks here the rows are there; a binary that never
     // seeds (a preview-only test, a tool) gets an honest null instead of a link
     // dependency on the importer.
-    const QString source = storedSource(QSqlDatabase::database(), AssetStorePaths::root(),
+    const QString source = storedSource(db->connection(), AssetStorePaths::root(),
                                        db, guid);
     if (source.isEmpty()) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning, "primitive: '" + QString::fromLatin1(def->name)
                                                           + "' is not seeded in this library — nothing to draw");
         return iris::MeshPtr();
     }
-    iris::BakedModelPtr baked = MeshBakeStore::load(source, guid);
+    iris::BakedModelPtr baked = MeshBakeStore::load(db->connection(), source, guid);
     if (!baked || baked->meshes.isEmpty()) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning, "primitive: '" + QString::fromLatin1(def->name)
                                                           + "' has no readable bake — nothing to draw");
@@ -114,7 +113,7 @@ iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db)
 bool allSeeded(Database *db)
 {
     if (!db) return false;
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
     for (const primitives::Def &def : primitives::all()) {
         if (!def.guid) continue;

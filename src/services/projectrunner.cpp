@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFuture>
-#include <QSqlDatabase>
 #include <QThread>
 #include <QtConcurrent>
 
@@ -202,7 +201,7 @@ iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped(openreads::Reads &reads)
 	// producing it rebuilds it — on a worker, this thread pumping, with the
 	// open's progress up — before anything reads. Never a parse on the open.
 	// ...the clip files' CLIP bakes with them (SHIPPED-BAKES-1).
-	MeshBakeStore::rebuildPumped(stale, [this](int i, int n) {
+	MeshBakeStore::rebuildPumped(mDb->connection(), stale, [this](int i, int n) {
 		mHost->showOpenProgress(5 + (20 * i) / qMax(1, n),
 		                        tr("Rebuilding models (%1 of %2)…").arg(i + 1).arg(n));
 	});
@@ -277,7 +276,7 @@ void ProjectRunner::open(bool playMode)
 	// The reads and the bakes, on a worker while this thread pumps (above).
 	mOpenRefusal.clear();
 	LoadTimeline::mark(QStringLiteral("plan"));
-	openreads::Reads reads = openreads::prepare(mProject);
+	openreads::Reads reads = openreads::prepare(mProject, mDb->filePath());
 	const iris::MeshPrewarmPtr prewarm = prewarmModelsPumped(reads);
 	if (refuseOpen(reads)) return;   // BEFORE stageBegin: nothing is torn down
 
@@ -466,20 +465,20 @@ void ProjectRunner::startOpenRun(bool playMode)
 	// rows, the scene blob and its sources and the bake plan on the runner's
 	// worker, the set's other types on a second one beside the bake read.
 	LoadTimeline::mark(QStringLiteral("plan"));
-	auto reads = std::make_shared<openreads::Reads>(openreads::prepare(mProject));
+	auto reads = std::make_shared<openreads::Reads>(openreads::prepare(mProject, mDb->filePath()));
 
 	startRunnerIfNeeded();
 
 	SceneOpenRunner::Reads workerReads;
 	workerReads.dbPath = reads->dbPath;
 	workerReads.root = reads->root;
-	workerReads.plan = [reads, project = mProject](QSqlDatabase &conn, QStringList *models,
+	workerReads.plan = [reads, project = mProject](db::Connection &conn, QStringList *models,
 	                                               QStringList *clips) {
 		openreads::readPlan(conn, project, *reads);
 		*models = reads->modelPaths;
 		*clips = reads->clipPaths;
 	};
-	workerReads.side = [reads](QSqlDatabase &conn) { openreads::readSession(conn, *reads); };
+	workerReads.side = [reads](db::Connection &conn) { openreads::readSession(conn, *reads); };
 
 	// ---- install: UI-thread slices, one per event-loop turn ----------------
 	//

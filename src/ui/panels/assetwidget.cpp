@@ -1073,7 +1073,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 			// Enabled only when there is something to take: the project's pin
 			// differs from the library's current version. A row that would do
 			// nothing is worse than one that is not there.
-			action->setEnabled(AvatarAssets::isEdited(avatarGuid, project));
+			action->setEnabled(AvatarAssets::isEdited(db, avatarGuid, project));
 			connect(action, SIGNAL(triggered()), this, SLOT(updateAvatarFromLibrary()));
 			menu.addAction(action);
 

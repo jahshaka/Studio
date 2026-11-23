@@ -15,8 +15,9 @@ For more information see the LICENSE file
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QLockFile>
-#include <QSqlDatabase>
-#include <QSqlQuery>
+#include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include <QStandardPaths>
 
 #include "data/constants.h"
@@ -70,7 +71,7 @@ bool AssetStoreService::online()
     return QDir(AssetStorePaths::root()).exists();
 }
 
-int AssetStoreService::missingCount(QSqlDatabase conn, const QString &root)
+int AssetStoreService::missingCount(db::Connection &conn, const QString &root)
 {
     if (!conn.isOpen() || !QDir(root).exists()) return 0;
 
@@ -82,31 +83,30 @@ int AssetStoreService::missingCount(QSqlDatabase conn, const QString &root)
     // THE USER'S STORAGES, LISTED (Assets, the Materials module's, the Avatar
     // module's): an unlisted row's content is the pinning project's business.
     // ONE statement on `conn`, any thread's connection (STAGE-CLOSE-TRIAGE-1 F2).
-    QSqlQuery q(conn);
-    q.prepare("SELECT A.guid, AF.oid, F.ext FROM assets A "
-              "JOIN asset_files AF ON AF.asset_guid = A.guid "
-              "LEFT JOIN files F ON AF.oid = F.oid "
-              "WHERE A.view_filter IN (?, ?, ?) AND A.listed = 1 ORDER BY A.guid");
-    q.addBindValue(static_cast<int>(assethome::StoredAssets));
-    q.addBindValue(static_cast<int>(assethome::StoredMaterialsLibrary));
-    q.addBindValue(static_cast<int>(assethome::StoredAvatarLibrary));
-    if (!q.exec()) return 0;
+    db::Statement q(conn, "SELECT A.guid, AF.oid, F.ext FROM assets A "
+                          "JOIN asset_files AF ON AF.asset_guid = A.guid "
+                          "LEFT JOIN files F ON AF.oid = F.oid "
+                          "WHERE A.view_filter IN (?, ?, ?) AND A.listed = 1 ORDER BY A.guid");
+    q.bindInt(1, static_cast<int>(assethome::StoredAssets));
+    q.bindInt(2, static_cast<int>(assethome::StoredMaterialsLibrary));
+    q.bindInt(3, static_cast<int>(assethome::StoredAvatarLibrary));
+    db::Error e;
 
     int missing = 0;
     QString current;
     bool present = false;
-    while (q.next()) {
-        const QString guid = q.value(0).toString();
+    while (q.step(&e)) {
+        const QString guid = dbqt::text(q, 0);
         if (guid != current) {
             if (!current.isEmpty() && !present) ++missing;
             current = guid;
             present = false;
         }
         if (!present
-            && QFileInfo::exists(AssetStorePaths::objectPathIn(root, q.value(1).toString(),
-                                                               q.value(2).toString())))
+            && QFileInfo::exists(AssetStorePaths::objectPathIn(root, dbqt::text(q, 1), dbqt::text(q, 2))))
             present = true;
     }
+    if (e) return -1;   // a count from a failed read is no count: -1, never "nothing missing"
     if (!current.isEmpty() && !present) ++missing;
     return missing;
 }
@@ -117,10 +117,10 @@ QVariantMap AssetStoreService::status(Database *db)
         const QString root = AssetStorePaths::root();
         return { { "root", root }, { "online", QDir(root).exists() }, { "missing", 0 } };
     }
-    return statusOn(QSqlDatabase::database(), AssetStorePaths::root());
+    return statusOn(db->connection(), AssetStorePaths::root());
 }
 
-QVariantMap AssetStoreService::statusOn(QSqlDatabase conn, const QString &root)
+QVariantMap AssetStoreService::statusOn(db::Connection &conn, const QString &root)
 {
     QVariantMap out;
     const bool isOnline = QDir(root).exists();
@@ -307,17 +307,19 @@ bool AssetStoreService::setRoot(const QString &path, bool moveContents, bool for
             // Sanity check against the catalog, keyed on the CAS rather than
             // on the retired per-guid view: when the library knows content,
             // at least one of its objects must be present there.
-            QSqlDatabase conn = QSqlDatabase::database();
+            db::Connection &conn = db->connection();
             int present = 0, expected = 0;
             if (conn.isOpen()) {
-                QSqlQuery q(conn);
-                if (q.exec("SELECT oid, ext FROM files")) {
-                    while (q.next()) {
-                        ++expected;
-                        if (QFileInfo::exists(AssetStorePaths::objectPathIn(
-                                newRoot, q.value(0).toString(), q.value(1).toString())))
-                            ++present;
-                    }
+                db::Statement q(conn, "SELECT oid, ext FROM files");
+                db::Error e;
+                while (q.step(&e)) {
+                    ++expected;
+                    if (QFileInfo::exists(AssetStorePaths::objectPathIn(newRoot, dbqt::text(q, 0), dbqt::text(q, 1))))
+                        ++present;
+                }
+                if (e) {   // the sanity check could not be made: refused by name, never passed on a guess
+                    if (errorOut) *errorOut = QStringLiteral("the library's objects could not be read: %1").arg(dbqt::describe(e));
+                    return false;
                 }
             }
             if (expected > 0 && present == 0) {

@@ -13,7 +13,6 @@ For more information see the LICENSE file
 
 #include <QDir>
 #include <QFileInfo>
-#include <QSqlDatabase>
 
 #include "data/database/database.h"
 #include "data/project.h"
@@ -109,7 +108,7 @@ QString VideoApi::sourceFor(const QString &videoGuid)
     // The pinned bytes, else the library source (resolvePinned falls back
     // itself). The projectFolder + row-name join that followed is gone (plan
     // item 15c): nothing puts asset files in a project folder any more.
-    const QString resolved = AssetCas::resolvePinned(QSqlDatabase::database(),
+    const QString resolved = AssetCas::resolvePinned(host.db->connection(),
                                                      AssetStorePaths::root(),
                                                      host.project->getProjectGuid(), videoGuid);
     if (resolved.isEmpty() || !QFileInfo::exists(resolved)) {

@@ -189,7 +189,7 @@ int main(int argc, char **argv)
     {
         bool committed = false, wrote = false, landed = false;
         {
-            DbTransaction tx(QSqlDatabase::database());
+            DbTransaction tx(db.connection());
             const QString before = nameOf(QStringLiteral("t1"));   // the read: a finished statement
             check(previewLandsOrWaits(writer, QStringLiteral("p1"), QStringLiteral("00000000000000p1"), drops, &landed),
                   "1: the preview landed or waited behind the transaction");
@@ -269,12 +269,12 @@ int main(int argc, char **argv)
         const QByteArray before = libraryDigest(path);
         bool committed = true, funnel = true, raw = true, nested = true;
         {
-            DbTransaction tx(QSqlDatabase::database());
+            DbTransaction tx(db.connection());
             funnel = db.updateAssetAsset(QStringLiteral("t4"), QByteArrayLiteral("{\"half\":1}"));
             QSqlQuery w;
             raw = w.exec(QStringLiteral("UPDATE assets SET name = 'behind-stale' WHERE guid = 't4'"));
             {
-                DbTransaction inner(QSqlDatabase::database());
+                DbTransaction inner(db.connection());
                 QSqlQuery n;
                 nested = n.exec(QStringLiteral("UPDATE assets SET name = 'nested' WHERE guid = 'u1'")) && inner.commit();
             }
@@ -290,7 +290,7 @@ int main(int argc, char **argv)
         check(libraryDigest(path) == before, "4: A FAILED UNIT WRITES NOTHING - every table is byte-equal after it");
         bool next = false;
         {
-            DbTransaction tx(QSqlDatabase::database());
+            DbTransaction tx(db.connection());
             QSqlQuery w;
             next = w.exec(QStringLiteral("UPDATE assets SET name = 'after' WHERE guid = 't4'")) && tx.commit();
         }
@@ -314,7 +314,7 @@ int main(int argc, char **argv)
         bool committed = true, funnel = true, raw = true;
         warnings.clear();
         {
-            DbTransaction tx(QSqlDatabase::database());   // its BEGIN times out at 50 ms
+            DbTransaction tx(db.connection());   // its BEGIN times out at 50 ms
             {
                 QSqlQuery release(other);
                 release.exec(QStringLiteral("COMMIT"));   // the lock is free before the scope writes
@@ -333,7 +333,7 @@ int main(int argc, char **argv)
         shortWait.exec(QStringLiteral("PRAGMA busy_timeout = 5000"));
         bool next = false;
         {
-            DbTransaction tx(QSqlDatabase::database());
+            DbTransaction tx(db.connection());
             QSqlQuery w;
             next = w.exec(QStringLiteral("UPDATE assets SET name = 'after-5' WHERE guid = 't4'")) && tx.commit();
         }

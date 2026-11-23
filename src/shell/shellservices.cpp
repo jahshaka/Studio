@@ -11,7 +11,6 @@ For more information see the LICENSE file
 
 #include "shell/shellservices.h"
 
-#include <QSqlDatabase>
 
 #include "data/database/database.h"
 #include "data/project.h"
@@ -134,12 +133,17 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     mAggregate->previewDemand = mDemand;
     mSceneEdit->setPreviews(mPreviews);
     mAggregate->assets = mAssets;
+    // THE ONE RESOLVER (ruling 15): the project's pin, else the library's bytes, on this shell's library.
+    if (db) {
+        mAggregate->resolvePinned = [db](const QString &projectGuid, const QString &guid) {
+            return AssetCas::resolvePinned(db->connection(), AssetStorePaths::root(), projectGuid, guid);
+        };
+    }
     // THE WORLD'S MUSIC (audit D8): a Music guid resolves the way every bound
-    // asset does — the project's pin, else the library's bytes.
-    mAmbience = new AmbienceService([project](const QString &guid) {
-        if (!project || project->getProjectGuid().isEmpty()) return QString();
-        return AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
-                                       project->getProjectGuid(), guid);
+    // asset does — through the resolver above.
+    mAmbience = new AmbienceService([project, aggregate = mAggregate](const QString &guid) {
+        if (!project || project->getProjectGuid().isEmpty() || !aggregate->resolvePinned) return QString();
+        return aggregate->resolvePinned(project->getProjectGuid(), guid);
     }, this);
     mAggregate->ambience = mAmbience;
     // A world that opens with music starts it here — the reader plays nothing.

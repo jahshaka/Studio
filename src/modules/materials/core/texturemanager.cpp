@@ -11,7 +11,6 @@ For more information see the LICENSE file
 #include "texturemanager.h"
 #include "../effectspage.h"
 #include "data/project.h"
-#include <QSqlDatabase>
 
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
@@ -87,12 +86,12 @@ GraphTexture * TextureManager::loadTextureFromGuid(QString guid)
 // safe before the sweep reclaims them.
 QString TextureManager::loadTextureFromDisk(QString guid)
 {
-	return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
+	return database ? AssetCas::resolveSource(database->connection(), AssetStorePaths::root(), guid) : QString();
 }
 
 QString TextureManager::loadTextureFromDatabase(QString guid)
 {
-	return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
+	return database ? AssetCas::resolveSource(database->connection(), AssetStorePaths::root(), guid) : QString();
 }
 
 GraphTexture* TextureManager::importTexture(QString path, const assethome::Home &home)

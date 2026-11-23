@@ -34,10 +34,6 @@ public:
                                    Database *db);
     static QByteArray makeBlobFromPixmap(const QPixmap &pixmap);
     static QStringList fetchAssetAndAllDependencies(const QString &guid, Database *db);
-    /// The file holding a library asset's bytes, whatever its view filter —
-    /// resolved through the content-addressed store by guid (by display name
-    /// first, then the source role). Empty when the store holds none.
-    static QString storedFilePath(const AssetRecord &asset);
     static ModelTypes getAssetTypeFromExtension(const QString &fileSuffix);
     /// modelStats (optional): filled with AssetMetadata::forModelScene counts
     /// from the parse this load already produced — the import-time source

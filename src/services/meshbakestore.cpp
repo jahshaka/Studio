@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include <QSet>
 #include <QMutex>
 #include <QUuid>
-#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <memory>
 #include <atomic>
@@ -34,6 +33,8 @@ For more information see the LICENSE file
 #include <QPointer>
 
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "data/constants.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
@@ -101,22 +102,21 @@ QString oidFromStorePath(const QString &root, const QString &path)
 /// object (an import records the model under both the Object and the Mesh
 /// member); they carry the SAME import record, so the first row that has one
 /// wins and a row with none reads as identity.
-QJsonObject importRecordForOid(QSqlDatabase conn, const QString &oid)
+QJsonObject importRecordForOid(db::Connection &conn, const QString &oid)
 {
     if (oid.isEmpty()) return QJsonObject();
-    QSqlQuery query(conn);
     // NEWEST FIRST, as the header promises: with no ORDER BY the answer was
     // SQLite's index order, so "the default variant for this content" was not
     // even stable between two runs over one library (the second read's F6).
-    query.prepare("SELECT A.properties FROM asset_files AF "
-                  "JOIN assets A ON A.guid = AF.asset_guid WHERE AF.oid = ? "
-                  "ORDER BY AF.rowid DESC");
-    query.addBindValue(oid);
-    if (!query.exec()) return QJsonObject();
+    db::Statement query(conn, "SELECT A.properties FROM asset_files AF "
+                              "JOIN assets A ON A.guid = AF.asset_guid WHERE AF.oid = ? "
+                              "ORDER BY AF.rowid DESC");
+    dbqt::bindText(query, 1, oid);
+    db::Error e;
     QJsonObject best;
-    while (query.next()) {
+    while (query.step(&e)) {
         const QJsonObject props =
-            QJsonDocument::fromJson(query.value(0).toByteArray()).object();
+            QJsonDocument::fromJson(dbqt::bytes(query, 0)).object();
         const QJsonObject record = props.value(QStringLiteral("import")).toObject();
         if (record.isEmpty()) continue;
         if (best.isEmpty()) best = props;
@@ -135,17 +135,17 @@ QJsonObject importRecordForOid(QSqlDatabase conn, const QString &oid)
 /// and is bounded (the catalog is two levels deep; the loop guards anyway).
 /// A row with no record anywhere above it reads as identity, exactly as every
 /// row imported before the import dialog does.
-QJsonObject importRecordForGuid(QSqlDatabase conn, const QString &guid)
+QJsonObject importRecordForGuid(db::Connection &conn, const QString &guid)
 {
     QString at = guid;
     for (int hop = 0; hop < 8 && !at.isEmpty(); ++hop) {
-        QSqlQuery query(conn);
-        query.prepare("SELECT properties, parent FROM assets WHERE guid = ?");
-        query.addBindValue(at);
-        if (!query.exec() || !query.next()) return QJsonObject();
-        const QJsonObject props = QJsonDocument::fromJson(query.value(0).toByteArray()).object();
+        db::Statement query(conn, "SELECT properties, parent FROM assets WHERE guid = ?");
+        dbqt::bindText(query, 1, at);
+        db::Error e;
+        if (!query.step(&e)) return QJsonObject();
+        const QJsonObject props = QJsonDocument::fromJson(dbqt::bytes(query, 0)).object();
         if (!props.value(QStringLiteral("import")).toObject().isEmpty()) return props;
-        at = query.value(1).toString();
+        at = dbqt::text(query, 1);
     }
     return QJsonObject();
 }
@@ -158,16 +158,21 @@ QJsonObject importRecordForGuid(QSqlDatabase conn, const QString &guid)
 /// `staged` non-null = the bytes are ALREADY in the store and already flushed,
 /// put there by the bake worker (FSYNC-2), so publishing them here is a rename.
 /// Null = the synchronous path (Preferences' bake-all), which ingests here.
-bool recordBake(QSqlDatabase conn, const QString &root, const QString &sourceOid,
+bool recordBake(db::Connection &conn, const QString &root, const QString &sourceOid,
                 const QString &bakePath, QString *errorOut,
                 AssetCas::Staged *staged = nullptr)
 {
     QStringList owners;
-    QSqlQuery owner(conn);
-    owner.prepare("SELECT DISTINCT asset_guid FROM asset_files WHERE oid = ?");
-    owner.addBindValue(sourceOid);
-    if (owner.exec())
-        while (owner.next()) owners.append(owner.value(0).toString());
+    {
+        db::Statement owner(conn, "SELECT DISTINCT asset_guid FROM asset_files WHERE oid = ?");
+        dbqt::bindText(owner, 1, sourceOid);
+        db::Error e;
+        while (owner.step(&e)) owners.append(dbqt::text(owner, 0));
+        if (e) {   // a failed read records the bake under none of its owners: said, never "no owner"
+            if (errorOut) *errorOut = dbqt::describe(e);
+            return false;
+        }
+    }
     if (owners.isEmpty()) {
         if (errorOut)
             *errorOut = QStringLiteral("no asset row names the source content %1")
@@ -203,16 +208,16 @@ bool recordBake(QSqlDatabase conn, const QString &root, const QString &sourceOid
     // (modelBakesNeeded's "two rows over one object with different settings are
     // two different bakes").
     for (const QString &ownerGuid : owners) {
-        QSqlQuery stale(conn);
-        stale.prepare("DELETE FROM asset_files WHERE asset_guid = ? AND role = ? "
-                      "AND name = ? AND oid <> ?");
-        stale.addBindValue(ownerGuid);
-        stale.addBindValue(iris::MeshBake::casRole());
-        stale.addBindValue(bakeName);
-        stale.addBindValue(staged && !staged->oid.isEmpty() ? staged->oid
-                                                            : AssetCas::hashFile(bakePath));
-        if (!stale.exec()) {
-            if (errorOut) *errorOut = stale.lastError().text();
+        db::Statement stale(conn, "DELETE FROM asset_files WHERE asset_guid = ? AND role = ? "
+                                  "AND name = ? AND oid <> ?");
+        dbqt::bindText(stale, 1, ownerGuid);
+        dbqt::bindText(stale, 2, iris::MeshBake::casRole());
+        dbqt::bindText(stale, 3, bakeName);
+        dbqt::bindText(stale, 4, staged && !staged->oid.isEmpty() ? staged->oid
+                                                                 : AssetCas::hashFile(bakePath));
+        db::Error e;
+        if (!stale.run(&e)) {
+            if (errorOut) *errorOut = dbqt::describe(e);
             return false;
         }
     }
@@ -265,7 +270,7 @@ QPair<QString, iris::ImportTransform> settingsOfRecord(const QJsonObject &props)
     return { parsed.hash(), parsed.transform(declared) };
 }
 
-QPair<QString, iris::ImportTransform> resolveSettings(QSqlDatabase conn, const QString &root,
+QPair<QString, iris::ImportTransform> resolveSettings(db::Connection &conn, const QString &root,
                                                      const QString &sourcePath,
                                                      const QString &assetGuid)
 {
@@ -286,35 +291,26 @@ QPair<QString, iris::ImportTransform> resolveSettings(QSqlDatabase conn, const Q
     // (the bake sweep's, an archive's) filling it made the UI thread's statement count depend on how far
     // that worker had got — at 10,000 assets the boot's material preview paid its 2 lookups, at 1,000 the
     // sweep had paid them first. A worker reads what is there; it never writes it.
-    if (conn.connectionName() != QLatin1String(QSqlDatabase::defaultConnection)) return out;
+    if (conn.name() != Database::kEditorConnection) return out;
     QMutexLocker locked(&sSettingsLock);
     if (sCacheGeneration.load() == generation) sSettingsCache.insert(key, out);
     return out;
 }
 }   // namespace
 
-QString settingsHashFor(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+QString settingsHashFor(db::Connection &conn, const QString &root, const QString &sourcePath,
                         const QString &assetGuid)
 {
     return resolveSettings(conn, root, sourcePath, assetGuid).first;
 }
 
-QString settingsHashFor(const QString &sourcePath, const QString &assetGuid)
-{
-    return settingsHashFor(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath,
-                           assetGuid);
-}
 
-iris::ImportTransform transformFor(QSqlDatabase conn, const QString &root,
+iris::ImportTransform transformFor(db::Connection &conn, const QString &root,
                                    const QString &sourcePath, const QString &assetGuid)
 {
     return resolveSettings(conn, root, sourcePath, assetGuid).second;
 }
 
-iris::ImportTransform transformFor(const QString &sourcePath, const QString &assetGuid)
-{
-    return transformFor(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath, assetGuid);
-}
 
 
 namespace {
@@ -323,7 +319,7 @@ struct BakeRow
 {
     QString oid;
     QString ext;
-    QVariant size;
+    qint64 size = -1;   ///< -1: the catalog records no size (NULL)
 };
 
 /// The newest of a bake name's recorded rows that is the CURRENT bake: its object present, its size the
@@ -335,7 +331,7 @@ QString freshBakeAmong(const QString &root, const QVector<BakeRow> &newestFirst,
         const QString path = AssetStorePaths::objectPathIn(root, row.oid, row.ext);
         const QFileInfo info(path);
         if (!info.exists()) continue;
-        if (!row.size.isNull() && info.size() != row.size.toLongLong()) continue;
+        if (row.size >= 0 && info.size() != row.size) continue;
         if (!iris::MeshBake::headerMatches(path, fingerprint)) continue;
         return path;
     }
@@ -343,7 +339,7 @@ QString freshBakeAmong(const QString &root, const QVector<BakeRow> &newestFirst,
 }
 }   // namespace
 
-iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+iris::PrewarmItem planFor(db::Connection &conn, const QString &root, const QString &sourcePath,
                           const QString &assetGuid)
 {
     iris::PrewarmItem item;
@@ -368,43 +364,41 @@ iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString 
     // bumped the producer id. read() validates the fingerprint, so the scan
     // stops at the first row that is actually the current generation.
     const QString settings = settingsHashFor(conn, root, sourcePath, assetGuid);
-    QSqlQuery query(conn);
     // The role is a LITERAL: the partial idx_asset_files_bake (Database's index list) serves only a WHERE that
     // states its own — a bound role read the whole of asset_files for every model a session loads.
-    query.prepare(QStringLiteral("SELECT AF.oid, F.ext, F.size FROM asset_files AF "
-                                 "LEFT JOIN files F ON AF.oid = F.oid "
-                                 "WHERE AF.role = '%1' AND AF.name = ? ORDER BY AF.rowid DESC")
-                      .arg(iris::MeshBake::casRole()));
-    query.addBindValue(iris::MeshBake::fileNameFor(sourceOid, settings));
-    if (!query.exec()) return item;
+    db::Statement query(conn, dbqt::utf8(QStringLiteral("SELECT AF.oid, F.ext, F.size FROM asset_files AF "
+                                                        "LEFT JOIN files F ON AF.oid = F.oid "
+                                                        "WHERE AF.role = '%1' AND AF.name = ? ORDER BY AF.rowid DESC")
+                                             .arg(iris::MeshBake::casRole())));
+    dbqt::bindText(query, 1, iris::MeshBake::fileNameFor(sourceOid, settings));
+    db::Error e;
     QVector<BakeRow> rows;
-    while (query.next()) rows.append({ query.value(0).toString(), query.value(1).toString(), query.value(2) });
+    while (query.step(&e))
+        rows.append({ dbqt::text(query, 0), dbqt::text(query, 1), query.isNull(2) ? -1 : query.int64(2) });
+    if (e) return item;   // a failed read plans no bake: the model parses, as before
     const QString fingerprint = iris::MeshBake::fingerprintFor(sourceOid, settings);
     item.bakePath = freshBakeAmong(root, rows, fingerprint);
     if (!item.bakePath.isEmpty()) item.bakeFingerprint = fingerprint;
     return item;
 }
 
-iris::PrewarmItem planFor(const QString &sourcePath, const QString &assetGuid)
-{
-    return planFor(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath, assetGuid);
-}
 
-iris::BakedModelPtr load(const QString &sourcePath, const QString &assetGuid)
+iris::BakedModelPtr load(db::Connection &conn, const QString &sourcePath, const QString &assetGuid)
 {
+    const QString root = AssetStorePaths::root();
     if (sourcePath.isEmpty()) return iris::BakedModelPtr();
     const quint64 generation = lookupGeneration();
     // KEYED BY (path, settings): identical bytes imported twice under different
     // settings are two different geometries and must not share a cache slot.
     const QString cacheKey =
-        sourcePath + QLatin1Char('|') + settingsHashFor(sourcePath, assetGuid);
+        sourcePath + QLatin1Char('|') + settingsHashFor(conn, root, sourcePath, assetGuid);
     {
         QMutexLocker locked(&sLock);
         const auto hit = sCache.constFind(cacheKey);
         if (hit != sCache.constEnd()) return hit.value();
     }
 
-    const iris::PrewarmItem item = planFor(sourcePath, assetGuid);
+    const iris::PrewarmItem item = planFor(conn, root, sourcePath, assetGuid);
     iris::BakedModelPtr result;
     if (!item.bakePath.isEmpty()) {
         iris::MeshBake::Model model = iris::MeshBake::read(item.bakePath, item.bakeFingerprint);
@@ -448,7 +442,7 @@ void clear()
 }
 
 
-bool isFresh(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+bool isFresh(db::Connection &conn, const QString &root, const QString &sourcePath,
              const QString &assetGuid)
 {
     // The plan's own test (size + header fingerprint), never a payload read:
@@ -456,7 +450,7 @@ bool isFresh(QSqlDatabase conn, const QString &root, const QString &sourcePath,
     return !planFor(conn, root, sourcePath, assetGuid).bakePath.isEmpty();
 }
 
-bool bakeAsset(Database *db, QSqlDatabase conn, const QString &root, const QString &guid,
+bool bakeAsset(Database *db, db::Connection &conn, const QString &root, const QString &guid,
                bool dryRun, bool *neededOut, QString *errorOut)
 {
     if (neededOut) *neededOut = false;
@@ -479,22 +473,22 @@ bool bakeAsset(Database *db, QSqlDatabase conn, const QString &root, const QStri
     // matches an Object row named after the model's base name).
     QString sourcePath;
     {
-        QSqlQuery files(conn);
-        files.prepare("SELECT AF.oid, AF.name, F.ext FROM asset_files AF "
-                      "LEFT JOIN files F ON AF.oid = F.oid "
-                      "WHERE AF.asset_guid = ? AND AF.role <> ? "
-                      "ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name");
-        files.addBindValue(guid);
-        files.addBindValue(iris::MeshBake::casRole());
-        if (files.exec()) {
-            while (files.next()) {
-                if (!Constants::MODEL_EXTS.contains(
-                        QFileInfo(files.value(1).toString()).suffix().toLower()))
-                    continue;
-                const QString candidate = AssetStorePaths::objectPathIn(
-                    root, files.value(0).toString(), files.value(2).toString());
-                if (QFileInfo::exists(candidate)) { sourcePath = candidate; break; }
-            }
+        db::Statement files(conn, "SELECT AF.oid, AF.name, F.ext FROM asset_files AF "
+                                  "LEFT JOIN files F ON AF.oid = F.oid "
+                                  "WHERE AF.asset_guid = ? AND AF.role <> ? "
+                                  "ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name");
+        dbqt::bindText(files, 1, guid);
+        dbqt::bindText(files, 2, iris::MeshBake::casRole());
+        db::Error e;
+        while (files.step(&e)) {
+            if (!Constants::MODEL_EXTS.contains(QFileInfo(dbqt::text(files, 1)).suffix().toLower()))
+                continue;
+            const QString candidate = AssetStorePaths::objectPathIn(root, dbqt::text(files, 0), dbqt::text(files, 2));
+            if (QFileInfo::exists(candidate)) { sourcePath = candidate; break; }
+        }
+        if (e) {   // a failed read is not "a row with no model": said
+            if (errorOut) *errorOut = dbqt::describe(e);
+            return false;
         }
     }
     if (sourcePath.isEmpty()) {
@@ -528,7 +522,7 @@ bool bakeAsset(Database *db, QSqlDatabase conn, const QString &root, const QStri
     return true;
 }
 
-bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+bool bakeSource(db::Connection &conn, const QString &root, const QString &sourcePath,
                 QString *errorOut, const QString &assetGuid)
 {
     const QString sourceOid = oidFromStorePath(root, sourcePath);
@@ -580,7 +574,7 @@ bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePat
     return recordBake(conn, root, sourceOid, bakePath, errorOut);
 }
 
-QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
+QVector<BakeTarget> modelBakesNeeded(db::Connection &conn, const QString &root,
                                      const QSet<QString> *onlyGuids, QVector<BakeTarget> *allRows)
 {
     QVector<BakeTarget> out;
@@ -596,10 +590,11 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
         for (int i = 0; i < onlyGuids->size(); ++i) marks << QStringLiteral("?");
         guidFilter = QStringLiteral(" AND AF.asset_guid IN (%1)").arg(marks.join(QLatin1Char(',')));
     }
-    const auto bindFilter = [&](QSqlQuery &query) {
-        query.addBindValue(iris::MeshBake::casRole());
+    const auto bindFilter = [&](db::Statement &query) {
+        int at = 0;
+        dbqt::bindText(query, ++at, iris::MeshBake::casRole());
         if (onlyGuids)
-            for (const QString &guid : *onlyGuids) query.addBindValue(guid);
+            for (const QString &guid : *onlyGuids) dbqt::bindText(query, ++at, guid);
     };
 
     // THE PLAN READS THE CATALOG IN THREE STATEMENTS, whatever the library's size (LARGE-LIBRARY-1 R5): it asked
@@ -611,17 +606,17 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
     for (const QString &ext : Constants::MODEL_EXTS) modelNames << QStringLiteral("AF.name LIKE '%.%1'").arg(ext);
     QHash<QString, QPair<QString, QByteArray>> records;   // guid -> (parent, properties)
     {
-        QSqlQuery query(conn);
-        query.prepare(QStringLiteral("WITH RECURSIVE chain(guid, hop) AS ("
+        db::Statement query(conn, dbqt::utf8(QStringLiteral("WITH RECURSIVE chain(guid, hop) AS ("
                                      "SELECT DISTINCT AF.asset_guid, 0 FROM asset_files AF WHERE AF.role <> ?%1 AND (%2) "
                                      "UNION SELECT A.parent, chain.hop + 1 FROM chain JOIN assets A ON A.guid = chain.guid "
                                      "WHERE A.parent IS NOT NULL AND A.parent <> '' AND chain.hop < 7) "
                                      "SELECT A.guid, A.parent, A.properties FROM assets A WHERE A.guid IN (SELECT guid FROM chain)")
-                          .arg(guidFilter, modelNames.join(QStringLiteral(" OR "))));
+                          .arg(guidFilter, modelNames.join(QStringLiteral(" OR ")))));
         bindFilter(query);
-        if (!query.exec()) return out;
-        while (query.next())
-            records.insert(query.value(0).toString(), { query.value(1).toString(), query.value(2).toByteArray() });
+        db::Error e;
+        while (query.step(&e))
+            records.insert(dbqt::text(query, 0), { dbqt::text(query, 1), dbqt::bytes(query, 2) });
+        if (e) return out;   // a plan from a failed read plans nothing (as before: the next open's sweep plans again)
     }
     const auto recordOf = [&records](QString at) {   // importRecordForGuid over the rows read
         for (int hop = 0; hop < 8 && !at.isEmpty(); ++hop) {
@@ -636,13 +631,14 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
     // (2) EVERY RECORDED BAKE, by its name, newest first (planFor's lookup, for all of them at once).
     QHash<QString, QVector<BakeRow>> bakes;
     {
-        QSqlQuery query(conn);
-        query.prepare("SELECT AF.name, AF.oid, F.ext, F.size FROM asset_files AF "
-                      "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.role = ? ORDER BY AF.rowid DESC");
-        query.addBindValue(iris::MeshBake::casRole());
-        if (!query.exec()) return out;
-        while (query.next())
-            bakes[query.value(0).toString()].append({ query.value(1).toString(), query.value(2).toString(), query.value(3) });
+        db::Statement query(conn, "SELECT AF.name, AF.oid, F.ext, F.size FROM asset_files AF "
+                                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.role = ? ORDER BY AF.rowid DESC");
+        dbqt::bindText(query, 1, iris::MeshBake::casRole());
+        db::Error e;
+        while (query.step(&e))
+            bakes[dbqt::text(query, 0)].append({ dbqt::text(query, 1), dbqt::text(query, 2),
+                                                 query.isNull(3) ? -1 : query.int64(3) });
+        if (e) return out;
     }
 
     // (3) Every recorded file whose DISPLAY NAME is a model, with the ROW that names it — one entry per distinct
@@ -650,30 +646,29 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
     // (what this did until the second read's F3) built one variant and left every other row parsing on every
     // open, forever. The ROW'S TYPE rides along: a clip row's content gets a CLIP bake (SHIPPED-BAKES-1), every
     // other model file a model bake.
-    QSqlQuery query(conn);
-    query.prepare(QStringLiteral("SELECT AF.oid, AF.name, F.ext, AF.asset_guid, A.type FROM asset_files AF "
-                                 "LEFT JOIN files F ON AF.oid = F.oid "
-                                 "LEFT JOIN assets A ON A.guid = AF.asset_guid WHERE AF.role <> ?%1 ORDER BY AF.rowid")
-                      .arg(guidFilter));
+    db::Statement query(conn, dbqt::utf8(QStringLiteral("SELECT AF.oid, AF.name, F.ext, AF.asset_guid, A.type FROM asset_files AF "
+                                                        "LEFT JOIN files F ON AF.oid = F.oid "
+                                                        "LEFT JOIN assets A ON A.guid = AF.asset_guid WHERE AF.role <> ?%1 ORDER BY AF.rowid")
+                                             .arg(guidFilter)));
     bindFilter(query);
-    if (!query.exec()) return out;
     QSet<QString> seen;          // "<oid>|<settingsHash>"
     QHash<QString, QString> pathForOid;
-    while (query.next()) {
-        const QString oid = query.value(0).toString();
-        if (!Constants::MODEL_EXTS.contains(
-                QFileInfo(query.value(1).toString()).suffix().toLower()))
+    db::Error e;
+    while (query.step(&e)) {
+        const QString oid = dbqt::text(query, 0);
+        if (!Constants::MODEL_EXTS.contains(QFileInfo(dbqt::text(query, 1)).suffix().toLower()))
             continue;
         QString path = pathForOid.value(oid);
         if (path.isEmpty()) {
-            path = AssetStorePaths::objectPathIn(root, oid, query.value(2).toString());
+            path = AssetStorePaths::objectPathIn(root, oid, dbqt::text(query, 2));
             if (!QFileInfo::exists(path)) { pathForOid.insert(oid, QString()); continue; }
             pathForOid.insert(oid, path);
         }
         if (path.isEmpty()) continue;   // offline/purged object, already judged
-        const QString guid = query.value(3).toString();
-        if (allRows) allRows->append({ path, guid, query.value(4).toInt() == static_cast<int>(ModelTypes::Animation) });
-        if (query.value(4).toInt() == static_cast<int>(ModelTypes::Animation)) {
+        const QString guid = dbqt::text(query, 3);
+        const bool clipRow = int(query.int64(4)) == static_cast<int>(ModelTypes::Animation);
+        if (allRows) allRows->append({ path, guid, clipRow });
+        if (clipRow) {
             const QString key = oid + QStringLiteral("|clip");
             if (seen.contains(key)) continue;
             seen.insert(key);
@@ -695,10 +690,11 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
             continue;
         out.append({ path, guid, false });
     }
+    if (e) return {};   // a plan cut short by a failed read is no plan: the next sweep plans again
     return out;
 }
 
-BakeJob prepareBake(QSqlDatabase conn, const QString &root, const BakeTarget &target)
+BakeJob prepareBake(db::Connection &conn, const QString &root, const BakeTarget &target)
 {
     BakeJob job;
     job.sourceOid = oidFromStorePath(root, target.path);
@@ -765,7 +761,7 @@ BakeResult runBake(const BakeJob &job, const std::atomic<bool> *cancel)
     return out;
 }
 
-bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QString *errorOut)
+bool commitBake(db::Connection &conn, const QString &root, BakeResult &result, QString *errorOut)
 {
     bool ok = false;
     if (!result.path.isEmpty()) {
@@ -781,7 +777,7 @@ bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QStr
     return ok;
 }
 
-QVector<BakeJob> staleJobsFor(QSqlDatabase conn, const QString &root, const QStringList &paths)
+QVector<BakeJob> staleJobsFor(db::Connection &conn, const QString &root, const QStringList &paths)
 {
     QVector<BakeJob> jobs;
     const PinGeneration pinned;   // the lookups run inside `rows`' pinned snapshot (I7)
@@ -789,15 +785,14 @@ QVector<BakeJob> staleJobsFor(QSqlDatabase conn, const QString &root, const QStr
     for (const QString &path : paths) {
         const QString oid = oidFromStorePath(root, path);
         if (oid.isEmpty() || !QFileInfo::exists(path)) continue;   // no source: missing
-        QSqlQuery rows(conn);
-        rows.prepare("SELECT DISTINCT AF.asset_guid, A.type FROM asset_files AF "
-                     "LEFT JOIN assets A ON A.guid = AF.asset_guid WHERE AF.oid = ? AND AF.role <> ?");
-        rows.addBindValue(oid);
-        rows.addBindValue(iris::MeshBake::casRole());
-        if (!rows.exec()) continue;
-        while (rows.next()) {
-            const QString guid = rows.value(0).toString();
-            if (rows.value(1).toInt() == static_cast<int>(ModelTypes::Animation)) {
+        db::Statement rows(conn, "SELECT DISTINCT AF.asset_guid, A.type FROM asset_files AF "
+                                 "LEFT JOIN assets A ON A.guid = AF.asset_guid WHERE AF.oid = ? AND AF.role <> ?");
+        dbqt::bindText(rows, 1, oid);
+        dbqt::bindText(rows, 2, iris::MeshBake::casRole());
+        db::Error e;
+        while (rows.step(&e)) {
+            const QString guid = dbqt::text(rows, 0);
+            if (int(rows.int64(1)) == static_cast<int>(ModelTypes::Animation)) {
                 // A CLIP's content: its clip bake (SHIPPED-BAKES-1).
                 const QString key = oid + QStringLiteral("|clip");
                 if (seen.contains(key)) continue;
@@ -818,7 +813,7 @@ QVector<BakeJob> staleJobsFor(QSqlDatabase conn, const QString &root, const QStr
     return jobs;
 }
 
-int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, int)> &progress)
+int rebuildPumped(db::Connection &conn, const QVector<BakeJob> &jobs, const std::function<void(int, int)> &progress)
 {
     if (jobs.isEmpty()) return 0;
     std::atomic<int> at { -1 };
@@ -840,7 +835,6 @@ int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, in
     }
     future.waitForFinished();
     int failed = 0;
-    QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
     for (BakeResult &result : results) {
         QString error;
@@ -889,7 +883,7 @@ QThreadPool *backgroundPool()
 }
 }   // namespace
 
-void startBackgroundRebuild(std::shared_ptr<SweepPlan> plan)
+void startBackgroundRebuild(Database &library, std::shared_ptr<SweepPlan> plan)
 {
     // EVERY WAY OUT SAYS WHICH (the plan is a result a reader joins: services/bootreport.h).
     if (backgroundRebuildRunning() || !QCoreApplication::instance()) { plan->finish(SweepPlan::State::Off); return; }
@@ -900,9 +894,10 @@ void startBackgroundRebuild(std::shared_ptr<SweepPlan> plan)
         plan->finish(SweepPlan::State::Off);
         return;
     }
-    const QSqlDatabase main = QSqlDatabase::database();
-    if (!main.isOpen()) { plan->finish(SweepPlan::State::Off); return; }
-    const QString dbPath = main.databaseName();
+    if (!library.connection().isOpen()) { plan->finish(SweepPlan::State::Off); return; }
+    const QString dbPath = library.filePath();
+    db::Connection *editor = &library.connection();   // the commits' (UI thread); a stop moves the epoch first
+    const quint64 epoch = sAsyncEpoch.load();
     const QString root = AssetStorePaths::root();
     sBackgroundStop.store(false);
     // THE SWEEP IS PLANNED ON THE WORKER TOO (TC2-LIBRARY-BOOT-READ, 2026-10-10): the plan reads
@@ -912,30 +907,32 @@ void startBackgroundRebuild(std::shared_ptr<SweepPlan> plan)
     // the worker reads through its OWN read connection to the same file; only the commits come
     // back to this (the database) thread, as before.
     plan->start();
-    sBackground = QtConcurrent::run(backgroundPool(), [dbPath, root, plan]() {
+    sBackground = QtConcurrent::run(backgroundPool(), [dbPath, root, plan, editor, epoch]() {
         // THE WORKER's EXIT ALWAYS ANSWERS: a way out that published nothing is Silent, never a join left waiting.
         struct ExitSays { std::shared_ptr<SweepPlan> plan; ~ExitSays() { plan->finishIfPlanning(); } } exitSays{ plan };
         QVector<BakeJob> jobs;
         bool read = false;   // the plan read the library (a connection that never opened planned nothing)
         {
-            const QString name = QStringLiteral("BakeSweep-%1")
-                                     .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
-            {
-                QSqlDatabase conn = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), name);
-                conn.setDatabaseName(dbPath);
-                conn.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
-                if (conn.open()) {
-                    for (const BakeTarget &target : modelBakesNeeded(conn, root)) {
-                        if (sBackgroundStop.load()) break;
-                        if (!QFileInfo::exists(target.path)) continue;
-                        BakeJob job = prepareBake(conn, root, target);
-                        if (!job.path.isEmpty()) jobs.append(job);
-                    }
-                    read = true;
-                    conn.close();
+            // ITS OWN READ-ONLY CONNECTION, OPENED BY THE LAYER on this worker (NOQT-DATABASE-1 stage 2), closed
+            // with this scope.
+            db::Options options;
+            options.readOnly = true;
+            options.busyMs = db::kEditorBusyMs;
+            options.name = "BakeSweep";
+            db::Error error;
+            db::Connection conn = db::Connection::open(dbPath.toStdString(), options, &error);
+            if (conn.isOpen()) {
+                for (const BakeTarget &target : modelBakesNeeded(conn, root)) {
+                    if (sBackgroundStop.load()) break;
+                    if (!QFileInfo::exists(target.path)) continue;
+                    BakeJob job = prepareBake(conn, root, target);
+                    if (!job.path.isEmpty()) jobs.append(job);
                 }
+                read = true;
+            } else {
+                JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                    QStringLiteral("mesh bake: the background sweep could not read the library (%1)").arg(dbqt::describe(error)));
             }
-            QSqlDatabase::removeDatabase(name);
         }
         if (sBackgroundStop.load()) { plan->finish(SweepPlan::State::Stopped); return; }
         if (!read) { plan->finish(SweepPlan::State::Unread); return; }
@@ -945,8 +942,15 @@ void startBackgroundRebuild(std::shared_ptr<SweepPlan> plan)
         for (const BakeJob &job : jobs) {
             if (sBackgroundStop.load()) return;
             auto result = std::make_shared<BakeResult>(runBake(job, &sBackgroundStop));
-            QMetaObject::invokeMethod(QCoreApplication::instance(), [result, root]() {
+            QMetaObject::invokeMethod(QCoreApplication::instance(), [result, root, editor, epoch]() {
                 QString error;
+                // A LANDING AFTER A RESET OR A QUIT COMMITS NOTHING (the async bakes' rule): the library it was
+                // planned against is gone, and so may be the connection it would commit on.
+                if (epoch != sAsyncEpoch.load()) {
+                    QVector<AssetCas::Staged> leftover{ result->staged };
+                    AssetCas::discardStaged(leftover);
+                    return;
+                }
                 // A CANCEL IS NOT A FAILURE (read 5): a reset or a quit stopped the job — the next
                 // library open's sweep builds it again. Said as what it is.
                 if (result->error == QStringLiteral("cancelled")) {
@@ -955,7 +959,7 @@ void startBackgroundRebuild(std::shared_ptr<SweepPlan> plan)
                     JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: a background rebuild was cancelled (a reset or a quit)"));
                     return;
                 }
-                if (!commitBake(QSqlDatabase::database(), root, *result, &error))
+                if (!commitBake(*editor, root, *result, &error))
                     JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("mesh bake: background rebuild failed (%1)").arg(error));
             }, Qt::QueuedConnection);
         }
@@ -964,6 +968,7 @@ void startBackgroundRebuild(std::shared_ptr<SweepPlan> plan)
 
 void stopBackgroundRebuild()
 {
+    ++sAsyncEpoch;   // first: every landing still queued (the sweep's and the async bakes') is dropped by it
     sBackgroundStop.store(true);
     if (sBackground.isValid() && !sBackground.isFinished()) sBackground.waitForFinished();
     // THE ASYNC BAKES TOO (a reset, a shutdown). The epoch moves FIRST: each worker stops between
@@ -972,7 +977,6 @@ void stopBackgroundRebuild()
     // `done` told why: F7), so nothing lands in a library that is no longer the one it was planned
     // against. The job IN FLIGHT stops too, at its next cancel point (the parse's progress handler,
     // between meshes, before each stage task, before the write and the stage): the join is short.
-    ++sAsyncEpoch;
     sAsyncCancel->store(true);   // the job in flight stops at its next cancel point
     sAsyncCancel = std::make_shared<std::atomic<bool>>(false);
     for (QFuture<QVector<BakeResult>> &future : sAsyncFutures)
@@ -989,49 +993,46 @@ bool backgroundRebuildRunning()
 
 // ---- the clip bake (SHIPPED-BAKES-1) ----------------------------------------
 
-bool isClipContent(QSqlDatabase conn, const QString &root, const QString &sourcePath)
+bool isClipContent(db::Connection &conn, const QString &root, const QString &sourcePath)
 {
     const QString oid = oidFromStorePath(root, sourcePath);
     if (oid.isEmpty()) return false;
-    QSqlQuery query(conn);
-    query.prepare("SELECT 1 FROM asset_files AF JOIN assets A ON A.guid = AF.asset_guid "
-                  "WHERE AF.oid = ? AND A.type = ? LIMIT 1");
-    query.addBindValue(oid);
-    query.addBindValue(static_cast<int>(ModelTypes::Animation));
-    return query.exec() && query.next();
+    db::Statement query(conn, "SELECT 1 FROM asset_files AF JOIN assets A ON A.guid = AF.asset_guid "
+                              "WHERE AF.oid = ? AND A.type = ? LIMIT 1");
+    dbqt::bindText(query, 1, oid);
+    query.bindInt(2, static_cast<int>(ModelTypes::Animation));
+    db::Error e;
+    return query.step(&e);
 }
 
-QString clipBakePath(QSqlDatabase conn, const QString &root, const QString &sourcePath)
+QString clipBakePath(db::Connection &conn, const QString &root, const QString &sourcePath)
 {
     const QString sourceOid = oidFromStorePath(root, sourcePath);
     if (sourceOid.isEmpty()) return QString();
     // NEWEST FIRST, every candidate — planFor's rule, for planFor's reason: a
     // producer bump leaves the stale generation under the same name until the
     // rebuild retires it.
-    QSqlQuery query(conn);
-    query.prepare(QStringLiteral("SELECT AF.oid, F.ext, F.size FROM asset_files AF "
-                                 "LEFT JOIN files F ON AF.oid = F.oid "
-                                 "WHERE AF.role = '%1' AND AF.name = ? ORDER BY AF.rowid DESC")
-                      .arg(iris::MeshBake::casRole()));   // literal: idx_asset_files_bake (planFor)
-    query.addBindValue(iris::MeshBake::clipFileNameFor(sourceOid));
-    if (!query.exec()) return QString();
+    db::Statement query(conn, dbqt::utf8(QStringLiteral("SELECT AF.oid, F.ext, F.size FROM asset_files AF "
+                                                        "LEFT JOIN files F ON AF.oid = F.oid "
+                                                        "WHERE AF.role = '%1' AND AF.name = ? ORDER BY AF.rowid DESC")
+                                             .arg(iris::MeshBake::casRole())));   // literal: idx_asset_files_bake (planFor)
+    dbqt::bindText(query, 1, iris::MeshBake::clipFileNameFor(sourceOid));
     const QString fingerprint = iris::MeshBake::clipFingerprintFor(sourceOid);
-    while (query.next()) {
-        const QString path = AssetStorePaths::objectPathIn(root, query.value(0).toString(),
-                                                           query.value(1).toString());
+    db::Error e;
+    while (query.step(&e)) {
+        const QString path = AssetStorePaths::objectPathIn(root, dbqt::text(query, 0), dbqt::text(query, 1));
         const QFileInfo info(path);
         if (!info.exists()) continue;
-        if (!query.value(2).isNull() && info.size() != query.value(2).toLongLong()) continue;
+        if (!query.isNull(2) && info.size() != query.int64(2)) continue;
         if (!iris::MeshBake::clipHeaderMatches(path, fingerprint)) continue;
         return path;
     }
     return QString();
 }
 
-iris::BakedClipPtr loadClip(const QString &sourcePath)
+iris::BakedClipPtr loadClip(db::Connection &conn, const QString &sourcePath)
 {
     if (sourcePath.isEmpty()) return iris::BakedClipPtr();
-    QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
     const QString bake = clipBakePath(conn, root, sourcePath);
     iris::BakedClipPtr result;
@@ -1046,10 +1047,9 @@ iris::BakedClipPtr loadClip(const QString &sourcePath)
     return result;
 }
 
-iris::BakedClipPtr ensureClip(const QString &sourcePath)
+iris::BakedClipPtr ensureClip(db::Connection &conn, const QString &sourcePath)
 {
-    if (iris::BakedClipPtr have = loadClip(sourcePath)) return have;
-    QSqlDatabase conn = QSqlDatabase::database();
+    if (iris::BakedClipPtr have = loadClip(conn, sourcePath)) return have;
     const QString root = AssetStorePaths::root();
     // THE SAME REBUILD THE OPEN RUNS: the store's own source, on a worker, this
     // thread pumping, committed under every row that names the content. Any
@@ -1057,27 +1057,25 @@ iris::BakedClipPtr ensureClip(const QString &sourcePath)
     // about, whatever row type names it.
     BakeJob job = prepareBake(conn, root, { sourcePath, QString(), true });
     if (job.path.isEmpty() || !QFileInfo::exists(job.path)) return iris::BakedClipPtr();
-    rebuildPumped({ job }, std::function<void(int, int)>());
-    return loadClip(sourcePath);
+    rebuildPumped(conn, { job }, std::function<void(int, int)>());
+    return loadClip(conn, sourcePath);
 }
 
-QString currentBakePath(int assetType, const QString &sourcePath, const QString &assetGuid)
+QString currentBakePath(db::Connection &conn, int assetType, const QString &sourcePath, const QString &assetGuid)
 {
-    QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
     if (assetType == static_cast<int>(ModelTypes::Animation))
         return clipBakePath(conn, root, sourcePath);
     return planFor(conn, root, sourcePath, assetGuid).bakePath;
 }
 
-bool ensureFresh(const QString &sourcePath, const QString &assetGuid)
+bool ensureFresh(db::Connection &conn, const QString &sourcePath, const QString &assetGuid)
 {
-    QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
     if (isFresh(conn, root, sourcePath, assetGuid)) return true;
     const QVector<BakeJob> jobs = staleJobsFor(conn, root, { sourcePath });
     if (jobs.isEmpty()) return false;   // no source on disk: the model stays missing
-    rebuildPumped(jobs, std::function<void(int, int)>());
+    rebuildPumped(conn, jobs, std::function<void(int, int)>());
     return isFresh(conn, root, sourcePath, assetGuid);
 }
 
@@ -1088,13 +1086,14 @@ QVector<std::function<void()>> sHeldCommits;
 /// `done(failed, dropped)`: `dropped` names why NOTHING was committed (a reset or shutdown moved the
 /// epoch, the store moved), empty when the landing ran.
 using DoneFn = std::function<void(int failed, const QString &dropped)>;
-void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
+void landAsync(db::Connection *conn, const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
                const DoneFn &done, quint64 epoch, QVector<BakeResult> results);
 
 /// Bakes `jobs` on a worker; commits them on the database thread when they land, tells the
 /// listeners which of `targets` landed, then calls `done(failed)`.
-void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets, DoneFn done)
+void bakeAsync(db::Connection &conn, const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets, DoneFn done)
 {
+    db::Connection *committer = &conn;   // the UI thread's; a stop (reset, quit) moves the epoch before it can go
     for (const BakeJob &job : jobs) ++sPending[job.path];
     sPendingJobs += jobs.size();
     const quint64 epoch = sAsyncEpoch.load();
@@ -1114,20 +1113,20 @@ void bakeAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
     });
     sAsyncFutures.removeIf([](const QFuture<QVector<BakeResult>> &f) { return f.isFinished(); });
     sAsyncFutures.append(future);
-    future.then(QCoreApplication::instance(), [jobs, targets, done, epoch](QVector<BakeResult> results) {
-        landAsync(jobs, targets, done, epoch, std::move(results));
+    future.then(QCoreApplication::instance(), [committer, jobs, targets, done, epoch](QVector<BakeResult> results) {
+        landAsync(committer, jobs, targets, done, epoch, std::move(results));
     });
 }
 
-void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
+void landAsync(db::Connection *conn, const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
                const DoneFn &done, quint64 epoch, QVector<BakeResult> results)
 {
     // THE TEST HOLD (assets.holdBakes): the finished bake waits here, uncommitted and still pending,
     // until the hold is released — so a suite can place and SAVE inside the window deterministically.
     if (sCommitHold) {
         auto held = std::make_shared<QVector<BakeResult>>(std::move(results));
-        sHeldCommits.append([jobs, targets, done, epoch, held]() {
-            landAsync(jobs, targets, done, epoch, std::move(*held));
+        sHeldCommits.append([conn, jobs, targets, done, epoch, held]() {
+            landAsync(conn, jobs, targets, done, epoch, std::move(*held));
         });
         return;
     }
@@ -1162,12 +1161,11 @@ void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
             if (done) done(jobs.size(), dropped);
             return;
         }
-        QSqlDatabase conn = QSqlDatabase::database();
         int failed = 0;
         QSet<QString> failedPaths;
         for (int i = 0; i < results.size(); ++i) {
             QString error;
-            if (!commitBake(conn, root, results[i], &error)) {
+            if (!commitBake(*conn, root, results[i], &error)) {
                 ++failed;
                 failedPaths.insert(jobs.at(i).path);
                 JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("mesh bake: '%1' could not be baked (%2)")
@@ -1187,7 +1185,7 @@ void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
 }
 }   // namespace
 
-int bakeLandedAsync(const QStringList &guids)
+int bakeLandedAsync(db::Connection &conn, const QStringList &guids)
 {
     if (guids.isEmpty()) return 0;
     // THE ROWS WERE JUST WRITTEN: the caches may still hold what a removed row of the same guid and
@@ -1198,7 +1196,6 @@ int bakeLandedAsync(const QStringList &guids)
     // share file carry includes each row's properties and a member's Object row (assetclosure) — so
     // the plan below reads the settings the model was imported under.
     clear();
-    QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
     const QSet<QString> only(guids.cbegin(), guids.cend());
     QVector<BakeJob> jobs;
@@ -1219,25 +1216,24 @@ int bakeLandedAsync(const QStringList &guids)
         if (baking.contains(row.path)) targets.append({ row.assetGuid, row.path, true });
     JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: %1 import bake(s) started for %2 landed row(s)")
                                                           .arg(jobs.size()).arg(targets.size()));
-    bakeAsync(jobs, targets, DoneFn());
+    bakeAsync(conn, jobs, targets, DoneFn());
     return jobs.size();
 }
 
-bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObject *context,
+bool ensureFreshAsync(db::Connection &conn, const QString &sourcePath, const QString &assetGuid, QObject *context,
                       std::function<void(bool fresh, const QString &dropped)> landed)
 {
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection *asker = &conn;   // read again at the landing, on the UI thread (the epoch guards it)
     const QString root = AssetStorePaths::root();
     if (sourcePath.isEmpty() || isFresh(conn, root, sourcePath, assetGuid)) return false;
     const QVector<BakeJob> jobs = staleJobsFor(conn, root, { sourcePath });
     if (jobs.isEmpty()) return false;   // no source on disk: the model stays missing
     QPointer<QObject> guard(context);
-    bakeAsync(jobs, { { assetGuid, sourcePath, true } },
-              [guard, landed, sourcePath, assetGuid](int, const QString &dropped) {
+    bakeAsync(conn, jobs, { { assetGuid, sourcePath, true } },
+              [guard, landed, sourcePath, assetGuid, asker](int, const QString &dropped) {
                   if (!guard || !landed) return;
                   if (!dropped.isEmpty()) { landed(false, dropped); return; }
-                  landed(isFresh(QSqlDatabase::database(), AssetStorePaths::root(), sourcePath,
-                                 assetGuid), QString());
+                  landed(isFresh(*asker, AssetStorePaths::root(), sourcePath, assetGuid), QString());
               });
     return true;
 }
@@ -1251,19 +1247,17 @@ void holdCommits(bool on)
     for (const std::function<void()> &land : held) land();
 }
 
-QString modelSourceFor(QSqlDatabase conn, const QString &root, const QString &guid)
+QString modelSourceFor(db::Connection &conn, const QString &root, const QString &guid)
 {
-    QSqlQuery query(conn);
-    query.prepare("SELECT AF.name, AF.oid, F.ext FROM asset_files AF LEFT JOIN files F ON AF.oid = F.oid "
-                  "WHERE AF.asset_guid = ? AND AF.role <> ? ORDER BY AF.rowid");
-    query.addBindValue(guid);
-    query.addBindValue(iris::MeshBake::casRole());
-    if (!query.exec()) return QString();
-    while (query.next()) {
-        if (!Constants::MODEL_EXTS.contains(QFileInfo(query.value(0).toString()).suffix().toLower()))
+    db::Statement query(conn, "SELECT AF.name, AF.oid, F.ext FROM asset_files AF LEFT JOIN files F ON AF.oid = F.oid "
+                              "WHERE AF.asset_guid = ? AND AF.role <> ? ORDER BY AF.rowid");
+    dbqt::bindText(query, 1, guid);
+    dbqt::bindText(query, 2, iris::MeshBake::casRole());
+    db::Error e;
+    while (query.step(&e)) {
+        if (!Constants::MODEL_EXTS.contains(QFileInfo(dbqt::text(query, 0)).suffix().toLower()))
             continue;
-        const QString path = AssetStorePaths::objectPathIn(root, query.value(1).toString(),
-                                                           query.value(2).toString());
+        const QString path = AssetStorePaths::objectPathIn(root, dbqt::text(query, 1), dbqt::text(query, 2));
         if (QFileInfo::exists(path)) return path;
     }
     return QString();
@@ -1289,7 +1283,7 @@ void addLandedListener(QObject *context, std::function<void(const QVector<Landed
     sListeners.append({ QPointer<QObject>(context), std::move(listener) });
 }
 
-QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root)
+QStringList modelSourcesNeedingBake(db::Connection &conn, const QString &root)
 {
     QStringList out;
     for (const BakeTarget &target : modelBakesNeeded(conn, root))

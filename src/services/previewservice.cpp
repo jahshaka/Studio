@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QImage>
 #include <QPixmap>
-#include <QSqlDatabase>
 
 #include "bridge/enginethumbnailrenderer.h"
 #include "bridge/previewenvironment.h"
@@ -46,9 +45,9 @@ using jahshaka::engine::Engine;
 
 namespace {
 
-QString storeFileFor(const QString &guid)
+QString storeFileFor(Database *db, const QString &guid)
 {
-    return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
+    return db ? AssetCas::resolveSource(db->connection(), AssetStorePaths::root(), guid) : QString();
 }
 
 PreviewService::Outcome failure(const QString &why, bool nothing = false)
@@ -121,7 +120,7 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
     switch (static_cast<ModelTypes>(type)) {
     case ModelTypes::Texture: {
         // THE ONE IMAGE DECODE of the CPU kinds (SKY-LIGHT-1 adds `.hdr` here).
-        auto thumb = ThumbnailManager::createThumbnail(storeFileFor(guid), cpu.width(), cpu.height());
+        auto thumb = ThumbnailManager::createThumbnail(storeFileFor(mDb, guid), cpu.width(), cpu.height());
         if (!thumb || thumb->thumb.isNull()) return say(QStringLiteral("the image could not be read"));
         return thumb->thumb;
     }
@@ -129,12 +128,12 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
         return QImage(AppPaths::shipped("app/icons/icons8-file-music.png"));
     case ModelTypes::Video:
         // The first-second frame; VideoUtils falls back to the film icon when decode fails.
-        return VideoUtils::thumbnailFor(storeFileFor(guid)).toImage();
+        return VideoUtils::thumbnailFor(storeFileFor(mDb, guid)).toImage();
     case ModelTypes::Animation: {
         // The POSE STRIP, from the CLIP BAKE (SHIPPED-BAKES-1), never a parse: a stale or missing
         // bake is rebuilt from the source on a worker first.
         QImage strip;
-        if (const iris::BakedClipPtr clip = MeshBakeStore::ensureClip(storeFileFor(guid)))
+        if (const iris::BakedClipPtr clip = MeshBakeStore::ensureClip(mDb->connection(), storeFileFor(mDb, guid)))
             animfile::describe(clip->info, QFileInfo(mDb->fetchAsset(guid).name).completeBaseName(), &strip,
                                cpu.width(), cpu.height());
         if (strip.isNull()) return say(QStringLiteral("the animation's clip bake could not be read"));
@@ -144,7 +143,7 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
         return QImage(AppPaths::shipped("app/icons/icons8-file-72.png"));
     case ModelTypes::LightProfile: {
         // The candela lobe: two .ies files look identical as names and completely different as light.
-        const IesProfile profile = IesProfile::parse(storeFileFor(guid));
+        const IesProfile profile = IesProfile::parse(storeFileFor(mDb, guid));
         if (!profile.ok)
             return say(QStringLiteral("the photometric profile could not be read: %1").arg(profile.error));
         return profile.polarThumbnail(cpu.width());
@@ -157,8 +156,8 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
         // MeshBakeStore::load of the row's source under its guid), every mesh of it in ONE neutral
         // material - iris::PbrMaterial's documented default (defaultmaterial: grey, roughness 0.75,
         // metalness 0) - framed to its bounds in the studio. Never a parse: no bake, no picture.
-        const QString source = storeFileFor(guid);
-        const iris::BakedModelPtr baked = source.isEmpty() ? iris::BakedModelPtr() : MeshBakeStore::load(source, guid);
+        const QString source = storeFileFor(mDb, guid);
+        const iris::BakedModelPtr baked = source.isEmpty() ? iris::BakedModelPtr() : MeshBakeStore::load(mDb->connection(), source, guid);
         if (!baked || !baked->valid) return say(QStringLiteral("the mesh's bake could not be read (re-import it)"));
         const iris::MaterialPtr neutral = iris::PbrMaterial::create();
         iris::SceneNodePtr node = iris::MeshBake::buildFragment(

@@ -26,7 +26,7 @@ For more information see the LICENSE file
 // (flat folder copies + Database::copyAsset clones) died with it.
 
 #include <QByteArray>
-#include <QSqlDatabase>
+#include "data/db/connection.h"
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -87,7 +87,7 @@ public:
     /// of that thread (the open runner's worker: services/openreads.h); bumps
     /// `*queries` by the statements it issued. `sessionTypes()` are the types
     /// that have a session shape, in the order an open registers them.
-    static QVector<SessionRow> readSessionRows(QSqlDatabase conn, const QString &root,
+    static QVector<SessionRow> readSessionRows(db::Connection &conn, const QString &root,
                                                const QString &projectGuid, int type,
                                                int *queries = nullptr);
     static QVector<int> sessionTypes();

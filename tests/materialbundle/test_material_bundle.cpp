@@ -81,7 +81,7 @@ static QString textureRow(Database &db, const QString &guid, const QString &name
                         QString(), assethome::assets(), assethome::Origin::Import, QString(), QString(), QByteArray(),
                         QByteArray(), QByteArray(), QByteArray());
     QString oid, err;
-    AssetCas::ingestFile(QSqlDatabase::database(), storeRoot, srcPath, guid,
+    AssetCas::ingestFile(db.connection(), storeRoot, srcPath, guid,
                          QStringLiteral("source"), name, &oid, &err);
     return oid;
 }
@@ -104,7 +104,7 @@ int main(int argc, char **argv)
     CHECK(db.initializeDatabase(dbPath), "throwaway database opened");
     db.createAllTables();
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db.connection();
 
     // --- 8. the slot list is the material's own ---------------------------
     CHECK(MaterialBundle::textureSlots().contains("baseColorMap")

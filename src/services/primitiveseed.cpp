@@ -31,7 +31,6 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
 #include <QTemporaryDir>
 
 #include <memory>
@@ -136,7 +135,7 @@ bool storedIsShipped(const primitives::Def &def, const QString &storedPath)
 }
 
 /// The row exists and its source bytes are in the store: the path to them.
-QString storedSource(QSqlDatabase conn, const QString &root, Database *db, const QString &guid)
+QString storedSource(db::Connection &conn, const QString &root, Database *db, const QString &guid)
 {
     if (!db) return QString();
     const AssetRecord row = db->fetchAsset(guid);
@@ -174,8 +173,8 @@ Plan planSeed(const primitives::Def &def, Database *db)
     if (!def.guid || !def.mesh) { plan.error = QStringLiteral("the seed row is incomplete"); return plan; }
     if (!db) { plan.error = QStringLiteral("no library"); return plan; }
     plan.guid = QString::fromLatin1(def.guid);
-    QSqlDatabase conn = QSqlDatabase::database();
-    if (!conn.isValid() || !conn.isOpen()) {
+    db::Connection &conn = db->connection();
+    if (!conn.isOpen()) {
         plan.error = QStringLiteral("no library connection on this thread");
         return plan;
     }
@@ -258,7 +257,7 @@ QString commitSeed(Plan &plan, Database *db, QString *errorOut)
         return QString();
     };
     if (!plan.error.isEmpty()) return failed(plan.error);
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
     if (plan.seeded) {
         for (MeshBakeStore::BakeResult &result : plan.rebuilt) {

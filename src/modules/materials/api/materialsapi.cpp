@@ -1671,7 +1671,7 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                                     .arg(ref, assetTypeName(record.type), key));
                 // The pinned bytes in a project (resolvePinned falls back to the
                 // library source itself), the library source otherwise.
-                QSqlDatabase conn = QSqlDatabase::database();
+                db::Connection &conn = host.db->connection();
                 const QString path = host.isProjectOpen()
                     ? AssetCas::resolvePinned(conn, AssetStorePaths::root(),
                                               host.project->getProjectGuid(), guid)

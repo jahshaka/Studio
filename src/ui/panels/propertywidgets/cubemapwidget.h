@@ -77,6 +77,7 @@ protected:
 };
 
 class Project;
+struct StudioServices;
 
 class CubeMapWidget : public QWidget {
 	Q_OBJECT
@@ -87,6 +88,9 @@ public:
 	/// the panel that builds this control; the buttons read it through their
 	/// `parent` back-pointer in dropEvent().
 	Project *project = nullptr;
+	/// The shell's services (ruling 15: the drop resolves through StudioServices::resolvePinned, never the Qt
+	/// global). Set beside `project` by the panel that builds this control and by its setServices.
+	StudioServices *services = nullptr;
 	QGridLayout* layout;
 	void addTopImage(QString topImagePath);
 	void addBottomImage(QString bottomImagePath);

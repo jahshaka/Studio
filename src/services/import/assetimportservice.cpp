@@ -18,8 +18,6 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMutex>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QTemporaryDir>
 
 #include <atomic>
@@ -30,6 +28,8 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "data/project.h"
 #include "services/assetcas.h"
 #include "services/memberstamp.h"
@@ -104,7 +104,7 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
                                                 const StagedAsset &staged)
 {
     if (!db) return QString();
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     if (!conn.isOpen()) return QString();
 
     // The common case pays exactly this: an unlisted row only exists after a
@@ -114,10 +114,10 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
     // active holds a WAL snapshot, and once the preview writer has committed the write fails at
     // once with 517 SQLITE_BUSY_SNAPSHOT (spikes/previews-1/stage1/probe.out, case 2).
     {
-        QSqlQuery any(conn);
-        if (!any.exec("SELECT COUNT(*) FROM assets WHERE listed = 0") || !any.next()
-            || any.value(0).toInt() == 0)
-            return QString();
+        db::Statement any(conn, "SELECT COUNT(*) FROM assets WHERE listed = 0");
+        db::Error e;
+        if (!any.step(&e) || any.int64(0) == 0)
+            return QString();   // none unlisted, or the count unread: a normal import
     }
 
     // The source oid is ALREADY known: prepare() stamps it into the
@@ -151,19 +151,19 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
     // cannot: it is second-resolution, and two rows of one import share it.
     QString guid;
     {
-        QSqlQuery match(conn);
-        match.prepare("SELECT AF.asset_guid FROM asset_files AF "
+        db::Statement match(conn, dbqt::utf8("SELECT AF.asset_guid FROM asset_files AF "
                       "JOIN assets A ON A.guid = AF.asset_guid "
                       "WHERE AF.role = 'source' AND AF.oid = ? AND A.listed = 0 "
                       // ONE HOME: an unlisted row of another home is not this
                       // import's to take (ASSETS-HOME-1, no cross-home rows).
                       "AND A.view_filter = ? "
                       "AND " + Database::memberSubquery(QStringLiteral("A")) + " "
-                      "ORDER BY A.date_created DESC, A.rowid DESC LIMIT 1");
-        match.addBindValue(oid);
-        match.addBindValue(request.home.stored());
-        if (!match.exec() || !match.next()) return QString();
-        guid = match.value(0).toString();
+                      "ORDER BY A.date_created DESC, A.rowid DESC LIMIT 1"));
+        dbqt::bindText(match, 1, oid);
+        match.bindInt(2, request.home.stored());
+        db::Error e;
+        if (!match.step(&e)) return QString();
+        guid = dbqt::text(match, 0);
     }
     return db->setAssetListed(guid, true) ? guid : QString();
 }
@@ -201,7 +201,7 @@ QString AssetImportService::claimStampedMemberForUser(const ImportRequest &reque
     // a normal import brings the bytes back under a new row rather than
     // handing out a guid that resolves to nothing (the same guard
     // ShippedAssets::importTextureContent applies to its own by-content hit).
-    if (AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid).isEmpty())
+    if (AssetCas::resolveSource(db->connection(), AssetStorePaths::root(), guid).isEmpty())
         return QString();
 
     // THE USER'S INTENT OUTRANKS THE ORIGIN (V-2, read from the import side):
@@ -598,7 +598,7 @@ AssetCas::Staged *stagedEntryFor(StagedAsset &staged, const QString &path)
 /// Publish one content file: the staged bytes when prepare() left some (a
 /// rename plus the rows — no copy, no flush, microseconds), the synchronous
 /// ingest otherwise.
-bool storeOneFile(QSqlDatabase conn, const QString &root, StagedAsset &staged,
+bool storeOneFile(db::Connection &conn, const QString &root, StagedAsset &staged,
                   const QString &path, const QString &guid, const QString &role,
                   const QString &name, QString *oidOut, QString *errorOut)
 {
@@ -628,7 +628,7 @@ bool storeOneFile(QSqlDatabase conn, const QString &root, StagedAsset &staged,
 bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedAsset &staged,
                                            ImportResult &result, const ImportProgressFn &progress)
 {
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
 
     QStringList createdOids;      // objects written by THIS import — rollback set
@@ -670,10 +670,10 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         // file in the store's own objects/ tree; it names no object and no row.
         AssetCas::discardStaged(staged.stagedBytes);
         for (const QString &oid : createdOids) {
-            QSqlQuery still(conn);
-            still.prepare("SELECT 1 FROM files WHERE oid = ?");
-            still.addBindValue(oid);
-            if (still.exec() && still.next()) continue;
+            db::Statement still(conn, "SELECT 1 FROM files WHERE oid = ?");
+            dbqt::bindText(still, 1, oid);
+            db::Error e;
+            if (still.step(&e) || e) continue;   // still recorded, or not known: an object is never removed on a failed read
             const QDir fanout(QFileInfo(AssetStorePaths::objectPathIn(root, oid, QStringLiteral("x"))).absolutePath());
             for (const QFileInfo &candidate : fanout.entryInfoList({ oid + ".*", oid }, QDir::Files))
                 QFile::remove(candidate.absoluteFilePath());
@@ -819,7 +819,7 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
         return fail(QStringLiteral("'%1' is not a model asset — only a model is imported with "
                                    "settings").arg(record.name));
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
     QString sourceName;
     const QString sourcePath = AssetCas::resolveSource(conn, root, guid, &sourceName);
@@ -921,11 +921,11 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
     // The previous bake, remembered before it is unlinked so a caller can say
     // what assets.gc will reap.
     {
-        QSqlQuery old(conn);
-        old.prepare("SELECT oid FROM asset_files WHERE asset_guid = ? AND role = ?");
-        old.addBindValue(guid);
-        old.addBindValue(iris::MeshBake::casRole());
-        if (old.exec() && old.next()) out.previousBakeOid = old.value(0).toString();
+        db::Statement old(conn, "SELECT oid FROM asset_files WHERE asset_guid = ? AND role = ?");
+        dbqt::bindText(old, 1, guid);
+        dbqt::bindText(old, 2, iris::MeshBake::casRole());
+        db::Error e;
+        if (old.step(&e)) out.previousBakeOid = dbqt::text(old, 0);
     }
 
     QString bakePath;
@@ -940,13 +940,13 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
     // Unlink the OLD bake rows FIRST: the bake's name carries the settings
     // hash, so the new one is a different row and a stale row would otherwise
     // sit in front of it in the newest-first candidate walk forever.
-    QSqlQuery drop(conn);
-    drop.prepare("DELETE FROM asset_files WHERE asset_guid IN (?, ?) AND role = ?");
-    drop.addBindValue(guid);
-    drop.addBindValue(meshGuid);
-    drop.addBindValue(iris::MeshBake::casRole());
-    if (!drop.exec())
-        return fail(QStringLiteral("could not retire the old bake of '%1'").arg(record.name));
+    db::Statement drop(conn, "DELETE FROM asset_files WHERE asset_guid IN (?, ?) AND role = ?");
+    dbqt::bindText(drop, 1, guid);
+    dbqt::bindText(drop, 2, meshGuid);
+    dbqt::bindText(drop, 3, iris::MeshBake::casRole());
+    db::Error dropError;
+    if (!drop.run(&dropError))
+        return fail(QStringLiteral("could not retire the old bake of '%1': %2").arg(record.name, dbqt::describe(dropError)));
 
     if (!bakePath.isEmpty()) {
         QString oid;
@@ -999,7 +999,7 @@ QJsonObject AssetImportService::checkConsistency(const QString &guid)
     report["guid"] = guid;
     if (!db) { report["ok"] = false; report["error"] = "no database"; return report; }
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
 
     QString sourceName;
@@ -1052,11 +1052,10 @@ QJsonObject AssetImportService::checkConsistency(const QString &guid)
 
     // Expected = the catalog's recorded objects for this asset.
     QSet<QString> expected;
-    QSqlQuery recorded(conn);
-    recorded.prepare("SELECT oid FROM asset_files WHERE asset_guid = ?");
-    recorded.addBindValue(guid);
-    if (recorded.exec())
-        while (recorded.next()) expected.insert(recorded.value(0).toString());
+    db::Statement recorded(conn, "SELECT oid FROM asset_files WHERE asset_guid = ?");
+    dbqt::bindText(recorded, 1, guid);
+    db::Error recordedError;
+    while (recorded.step(&recordedError)) expected.insert(dbqt::text(recorded, 0));
 
     QJsonArray expectedArr, producedArr, missingArr, extraArr;
     for (const auto &oid : expected) expectedArr.append(oid);
@@ -1066,7 +1065,9 @@ QJsonObject AssetImportService::checkConsistency(const QString &guid)
     for (const auto &oid : produced)
         if (!expected.contains(oid)) extraArr.append(oid);
 
-    report["ok"] = true;
+    // A comparison against a failed read is no comparison: said, never "ok".
+    report["ok"] = !recordedError;
+    if (recordedError) report["error"] = dbqt::describe(recordedError);
     report["consistent"] = (expected == produced);
     report["expected"] = expectedArr;
     report["produced"] = producedArr;

@@ -19,12 +19,12 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QTemporaryDir>
 
 #include "data/constants.h"
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -172,7 +172,7 @@ bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &defini
                     const QString &projectGuid)
 {
     if (!db || guid.isEmpty()) return false;
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     if (!conn.isOpen()) return false;
 
     // ONE EDGE SET PER SCOPE, and the scope is the one whose definition this
@@ -204,16 +204,13 @@ bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &defini
     // edge that already exists. If they ever disagree, the definition is
     // right and this is the writer that says so — which is the whole reason
     // membership is DERIVED and never authored.
-    QSqlQuery del(conn);
-    if (projectGuid.isEmpty()) {
-        del.prepare("DELETE FROM dependencies WHERE depender = ? AND project_guid IS NULL");
-        del.addBindValue(guid);
-    } else {
-        del.prepare("DELETE FROM dependencies WHERE depender = ? AND project_guid = ?");
-        del.addBindValue(guid);
-        del.addBindValue(projectGuid);
-    }
-    if (!del.exec()) return false;
+    db::Statement del(conn, projectGuid.isEmpty()
+                                ? "DELETE FROM dependencies WHERE depender = ? AND project_guid IS NULL"
+                                : "DELETE FROM dependencies WHERE depender = ? AND project_guid = ?");
+    dbqt::bindText(del, 1, guid);
+    if (!projectGuid.isEmpty()) dbqt::bindText(del, 2, projectGuid);
+    db::Error e;
+    if (!del.run(&e)) return false;
 
     bool ok = true;
     for (const QString &member : memberGuids(definition)) {
@@ -282,7 +279,7 @@ QJsonObject read(Database *db, const QString &guid, Project *project)
 {
     if (!db || guid.isEmpty()) return QJsonObject();
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
 
     // D-2: the definition is a store object. PIN-FIRST in a project, so a
@@ -355,17 +352,17 @@ QJsonObject adoptForeignMembers(Database *db, const QString &materialGuid,
         // (the graph page autosaves every 1.5 s) — the copy this material
         // already made of the same bytes is the answer, not another row.
         {
-            QSqlQuery mine(QSqlDatabase::database());
-            mine.prepare("SELECT A.guid FROM assets A "
+            db::Statement mine(db->connection(), "SELECT A.guid FROM assets A "
                          "JOIN asset_files F ON F.asset_guid = A.guid AND F.role = 'source' "
                          "WHERE A.parent = ? AND A.view_filter = ? AND F.oid = "
                          "(SELECT oid FROM asset_files WHERE asset_guid = ? AND role = 'source' "
                          " LIMIT 1) LIMIT 1");
-            mine.addBindValue(materialGuid);
-            mine.addBindValue(home.stored());
-            mine.addBindValue(member);
-            if (mine.exec() && mine.next()) {
-                text.replace(member, mine.value(0).toString());
+            dbqt::bindText(mine, 1, materialGuid);
+            mine.bindInt(2, home.stored());
+            dbqt::bindText(mine, 3, member);
+            db::Error e;
+            if (mine.step(&e)) {
+                text.replace(member, dbqt::text(mine, 0));
                 renamed = true;
                 continue;
             }
@@ -385,12 +382,12 @@ QJsonObject adoptForeignMembers(Database *db, const QString &materialGuid,
                                 .arg(row.name, refused);
             return QJsonObject();
         }
-        QSqlQuery links(QSqlDatabase::database());
-        links.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) "
-                      "SELECT ?, role, oid, name FROM asset_files WHERE asset_guid = ?");
-        links.addBindValue(copy);
-        links.addBindValue(member);
-        if (!links.exec()) {
+        db::Statement links(db->connection(), "INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) "
+                                              "SELECT ?, role, oid, name FROM asset_files WHERE asset_guid = ?");
+        dbqt::bindText(links, 1, copy);
+        dbqt::bindText(links, 2, member);
+        db::Error linkError;
+        if (!links.run(&linkError)) {
             if (errorOut)
                 *errorOut = QStringLiteral("could not link the member '%1''s bytes").arg(row.name);
             return QJsonObject();
@@ -490,7 +487,7 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
         if (file.write(bytes) != bytes.size()) return fail(QStringLiteral("a short write"));
     }
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     QString error;
     QString oid;
 
@@ -645,11 +642,10 @@ QStringList materialNames(Database *db)
     // EVERY Material row, the library's AND every project's own (ASSETS-SCOPE-1):
     // a project's material is not a library row, and a name judged against the
     // library alone would hand the next Customise the same "Gold PBR-1".
-    QSqlQuery query(QSqlDatabase::database());
-    query.prepare("SELECT name FROM assets WHERE type = ?");
-    query.addBindValue(static_cast<int>(ModelTypes::Material));
-    if (query.exec())
-        while (query.next()) out << query.value(0).toString();
+    db::Statement query(db->connection(), "SELECT name FROM assets WHERE type = ?");
+    query.bindInt(1, static_cast<int>(ModelTypes::Material));
+    db::Error e;
+    while (query.step(&e)) out << dbqt::text(query, 0);
     return out;
 }
 

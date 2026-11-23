@@ -22,7 +22,7 @@ For more information see the LICENSE file
 // input excluded, so the frame loop and the heartbeat tick and nothing re-enters the
 // editor from outside. This is that shape, once, for every caller.
 //
-// THE WORK MUST BE WORKER-SAFE: no default QSqlDatabase connection (it is bound to the
+// THE WORK MUST BE WORKER-SAFE: no use of the editor's library connection (it is bound to the
 // UI thread), no widget, no document node the UI thread can reach. Everything the
 // worker needs goes in by value; everything it produces comes back through the
 // captured state the caller reads after run() returns.

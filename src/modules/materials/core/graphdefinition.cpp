@@ -13,10 +13,10 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "graphbaker.h"
@@ -69,12 +69,12 @@ QString bakedMemberRow(Database *db, const QString &materialGuid, const QString 
     // change because the material was saved again.
     QString guid;
     {
-        QSqlQuery query(QSqlDatabase::database());
-        query.prepare("SELECT guid FROM assets WHERE parent = ? AND name = ? AND type = ?");
-        query.addBindValue(materialGuid);
-        query.addBindValue(name);
-        query.addBindValue(static_cast<int>(ModelTypes::Texture));
-        if (query.exec() && query.next()) guid = query.value(0).toString();
+        db::Statement query(db->connection(), "SELECT guid FROM assets WHERE parent = ? AND name = ? AND type = ?");
+        dbqt::bindText(query, 1, materialGuid);
+        dbqt::bindText(query, 2, name);
+        query.bindInt(3, static_cast<int>(ModelTypes::Texture));
+        db::Error e;
+        if (query.step(&e)) guid = dbqt::text(query, 0);
     }
     if (guid.isEmpty()) {
         guid = QString::fromStdString(iris::newGuid());
@@ -88,7 +88,7 @@ QString bakedMemberRow(Database *db, const QString &materialGuid, const QString 
                              materialGuid, home, assethome::bornInside(home));
     }
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
     QString oid, error;
     if (!AssetCas::ingestFile(conn, root, filePath, guid, QStringLiteral("source"), name,

@@ -94,8 +94,8 @@ public:
     {
         QString dbPath;
         QString root;
-        std::function<void(QSqlDatabase &conn, QStringList *models, QStringList *clips)> plan;
-        std::function<void(QSqlDatabase &conn)> side;
+        std::function<void(db::Connection &conn, QStringList *models, QStringList *clips)> plan;
+        std::function<void(db::Connection &conn)> side;
     };
 
     /// Queue an open: the reads, then `slices` (the install).
@@ -168,7 +168,7 @@ signals:
 
 private:
     void runWorker();     ///< worker-thread body: the plan, the stale bakes, the bake read
-    void readBakes(QSqlDatabase &conn);   ///< worker: the bake plan + the bake read
+    void readBakes(db::Connection &conn);   ///< worker: the bake plan + the bake read
     void finishWorker();  ///< worker: joins the side reads, hands back to the UI thread
     void runNextSlice();  ///< UI thread, one slice per event-loop turn
     void crossSliceBoundary();   ///< see setSliceBoundary

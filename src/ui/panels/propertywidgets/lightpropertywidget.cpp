@@ -588,3 +588,9 @@ iris::ShadowMapType LightPropertyWidget::evalShadowMapType(QString shadowType)
 
     return iris::ShadowMapType::Soft;
 }
+
+void LightPropertyWidget::setServices(StudioServices *s)
+{
+    services = s;
+    if (domeFacesRow) domeFacesRow->services = s;
+}

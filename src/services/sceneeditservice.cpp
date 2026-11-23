@@ -39,7 +39,6 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QPointer>
 #include <QPixmap>
-#include <QSqlDatabase>
 #include <QTextStream>
 
 #include "services/apppaths.h"
@@ -165,7 +164,7 @@ QStringList SceneEditService::waitingSources(const iris::SceneNodePtr &root) con
 {
     QStringList out;
     if (!root || !db) return out;
-    SceneReader resolver;   // the reader's own resolution (item 7)
+    SceneReader resolver(db->connection());   // the reader's own resolution (item 7)
     resolver.setDatabaseHandle(db);
     resolver.setProject(project);
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
@@ -191,7 +190,7 @@ int SceneEditService::rebindPendingClips(const QSet<QString> &assetGuids, const 
     if (assetGuids.isEmpty() || !start) return 0;
     // The SAME resolution an open or a synchronous placement runs (SceneReader::getSkeletalAnimation):
     // one reader for the whole walk, so a model's bake is read once however many clips name it.
-    SceneReader reader;   // the open's mode, as completeLandedContent resolves (item 7)
+    SceneReader reader(db->connection());   // the open's mode, as completeLandedContent resolves (item 7)
     reader.setDatabaseHandle(db);
     reader.setProject(project);
     int bound = 0;
@@ -234,7 +233,7 @@ int SceneEditService::completeLandedContent(const iris::SceneNodePtr &root)
     // THE READER'S RESOLUTION (item 7): the same function the reader decided "pending" through, in
     // the open's mode (the project's pin, falling back to the library source — a paste pins what it
     // lands, so the two answer the same object).
-    SceneReader resolver;
+    SceneReader resolver(db->connection());
     resolver.setDatabaseHandle(db);
     resolver.setProject(project);
     QHash<QString, QString> sourceOf;   // asset guid -> its store file
@@ -271,7 +270,7 @@ int SceneEditService::completeLandedContent(const iris::SceneNodePtr &root)
         const auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
         const QString path = source(meshNode->meshPath);
         if (path.isEmpty() || MeshBakeStore::bakePending(path)) continue;
-        const iris::BakedModelPtr baked = MeshBakeStore::load(path, meshNode->meshPath);
+        const iris::BakedModelPtr baked = MeshBakeStore::load(db->connection(), path, meshNode->meshPath);
         if (!baked || meshNode->meshIndex < 0 || meshNode->meshIndex >= baked->meshes.size()) continue;
         meshNode->setMesh(baked->meshes.at(meshNode->meshIndex));
         ++completed;
@@ -538,7 +537,7 @@ int SceneEditService::refreshAssetMeshes(const QString &meshGuid, const QString 
 
     // The bake the asset holds NOW — MeshBakeStore's model cache was dropped by
     // the reimport that called us, so this reads the new blob.
-    const iris::BakedModelPtr baked = MeshBakeStore::load(sourcePath, meshGuid);
+    const iris::BakedModelPtr baked = MeshBakeStore::load(db->connection(), sourcePath, meshGuid);
     int swapped = 0;
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
         if (!node) return;
@@ -565,7 +564,7 @@ void SceneEditService::addMaterialMesh(bool ignore, iris::Vec3 position, const Q
 {
     auto document = QJsonDocument::fromJson(db->fetchAssetData(guid)).object();
 
-    auto reader = new SceneReader;
+    auto reader = new SceneReader(db->connection());
     reader->setDatabaseHandle(db);
     reader->setProject(project);
     reader->setLibrarySource();
@@ -844,7 +843,7 @@ bool SceneEditService::setDecalMap(const iris::DecalNodePtr &decal, DecalMapKind
                          decal->getGUID(), textureGuid, project->getProjectGuid());
 
     *pathField = AssetCas::resolvePinned(
-        QSqlDatabase::database(), AssetStorePaths::root(),
+        db->connection(), AssetStorePaths::root(),
         project->getProjectGuid(), textureGuid);
     return true;
 }
@@ -866,7 +865,7 @@ bool SceneEditService::setParticleTexture(const iris::ParticleSystemNodePtr &emi
                          emitter->getGUID(), textureGuid, project->getProjectGuid());
 
     const QString path = AssetCas::resolvePinned(
-        QSqlDatabase::database(), AssetStorePaths::root(),
+        db->connection(), AssetStorePaths::root(),
         project->getProjectGuid(), textureGuid);
     if (path.isEmpty()) return false;
     emitter->setTexture(iris::Texture2D::load(path), textureGuid);
@@ -905,7 +904,7 @@ void SceneEditService::addAssetParticleSystem(bool ignore, iris::Vec3 position, 
         auto textureGuid = pDefs["texture"].toString();
         if (!textureGuid.isEmpty()) {
             const QString texPath = AssetCas::resolvePinned(
-                QSqlDatabase::database(), AssetStorePaths::root(),
+                db->connection(), AssetStorePaths::root(),
                 project->getProjectGuid(), textureGuid);
             particleNode->setTexture(texPath.isEmpty() ? iris::Texture2DPtr()
                                                        : iris::Texture2D::load(texPath),
@@ -1112,7 +1111,7 @@ iris::SceneNodePtr SceneEditService::rebuildFragment(const SceneFragment &fragme
     // a long-lived one would hold every mesh a rebuild ever touched for the life
     // of the service, and a rebuild is a user-scale event — an undo, a paste —
     // not a loop.
-    SceneReader reader;
+    SceneReader reader(db->connection());
     reader.setDatabaseHandle(db);
     reader.setProject(project);
     reader.setLibrarySource();
@@ -1776,7 +1775,7 @@ int SceneEditService::refreshMaterialUsers(const QString &materialGuid)
     // produced the same definition produced the same OID, so comparing the
     // material's effective content id with the one this scene was last
     // dressed from answers "did anything change?" with no parse and no walk.
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString oid = projectGuid.isEmpty()
                             ? AssetCas::sourceOid(conn, materialGuid)
                             : AssetCas::pinnedOid(conn, projectGuid, materialGuid);

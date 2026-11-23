@@ -39,7 +39,6 @@ For more information see the LICENSE file
 #include "services/ambienceservice.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
-#include <QSqlDatabase>
 #include "data/project.h"
 #include "io/scenewriter.h"
 #include "ui/ishellview.h"
@@ -3664,7 +3663,7 @@ bool WorldApi::resolveTexture(const QVariant &ref, QString &guidOut, QString &pa
     // Pin-first through the CAS (resolvePinned falls back to the library
     // source itself). The flat projectFolder + row-name join that followed is
     // gone with the copies it looked for.
-    const QString path = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+    const QString path = AssetCas::resolvePinned(host.db->connection(), AssetStorePaths::root(),
                                                  host.project->getProjectGuid(), guid);
     if (path.isEmpty() || !QFileInfo::exists(path)) return false;
     guidOut = guid;

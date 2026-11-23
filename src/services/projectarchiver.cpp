@@ -20,8 +20,6 @@ For more information see the LICENSE file
 #include <QMetaObject>
 #include <QPointer>
 #include <QSet>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QTimer>
@@ -30,6 +28,8 @@ For more information see the LICENSE file
 #include <memory>
 
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "export/exportmanifest.h"
@@ -157,7 +157,7 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
 {
     // UI THREAD. Every line below is a database read (or resolves a CAS path
     // from one) — this is the phase that cannot move, and the reason there is
-    // no per-thread QSqlDatabase connection anywhere in this file.
+    // no per-thread library connection anywhere in this file.
     mResult = Result();
     mDestZip = destZipPath;
     mCopies.clear();
@@ -195,17 +195,21 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
     }
 
     // 2. Membership: project rows + pinned library assets.
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
 
-    QSqlQuery members(conn);
-    members.prepare(
+    db::Statement members(conn,
         "SELECT guid, name, type FROM assets "
         "WHERE project_guid = ? "
         "   OR guid IN (SELECT asset_guid FROM project_assets WHERE project_guid = ?)");
-    members.addBindValue(projectGuid);
-    members.addBindValue(projectGuid);
-    members.exec();
+    dbqt::bindText(members, 1, projectGuid);
+    dbqt::bindText(members, 2, projectGuid);
+    // AN ARCHIVE IS NEVER WRITTEN SHORT (NOQT-DATABASE-1 stage 2): a read that fails fails the export, by name.
+    db::Error readError;
+    const auto readFailed = [this, &readError](const char *what) {
+        mResult.error = QStringLiteral("the catalog read of the %1 failed: %2").arg(QLatin1String(what), dbqt::describe(readError));
+        return false;
+    };
 
     mManifest.kind = QStringLiteral("project");
     mManifest.generator = QStringLiteral("Jahshaka");
@@ -224,20 +228,21 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
     // beside it. One query for the whole export.
     const QHash<QString, QString> pinFolders = db->fetchProjectPinFolders(projectGuid);
 
-    while (members.next()) {
+    while (members.step(&readError)) {
         ManifestAsset asset;
-        asset.guid = members.value(0).toString();
-        asset.name = members.value(1).toString();
-        asset.typeId = members.value(2).toInt();
+        asset.guid = dbqt::text(members, 0);
+        asset.name = dbqt::text(members, 1);
+        asset.typeId = int(members.int64(2));
         asset.type = typeNameOf(asset.typeId);
         asset.folder = pinFolders.value(asset.guid);   // empty = the root
 
         // Outgoing dependency edges.
-        QSqlQuery deps(conn);
-        deps.prepare("SELECT dependee FROM dependencies WHERE depender = ?");
-        deps.addBindValue(asset.guid);
-        if (deps.exec())
-            while (deps.next()) asset.dependencies.append(deps.value(0).toString());
+        {
+            db::Statement deps(conn, "SELECT dependee FROM dependencies WHERE depender = ?");
+            dbqt::bindText(deps, 1, asset.guid);
+            while (deps.step(&readError)) asset.dependencies.append(dbqt::text(deps, 0));
+            if (readError) return readFailed("dependencies");
+        }
 
         // The asset's files: every recorded object, with the SOURCE role
         // materialized at the project's pinned content (I3 — the archive
@@ -253,32 +258,30 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
         // (PUBLISH_AUDIT #2), which is why the two queries now agree.
         const QString pin = AssetCas::pinnedOid(conn, projectGuid, asset.guid);
 
-        QSqlQuery files(conn);
-        files.prepare("SELECT AF.role, AF.name, AF.oid, F.size, F.ext FROM asset_files AF "
-                      "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
-                      "AND AF.role <> 'bake' "
-                      "ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name");
-        files.addBindValue(asset.guid);
-        files.exec();
+        db::Statement files(conn, "SELECT AF.role, AF.name, AF.oid, F.size, F.ext FROM asset_files AF "
+                                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
+                                  "AND AF.role <> 'bake' "
+                                  "ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name");
+        dbqt::bindText(files, 1, asset.guid);
         bool first = true;
-        while (files.next()) {
+        while (files.step(&readError)) {
             ManifestFile file;
-            file.role = files.value(0).toString();
-            file.name = files.value(1).toString();
-            file.oid = files.value(2).toString();
-            file.size = files.value(3).toLongLong();
-            QString ext = files.value(4).toString();
+            file.role = dbqt::text(files, 0);
+            file.name = dbqt::text(files, 1);
+            file.oid = dbqt::text(files, 2);
+            file.size = files.int64(3);
+            QString ext = dbqt::text(files, 4);
 
             if (first && file.role == QStringLiteral("source") && !pin.isEmpty() && pin != file.oid) {
                 // The project pinned different content than the library's
                 // current source — the archive ships the PIN.
-                QSqlQuery pinExt(conn);
-                pinExt.prepare("SELECT size, ext FROM files WHERE oid = ?");
-                pinExt.addBindValue(pin);
-                if (pinExt.exec() && pinExt.next()) {
+                db::Statement pinExt(conn, "SELECT size, ext FROM files WHERE oid = ?");
+                dbqt::bindText(pinExt, 1, pin);
+                db::Error pinError;
+                if (pinExt.step(&pinError)) {
                     file.oid = pin;
-                    file.size = pinExt.value(0).toLongLong();
-                    ext = pinExt.value(1).toString();
+                    file.size = pinExt.int64(0);
+                    ext = dbqt::text(pinExt, 1);
                 }
             }
             first = false;
@@ -293,10 +296,12 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
             }
             asset.files.append(file);
         }
+        if (readError) return readFailed("asset files");
 
         mManifest.assets.append(asset);
         ++mResult.assets;
     }
+    if (readError) return readFailed("members");
     return true;
 }
 
@@ -608,7 +613,7 @@ void ProjectArchiver::installImportSlice()
         return;
     }
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
 
     IngestAsset &asset = mIngest[mNextIngest++];
     const QString localGuid = mGuidMap.value(asset.archiveGuid, asset.archiveGuid);
@@ -714,7 +719,7 @@ void ProjectArchiver::republishImportedBundles()
         // what mGuidMap answers.
         QString text;
         {
-            const QString path = AssetCas::resolvePinned(QSqlDatabase::database(), mStoreRoot,
+            const QString path = AssetCas::resolvePinned(db->connection(), mStoreRoot,
                                                          mResult.projectGuid, localGuid);
             QFile file(path);
             if (!path.isEmpty() && file.open(QIODevice::ReadOnly))
@@ -741,7 +746,7 @@ void ProjectArchiver::republishImportedBundles()
                      qUtf8Printable(localGuid), qUtf8Printable(written.error));
             continue;
         }
-        AssetCas::writePin(QSqlDatabase::database(), mResult.projectGuid, localGuid, written.oid);
+        AssetCas::writePin(db->connection(), mResult.projectGuid, localGuid, written.oid);
     }
 }
 
@@ -754,7 +759,7 @@ QVector<MeshBakeStore::BakeJob> ProjectArchiver::planImportBakes()
     QSet<QString> guids;
     for (const IngestAsset &asset : mIngest)
         guids.insert(mGuidMap.value(asset.archiveGuid, asset.archiveGuid));
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     for (const MeshBakeStore::BakeTarget &target :
          MeshBakeStore::modelBakesNeeded(conn, mStoreRoot, &guids)) {
         MeshBakeStore::BakeJob job = MeshBakeStore::prepareBake(conn, mStoreRoot, target);
@@ -767,7 +772,7 @@ int ProjectArchiver::commitImportBakes(QVector<MeshBakeStore::BakeResult> &resul
                                        const QVector<MeshBakeStore::BakeJob> &jobs)
 {
     int failed = 0;
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     for (int i = 0; i < results.size(); ++i) {
         QString error;
         if (!MeshBakeStore::commitBake(conn, mStoreRoot, results[i], &error)) {

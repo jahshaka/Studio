@@ -26,8 +26,8 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QMap>
 #include <QVector>
-#include <QSqlDatabase>
 
+#include "data/db/connection.h"
 #include "data/project.h"
 
 #include "irisgl/irisglfwd.h"
@@ -53,9 +53,10 @@ class SceneReader : public AssetIOBase
     /// the Bistro Exterior's 1,592 mesh nodes, one source. Nothing writes the
     /// catalog while one read runs (it is one call on one thread).
     QHash<QString, QString> mResolvedPaths;
-    /// The catalog connection (setConnection); invalid = the thread's default.
-    QSqlDatabase mConn;
-    QSqlDatabase conn() const { return mConn.isValid() ? mConn : QSqlDatabase::database(); }
+    /// THE CATALOG CONNECTION every guid resolution, clip-type check and bake lookup reads through: the one
+    /// the reader is constructed with (the editor's, or an open plan's worker connection: services/openreads.h).
+    db::Connection *mConn;
+    db::Connection &conn() const { return *mConn; }
     mutable QHash<QString, QString> mSettingsHashes;
     QString settingsHash(const QString &filePath, const QString &assetGuid) const;
 
@@ -93,11 +94,10 @@ public:
 		this->handle = db;
 	}
 
-	/// THE CONNECTION THE CATALOG IS READ THROUGH for the guid resolutions and the
-	/// clip-type checks (OPEN-PATH-1): the default connection unless set — an open's
-	/// PLAN runs collectMeshSources / collectClipSources on the runner's worker
-	/// with that worker's own connection (services/openreads.h).
-	void setConnection(QSqlDatabase conn) { mConn = conn; mResolvedPaths.clear(); }
+	/// THE CONNECTION THE CATALOG IS READ THROUGH (OPEN-PATH-1; NOQT-DATABASE-1 stage 2: always given, never
+	/// a default): an open's PLAN runs collectMeshSources / collectClipSources on the runner's worker with that
+	/// worker's own connection (services/openreads.h); every other reader the library's own.
+	explicit SceneReader(db::Connection &conn) : mConn(&conn) {}
 
 	/// Model files already parsed on another thread (irisgl/import/meshprewarm.h).
 	/// When a mesh source is in here the reader consumes the prewarmed parse

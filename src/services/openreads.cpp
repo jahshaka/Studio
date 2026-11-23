@@ -14,13 +14,14 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonParseError>
-#include <QSqlQuery>
-#include <QUuid>
 
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "data/project.h"
 #include "io/sceneformat.h"
 #include "io/scenereader.h"
 #include "services/assetstorepaths.h"
+#include "services/jahlog.h"
 #include "services/loadtimeline.h"
 
 namespace openreads
@@ -41,33 +42,29 @@ QVector<ProjectAssets::SessionRow> Reads::sessionRows() const
     return out;
 }
 
-Reads prepare(Project *project)
+Reads prepare(Project *project, const QString &dbPath)
 {
     Reads reads;
     reads.projectGuid = project ? project->getProjectGuid() : QString();
     reads.root = AssetStorePaths::root();
-    reads.dbPath = QSqlDatabase::database().databaseName();
+    reads.dbPath = dbPath;
     return reads;
 }
 
 ReadConnection::ReadConnection(const QString &dbPath)
-    : mName(QStringLiteral("OpenReads-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces)))
 {
-    mDb = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), mName);
-    mDb.setDatabaseName(dbPath);
-    mDb.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
-    mDb.open();
+    db::Options options;
+    options.readOnly = true;
+    options.busyMs = db::kEditorBusyMs;
+    options.name = "OpenReads";
+    db::Error error;
+    mDb = db::Connection::open(dbPath.toStdString(), options, &error);
+    if (!mDb.isOpen())
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QStringLiteral("open: the worker's read connection could not open the library (%1)").arg(dbqt::describe(error)));
 }
 
-ReadConnection::~ReadConnection()
-{
-    // Close, drop our handle, then unregister (a live copy makes removeDatabase complain).
-    if (mDb.isOpen()) mDb.close();
-    mDb = QSqlDatabase();
-    QSqlDatabase::removeDatabase(mName);
-}
-
-void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
+void readPlan(db::Connection &conn, Project *project, Reads &reads)
 {
     // THE SCENE BLOB, READ ONCE AND PARSED ONCE (it was read three times and parsed three times) — and
     // FIRST (STUDIO-HYGIENE-1): a scene the open refuses plans NOTHING, no session row and no model path, so
@@ -75,10 +72,10 @@ void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
     QByteArray blob;
     {
         LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
-        QSqlQuery query(conn);
-        query.prepare(QStringLiteral("SELECT scene FROM projects WHERE guid = ?"));
-        query.addBindValue(reads.projectGuid);
-        if (query.exec() && query.next()) blob = query.value(0).toByteArray();
+        db::Statement query(conn, "SELECT scene FROM projects WHERE guid = ?");
+        dbqt::bindText(query, 1, reads.projectGuid);
+        db::Error e;
+        if (query.step(&e)) blob = dbqt::bytes(query, 0);
     }
     if (!blob.isEmpty()) {
         LoadTimeline::Accumulate json(QStringLiteral("worker:sceneJson"));
@@ -117,9 +114,8 @@ void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
 
     // ...and its sources, resolved on this connection exactly as the reader will resolve them.
     LoadTimeline::Accumulate plan(QStringLiteral("worker:plan"));
-    SceneReader reader;
+    SceneReader reader(conn);
     reader.setProject(project);
-    reader.setConnection(conn);
     if (reads.found) {
         for (const QString &path : reader.collectMeshSources(reads.projectObj))
             if (!reads.modelPaths.contains(path)) reads.modelPaths.append(path);
@@ -127,7 +123,7 @@ void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
     }
 }
 
-void readSession(QSqlDatabase conn, Reads &reads)
+void readSession(db::Connection &conn, Reads &reads)
 {
     int queries = 0;
     LoadTimeline::Accumulate rows(QStringLiteral("db:sessionRows"), 0);

@@ -79,7 +79,7 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
 /// companion material (a re-add of the same image must not mint a second
 /// material). Per project since ASSETS-SCOPE-1: a companion is its project's
 /// own row, so another project's companion is no answer for this one.
-bool hasCompanionMaterial(const QString &textureGuid, const QString &projectGuid);
+bool hasCompanionMaterial(Database *db, const QString &textureGuid, const QString &projectGuid);
 
 /// The AUTO-MINTED companions of a texture: Material rows STAMPED
 /// `companionOf: <textureGuid>` by createMaterialAsset — the stamp is the
@@ -90,14 +90,14 @@ bool hasCompanionMaterial(const QString &textureGuid, const QString &projectGuid
 /// else). Rows minted before the stamp existed answer no. Used by
 /// assetdelete::removeFromProject to take the companion out of a project with
 /// the image it was minted for.
-QStringList companionMaterials(const QString &textureGuid);
+QStringList companionMaterials(Database *db, const QString &textureGuid);
 
 /// The same question for MANY textures at once, in three queries instead of
 /// three per texture: textureGuid -> its companions (a texture with none is
 /// absent). The editor tray asks it once per image in a listing, on every edge
 /// write and every search keystroke, so the single-guid form above is written
 /// in terms of THIS one — there is one rule, and it is here.
-QHash<QString, QStringList> companionMaterials(const QStringList &textureGuids);
+QHash<QString, QStringList> companionMaterials(Database *db, const QStringList &textureGuids);
 
 } // namespace ImageMaterial
 

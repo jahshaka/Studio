@@ -586,3 +586,9 @@ void EmitterPropertyWidget::onBillboardImageChanged(const QString &path, const Q
                             node->setTexture(beforeTexture, beforeGuid);
                         });
 }
+
+void EmitterPropertyWidget::setServices(StudioServices *s)
+{
+    services = s;
+    if (billboardImage) billboardImage->services = s;
+}

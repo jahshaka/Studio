@@ -162,9 +162,8 @@ PbrGraphEvaluator::TextureResolver MaterialHelper::textureResolver()
 		// a texture guid the TextureManager never loaded (library material
 		// referencing store textures): resolve through the CAS rather than
 		// handing the raw guid to a path-based loader
-		{
-			QSqlDatabase conn = QSqlDatabase::database();
-			const QString path = AssetCas::resolveSource(conn, AssetStorePaths::root(), value);
+		{   // the graph's TextureManager's library (it holds the Database the graph was opened with)
+			const QString path = TextureManager::getSingleton()->loadTextureFromDatabase(value);
 			if (!path.isEmpty()) return path;
 		}
 		return value;

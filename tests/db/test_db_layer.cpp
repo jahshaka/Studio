@@ -24,7 +24,8 @@ For more information see the LICENSE file
 //   8. the version floor (ruling 8): a minimum above the library's is refused by name, THROUGH open() and THROUGH
 //      borrow(); borrow() works on a handle someone else opened and refuses none;
 //   9. the statement trace (stage 2): every statement on its connection, once per execution, none on another;
-//      shared by a handle's borrowers; removed by an empty function and by the last borrower's end.
+//      shared by a handle's borrowers; removed by an empty function and by the last borrower's end;
+//  10. run(): to the end, false with the failing step's error (a later row's included), once per reset().
 
 #include "data/database/dbqt.h"
 #include "data/db/connection.h"
@@ -96,6 +97,13 @@ int countOf(db::Connection &c, const std::string &value)
 {
     db::Statement s(c, "SELECT count(*) FROM t WHERE v = ?");
     s.bindText(1, value);
+    db::Error e;
+    return s.step(&e) ? int(s.int64(0)) : -1;
+}
+
+int countIn(db::Connection &c, const std::string &table)
+{
+    db::Statement s(c, "SELECT count(*) FROM " + table);
     db::Error e;
     return s.step(&e) ? int(s.int64(0)) : -1;
 }
@@ -367,6 +375,46 @@ int main()
         sqlite3_exec(raw, "SELECT 1", nullptr, nullptr, nullptr);   // the State is gone: its trace must be too
         check(lent == 1, "the last borrower's end removes its trace from the live handle: " + std::to_string(lent));
         sqlite3_close(raw);
+    }
+
+    // 10. run() (stage 2, the lead's ruling A): a statement run TO ITS END - a failing write answers false and names
+    //     its error; a statement that fails on a LATER row answers false (run() did not stop at the first row);
+    //     its rows are discarded; a second run() without reset() is refused by name, and after reset() runs again.
+    {
+        db::Connection a = openNamed("A");
+        db::Error e;
+        a.exec("CREATE TABLE IF NOT EXISTS once(k INTEGER PRIMARY KEY); DELETE FROM once; "
+               "CREATE TABLE IF NOT EXISTS later(v INTEGER); DELETE FROM later; INSERT INTO later VALUES (1), (2)", &e);
+        {
+            db::Statement ok(a, "INSERT INTO once(k) VALUES (1)");
+            const bool ran = ok.run(&e);
+            check(ran && !e && countIn(a, "once") == 1, "CONTROL: run() of a write answers true and the row is there");
+        }
+        {
+            db::Statement dup(a, "INSERT INTO once(k) VALUES (1)");
+            const bool ran = dup.run(&e);
+            check(!ran && e && contains(e.message, "UNIQUE"), "run() of a failing write answers false and names it: " + e.message);
+        }
+        {
+            db::Statement whole(a, "SELECT v FROM later");
+            const bool ran = whole.run(&e);
+            check(ran && !e, "CONTROL: run() of a two-row read reaches its end and answers true");
+        }
+        {
+            db::Statement broken(a, "SELECT CASE WHEN v = 2 THEN abs(-9223372036854775807 - 1) ELSE v END FROM later");
+            const bool ran = broken.run(&e);
+            check(!ran && contains(e.message, "overflow"),
+                  "run() of a statement that fails on its SECOND row answers false with that step's error: " + e.message);
+        }
+        {
+            db::Statement twice(a, "SELECT v FROM later");
+            const bool first = twice.run(&e);
+            const bool again = twice.run(&e);
+            check(first && !again && contains(e.message, "already ran"), "a second run() without reset() is refused by name: " + e.message);
+            twice.reset();
+            const bool afterReset = twice.run(&e);
+            check(afterReset && !e, "...and after reset() it runs again");
+        }
     }
 
     removeFile();

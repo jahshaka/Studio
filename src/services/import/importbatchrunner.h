@@ -16,7 +16,7 @@ For more information see the LICENSE file
 // pipeline. The UI freeze fix: AssetImportService::prepare (assimp parse,
 // texture extraction, content hashing — the expensive half) runs on a
 // QtConcurrent worker while the UI thread keeps its event loop; the store +
-// register half hops back to the UI thread per file (the default QSqlDatabase
+// register half hops back to the UI thread per file (the editor's library
 // connection and the session AssetManager are UI-thread-bound).
 //
 //   worker:  prepare(file 0) ──hop──▶ UI: commit(file 0), fileFinished

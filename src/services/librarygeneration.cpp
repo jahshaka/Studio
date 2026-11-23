@@ -13,11 +13,11 @@ For more information see the LICENSE file
 
 #include <QDir>
 #include <QFile>
-#include <QSqlQuery>
 
 #include "data/constants.h"
 #include "data/database/casschema.h"
 #include "data/database/database.h"
+#include "data/db/statement.h"
 #include "data/settingkeys.h"
 #include "data/settingsmanager.h"
 #include "services/jahlog.h"
@@ -53,9 +53,9 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
         return result;
     }
     {
-        QSqlQuery version(library.getDb());
-        if (version.exec(QStringLiteral("PRAGMA user_version")) && version.next())
-            result.generationOnDisk = version.value(0).toInt();
+        db::Statement version(library.connection(), "PRAGMA user_version");
+        db::Error e;
+        if (version.step(&e)) result.generationOnDisk = int(version.int64(0));
     }
     const bool columnsMatch = library.schemaMatchesFresh();
     if (result.generationOnDisk == generation() && columnsMatch) {

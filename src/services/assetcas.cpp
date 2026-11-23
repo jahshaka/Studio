@@ -21,8 +21,6 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
-#include <QSqlError>
-#include <QSqlQuery>
 #include <QVector>
 #include <atomic>
 
@@ -33,6 +31,8 @@ For more information see the LICENSE file
 #include "services/jahlog.h"
 #include "data/database/casschema.h"
 #include "data/database/database.h"   // DbTransaction
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "data/project.h"          // ModelTypes — the asset `type` column
 #include "services/assetstorepaths.h"
 #include "app/qtstd.h"
@@ -245,7 +245,7 @@ void discardStaged(QVector<Staged> &files)
     }
 }
 
-bool commitStagedObject(QSqlDatabase conn, const QString &root, Staged &file, QString *errorOut)
+bool commitStagedObject(db::Connection &conn, const QString &root, Staged &file, QString *errorOut)
 {
     // The object half of commitStaged — the bytes into the store and the
     // `files` row — with NO asset_files link (ARCHIVE-GUIDS-1: an archive's
@@ -254,7 +254,7 @@ bool commitStagedObject(QSqlDatabase conn, const QString &root, Staged &file, QS
     return commitStaged(conn, root, QString(), file, errorOut);
 }
 
-bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
+bool commitStaged(db::Connection &conn, const QString &root, const QString &guid,
                   Staged &file, QString *errorOut)
 {
     if (file.oid.isEmpty()) {
@@ -269,10 +269,10 @@ bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
     // question the staging thread could not answer.
     QString ext = file.ext;
     {
-        QSqlQuery known(conn);
-        known.prepare("SELECT ext FROM files WHERE oid = ?");
-        known.addBindValue(file.oid);
-        if (known.exec() && known.next()) ext = known.value(0).toString();
+        db::Statement known(conn, "SELECT ext FROM files WHERE oid = ?");
+        dbqt::bindText(known, 1, file.oid);
+        db::Error e;
+        if (known.step(&e)) ext = dbqt::text(known, 0);
     }
 
     const QString dstPath = AssetStorePaths::objectPathIn(root, file.oid, ext);
@@ -303,50 +303,51 @@ bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
         if (!storeObject(file.srcPath, root, file.oid, ext, errorOut)) return false;
     }
 
-    QSqlQuery insertFile(conn);
-    insertFile.prepare("INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
-    insertFile.addBindValue(file.oid);
-    insertFile.addBindValue(file.size);
-    insertFile.addBindValue(ext);
-    if (!insertFile.exec()) {
-        if (errorOut) *errorOut = QStringLiteral("files row refused: %1").arg(insertFile.lastError().text());
+    db::Statement insertFile(conn, "INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
+    dbqt::bindText(insertFile, 1, file.oid);
+    insertFile.bindInt(2, file.size);
+    dbqt::bindText(insertFile, 3, ext);
+    db::Error e;
+    if (!insertFile.run(&e)) {
+        if (errorOut) *errorOut = QStringLiteral("files row refused: %1").arg(dbqt::describe(e));
         return false;
     }
 
     if (guid.isEmpty()) return true;   // commitStagedObject: the object only
-    QSqlQuery insertLink(conn);
-    insertLink.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
-    insertLink.addBindValue(guid);
-    insertLink.addBindValue(file.role);
-    insertLink.addBindValue(file.oid);
-    insertLink.addBindValue(file.name.isEmpty() ? QFileInfo(file.srcPath).fileName() : file.name);
-    if (!insertLink.exec()) {
-        if (errorOut) *errorOut = QStringLiteral("asset_files row refused: %1").arg(insertLink.lastError().text());
+    db::Statement insertLink(conn, "INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
+    dbqt::bindText(insertLink, 1, guid);
+    dbqt::bindText(insertLink, 2, file.role);
+    dbqt::bindText(insertLink, 3, file.oid);
+    dbqt::bindText(insertLink, 4, file.name.isEmpty() ? QFileInfo(file.srcPath).fileName() : file.name);
+    if (!insertLink.run(&e)) {
+        if (errorOut) *errorOut = QStringLiteral("asset_files row refused: %1").arg(dbqt::describe(e));
         return false;
     }
     return true;
 }
 
-void ensureCasSchema(QSqlDatabase conn)
+void ensureCasSchema(db::Connection &conn)
 {
-    QSqlQuery(CasSchema::kFilesTable, conn);
-    QSqlQuery(CasSchema::kAssetFilesTable, conn);
-    QSqlQuery(CasSchema::kAssetFilesOidIndex, conn);
-    QSqlQuery(CasSchema::kRefcountInsertTrigger, conn);
-    QSqlQuery(CasSchema::kRefcountDeleteTrigger, conn);
-    QSqlQuery(CasSchema::kProjectAssetsTable, conn);
+    // Each statement as it always ran: on its own, its failure unread (an existing schema answers "already
+    // exists" to nothing here: every statement is IF NOT EXISTS).
+    db::Error e;
+    for (const char *sql : { CasSchema::kFilesTable, CasSchema::kAssetFilesTable, CasSchema::kAssetFilesOidIndex,
+                             CasSchema::kRefcountInsertTrigger, CasSchema::kRefcountDeleteTrigger,
+                             CasSchema::kProjectAssetsTable })
+        conn.exec(sql, &e);
 
     // PRAGMA user_version arrives with the CAS (spec §3.1.3) — informational
     // at this phase; never lowered.
-    QSqlQuery versionQuery(conn);
-    versionQuery.exec("PRAGMA user_version");
     int current = 0;
-    if (versionQuery.next()) current = versionQuery.value(0).toInt();
+    {
+        db::Statement versionQuery(conn, "PRAGMA user_version");
+        if (versionQuery.step(&e)) current = int(versionQuery.int64(0));
+    }
     if (current != CasSchema::kUserVersion)
-        QSqlQuery(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::kUserVersion), conn);
+        conn.exec("PRAGMA user_version = " + std::to_string(CasSchema::kUserVersion), &e);
 }
 
-bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
+bool ingestFile(db::Connection &conn, const QString &root, const QString &srcPath,
                 const QString &guid, const QString &role, const QString &name,
                 QString *oidOut, QString *errorOut, const QString &knownOid)
 {
@@ -367,48 +368,47 @@ bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
     // object per oid, never a sibling copy under another name).
     QString ext = info.suffix().toLower();
     {
-        QSqlQuery known(conn);
-        known.prepare("SELECT ext FROM files WHERE oid = ?");
-        known.addBindValue(oid);
-        if (known.exec() && known.next()) ext = known.value(0).toString();
+        db::Statement known(conn, "SELECT ext FROM files WHERE oid = ?");
+        dbqt::bindText(known, 1, oid);
+        db::Error e;
+        if (known.step(&e)) ext = dbqt::text(known, 0);
     }
 
     if (!storeObject(srcPath, root, oid, ext, errorOut)) return false;
 
-    QSqlQuery insertFile(conn);
-    insertFile.prepare("INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
-    insertFile.addBindValue(oid);
-    insertFile.addBindValue(info.size());
-    insertFile.addBindValue(ext);
-    if (!insertFile.exec()) {
-        if (errorOut) *errorOut = QStringLiteral("files row refused: %1").arg(insertFile.lastError().text());
+    db::Statement insertFile(conn, "INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
+    dbqt::bindText(insertFile, 1, oid);
+    insertFile.bindInt(2, info.size());
+    dbqt::bindText(insertFile, 3, ext);
+    db::Error e;
+    if (!insertFile.run(&e)) {
+        if (errorOut) *errorOut = QStringLiteral("files row refused: %1").arg(dbqt::describe(e));
         return false;
     }
 
-    QSqlQuery insertLink(conn);
-    insertLink.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
-    insertLink.addBindValue(guid);
-    insertLink.addBindValue(role);
-    insertLink.addBindValue(oid);
-    insertLink.addBindValue(name.isEmpty() ? info.fileName() : name);
-    if (!insertLink.exec()) {
-        if (errorOut) *errorOut = QStringLiteral("asset_files row refused: %1").arg(insertLink.lastError().text());
+    db::Statement insertLink(conn, "INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
+    dbqt::bindText(insertLink, 1, guid);
+    dbqt::bindText(insertLink, 2, role);
+    dbqt::bindText(insertLink, 3, oid);
+    dbqt::bindText(insertLink, 4, name.isEmpty() ? info.fileName() : name);
+    if (!insertLink.run(&e)) {
+        if (errorOut) *errorOut = QStringLiteral("asset_files row refused: %1").arg(dbqt::describe(e));
         return false;
     }
     return true;
 }
 
-QString sourceOid(QSqlDatabase conn, const QString &guid)
+QString sourceOid(db::Connection &conn, const QString &guid)
 {
-    QSqlQuery query(conn);
-    query.prepare("SELECT oid FROM asset_files WHERE asset_guid = ? "
-                  "ORDER BY CASE role WHEN 'source' THEN 0 ELSE 1 END, name");
-    query.addBindValue(guid);
-    if (query.exec() && query.next()) return query.value(0).toString();
+    db::Statement query(conn, "SELECT oid FROM asset_files WHERE asset_guid = ? "
+                              "ORDER BY CASE role WHEN 'source' THEN 0 ELSE 1 END, name");
+    dbqt::bindText(query, 1, guid);
+    db::Error e;
+    if (query.step(&e)) return dbqt::text(query, 0);
     return QString();
 }
 
-bool moveSourcePointer(QSqlDatabase conn, const QString &guid, const QString &oid,
+bool moveSourcePointer(db::Connection &conn, const QString &guid, const QString &oid,
                        const QString &name, QString *errorOut)
 {
     if (oid.isEmpty()) {
@@ -419,10 +419,10 @@ bool moveSourcePointer(QSqlDatabase conn, const QString &guid, const QString &oi
     // Which row: the named one, else the asset's single source row.
     QString targetName = name;
     if (targetName.isEmpty()) {
-        QSqlQuery pick(conn);
-        pick.prepare("SELECT name FROM asset_files WHERE asset_guid = ? AND role = 'source'");
-        pick.addBindValue(guid);
-        if (pick.exec() && pick.next()) targetName = pick.value(0).toString();
+        db::Statement pick(conn, "SELECT name FROM asset_files WHERE asset_guid = ? AND role = 'source'");
+        dbqt::bindText(pick, 1, guid);
+        db::Error e;
+        if (pick.step(&e)) targetName = dbqt::text(pick, 0);
     }
     if (targetName.isEmpty()) {
         if (errorOut) *errorOut = QStringLiteral("asset %1 has no source file row").arg(guid);
@@ -435,40 +435,38 @@ bool moveSourcePointer(QSqlDatabase conn, const QString &guid, const QString &oi
     // and the new one's at zero (assets.gc would reap the bytes the library
     // just published). One transaction, so a reader never sees no source row.
     DbTransaction tx(conn);
-    QSqlQuery drop(conn);
-    drop.prepare("DELETE FROM asset_files WHERE asset_guid = ? AND role = 'source' AND name = ?");
-    drop.addBindValue(guid);
-    drop.addBindValue(targetName);
-    if (!drop.exec()) {
-        if (errorOut) *errorOut = drop.lastError().text();
+    db::Statement drop(conn, "DELETE FROM asset_files WHERE asset_guid = ? AND role = 'source' AND name = ?");
+    dbqt::bindText(drop, 1, guid);
+    dbqt::bindText(drop, 2, targetName);
+    db::Error e;
+    if (!drop.run(&e)) {
+        if (errorOut) *errorOut = dbqt::describe(e);
         return false;
     }
-    QSqlQuery add(conn);
-    add.prepare("INSERT OR REPLACE INTO asset_files (asset_guid, role, oid, name) "
-                "VALUES (?, 'source', ?, ?)");
-    add.addBindValue(guid);
-    add.addBindValue(oid);
-    add.addBindValue(targetName);
-    if (!add.exec()) {
-        if (errorOut) *errorOut = add.lastError().text();
+    db::Statement add(conn, "INSERT OR REPLACE INTO asset_files (asset_guid, role, oid, name) "
+                            "VALUES (?, 'source', ?, ?)");
+    dbqt::bindText(add, 1, guid);
+    dbqt::bindText(add, 2, oid);
+    dbqt::bindText(add, 3, targetName);
+    if (!add.run(&e)) {
+        if (errorOut) *errorOut = dbqt::describe(e);
         return false;
     }
     return tx.commit();
 }
 
-QString resolveSource(QSqlDatabase conn, const QString &root,
+QString resolveSource(db::Connection &conn, const QString &root,
                       const QString &guid, QString *nameOut)
 {
-    QSqlQuery query(conn);
-    query.prepare("SELECT AF.name, AF.oid, F.ext FROM asset_files AF "
-                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
-                  "ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name");
-    query.addBindValue(guid);
-    if (query.exec() && query.next()) {
-        const QString path = AssetStorePaths::objectPathIn(
-            root, query.value(1).toString(), query.value(2).toString());
+    db::Statement query(conn, "SELECT AF.name, AF.oid, F.ext FROM asset_files AF "
+                              "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
+                              "ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name");
+    dbqt::bindText(query, 1, guid);
+    db::Error e;
+    if (query.step(&e)) {
+        const QString path = AssetStorePaths::objectPathIn(root, dbqt::text(query, 1), dbqt::text(query, 2));
         if (QFileInfo::exists(path)) {
-            if (nameOut) *nameOut = query.value(0).toString();
+            if (nameOut) *nameOut = dbqt::text(query, 0);
             return path;
         }
     }
@@ -478,20 +476,21 @@ QString resolveSource(QSqlDatabase conn, const QString &root,
     return QString();
 }
 
-bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
+bool writeSidecar(db::Connection &conn, const QString &root, const QString &guid,
                   QString *errorOut)
 {
-    QSqlQuery assetQuery(conn);
-    assetQuery.prepare("SELECT name, type, view_filter, collection, author, license, properties, tags, listed, "
-                       "parent, asset, project_guid, origin, date_created, times_used "
-                       "FROM assets WHERE guid = ?");
-    assetQuery.addBindValue(guid);
-    if (!assetQuery.exec() || !assetQuery.next()) {
-        if (errorOut) *errorOut = QStringLiteral("no asset row for %1").arg(guid);
+    QJsonObject sidecar;
+    {   // its last column read: no statement left active
+    db::Statement assetQuery(conn, "SELECT name, type, view_filter, collection, author, license, properties, tags, listed, "
+                                   "parent, asset, project_guid, origin, date_created, times_used "
+                                   "FROM assets WHERE guid = ?");
+    dbqt::bindText(assetQuery, 1, guid);
+    db::Error e;
+    if (!assetQuery.step(&e)) {
+        if (errorOut) *errorOut = e ? dbqt::describe(e) : QStringLiteral("no asset row for %1").arg(guid);
         return false;
     }
 
-    QJsonObject sidecar;
     // FORMAT 2 (bundles audit G5): a sidecar carries the asset's RELATIONS,
     // not only its bytes. Version 1 recorded identity, organization and the
     // file manifest and nothing else — the comment that claimed otherwise was
@@ -506,33 +505,33 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     // the old bare `viewFilter` number.
     sidecar["formatVersion"] = 3;
     sidecar["guid"] = guid;
-    sidecar["name"] = assetQuery.value(0).toString();
-    sidecar["type"] = assetQuery.value(1).toInt();
+    sidecar["name"] = dbqt::text(assetQuery, 0);
+    sidecar["type"] = int(assetQuery.int64(1));
     {
-        const assethome::Home home = assethome::fromStored(assetQuery.value(2).toInt(),
-                                                           assetQuery.value(11).toString());
+        const assethome::Home home = assethome::fromStored(int(assetQuery.int64(2)),
+                                                           dbqt::text(assetQuery, 11));
         sidecar["home"] = assethome::kindName(home.kind);
         if (home.isProject()) sidecar["projectGuid"] = home.projectGuid;
-        sidecar["origin"] = assetQuery.value(12).toString();
-        sidecar["dateCreated"] = assetQuery.value(13).toString();
-        sidecar["timesUsed"] = assetQuery.value(14).toInt();
+        sidecar["origin"] = dbqt::text(assetQuery, 12);
+        sidecar["dateCreated"] = dbqt::text(assetQuery, 13);
+        sidecar["timesUsed"] = int(assetQuery.int64(14));
     }
-    sidecar["collection"] = assetQuery.value(3).toInt();
-    sidecar["author"] = assetQuery.value(4).toString();
-    sidecar["license"] = assetQuery.value(5).toString();
-    const QJsonDocument props = QJsonDocument::fromJson(assetQuery.value(6).toByteArray());
+    sidecar["collection"] = int(assetQuery.int64(3));
+    sidecar["author"] = dbqt::text(assetQuery, 4);
+    sidecar["license"] = dbqt::text(assetQuery, 5);
+    const QJsonDocument props = QJsonDocument::fromJson(dbqt::bytes(assetQuery, 6));
     if (props.isObject()) sidecar["properties"] = props.object();
-    const QJsonDocument tags = QJsonDocument::fromJson(assetQuery.value(7).toByteArray());
+    const QJsonDocument tags = QJsonDocument::fromJson(dbqt::bytes(assetQuery, 7));
     if (tags.isObject()) sidecar["tags"] = tags.object();
     // LIBRARY VISIBILITY (library delete keeps project pins): recorded so a
     // rebuildCatalog does not resurrect an unlisted row as a library tile.
     // Absent in older sidecars — the reader defaults to listed.
-    sidecar["listed"] = assetQuery.value(8).toInt() != 0;
+    sidecar["listed"] = int(assetQuery.int64(8)) != 0;
 
     // MEMBERSHIP (G5). `parent` is what makes a Mesh row the inside of its
     // model and a baked map the inside of its material — the one relation
     // both browsers hide by — and it lived in no sidecar at all.
-    const QString parent = assetQuery.value(9).toString();
+    const QString parent = dbqt::text(assetQuery, 9);
     if (!parent.isEmpty()) sidecar["parent"] = parent;
 
     // THE DB-ONLY PAYLOAD (G5 + the material spec's F12). A Material's, a
@@ -543,10 +542,10 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     // costs a few hundred bytes and closes the gap for the kinds that have no
     // file at all.
     {
-        const QJsonDocument blob = QJsonDocument::fromJson(assetQuery.value(10).toByteArray());
+        const QJsonDocument blob = QJsonDocument::fromJson(dbqt::bytes(assetQuery, 10));
         if (blob.isObject()) sidecar["asset"] = blob.object();
     }
-    assetQuery.finish();   // its last column read: no statement left active (source.no_live_read_at_write)
+    }
 
     // INTRINSIC DEPENDENCY EDGES (G5): the ones with NO project stamp — a
     // bundle's own membership, derived from its definition
@@ -555,37 +554,45 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     // the project, not to this asset.
     {
         QJsonArray edges;
-        QSqlQuery depQuery(conn);
-        depQuery.prepare("SELECT dependee, dependee_type FROM dependencies "
-                         "WHERE depender = ? AND project_guid IS NULL "
-                         "ORDER BY dependee");
-        depQuery.addBindValue(guid);
-        if (depQuery.exec()) {
-            while (depQuery.next()) {
-                QJsonObject edge;
-                edge["dependee"] = depQuery.value(0).toString();
-                edge["dependeeType"] = depQuery.value(1).toInt();
-                edges.append(edge);
-            }
+        db::Statement depQuery(conn, "SELECT dependee, dependee_type FROM dependencies "
+                                     "WHERE depender = ? AND project_guid IS NULL "
+                                     "ORDER BY dependee");
+        dbqt::bindText(depQuery, 1, guid);
+        db::Error e;
+        while (depQuery.step(&e)) {
+            QJsonObject edge;
+            edge["dependee"] = dbqt::text(depQuery, 0);
+            edge["dependeeType"] = int(depQuery.int64(1));
+            edges.append(edge);
+        }
+        // A SIDECAR WRITTEN SHORT IS WORSE THAN NONE (the rebuild trusts it): a failed read writes nothing.
+        if (e) {
+            if (errorOut) *errorOut = dbqt::describe(e);
+            return false;
         }
         if (!edges.isEmpty()) sidecar["dependencies"] = edges;
     }
 
     QJsonArray files;
-    QSqlQuery filesQuery(conn);
-    filesQuery.prepare("SELECT AF.role, AF.oid, AF.name, F.size, F.ext "
-                       "FROM asset_files AF LEFT JOIN files F ON AF.oid = F.oid "
-                       "WHERE AF.asset_guid = ? ORDER BY AF.role, AF.name");
-    filesQuery.addBindValue(guid);
-    filesQuery.exec();
-    while (filesQuery.next()) {
-        QJsonObject file;
-        file["role"] = filesQuery.value(0).toString();
-        file["oid"] = filesQuery.value(1).toString();
-        file["name"] = filesQuery.value(2).toString();
-        file["size"] = filesQuery.value(3).toDouble();
-        file["ext"] = filesQuery.value(4).toString();
-        files.append(file);
+    {
+        db::Statement filesQuery(conn, "SELECT AF.role, AF.oid, AF.name, F.size, F.ext "
+                                       "FROM asset_files AF LEFT JOIN files F ON AF.oid = F.oid "
+                                       "WHERE AF.asset_guid = ? ORDER BY AF.role, AF.name");
+        dbqt::bindText(filesQuery, 1, guid);
+        db::Error e;
+        while (filesQuery.step(&e)) {
+            QJsonObject file;
+            file["role"] = dbqt::text(filesQuery, 0);
+            file["oid"] = dbqt::text(filesQuery, 1);
+            file["name"] = dbqt::text(filesQuery, 2);
+            file["size"] = filesQuery.real(3);
+            file["ext"] = dbqt::text(filesQuery, 4);
+            files.append(file);
+        }
+        if (e) {
+            if (errorOut) *errorOut = dbqt::describe(e);
+            return false;
+        }
     }
     sidecar["files"] = files;
 
@@ -605,20 +612,25 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     // restores the files row plus the project_assets pin, and the asset's
     // library mapping stays exactly where the manifest put it.
     QJsonArray pins;
-    QSqlQuery pinQuery(conn);
-    pinQuery.prepare("SELECT PA.project_guid, PA.oid_pin, F.size, F.ext "
-                     "FROM project_assets PA LEFT JOIN files F ON F.oid = PA.oid_pin "
-                     "WHERE PA.asset_guid = ? AND PA.oid_pin IS NOT NULL AND PA.oid_pin <> '' "
-                     "ORDER BY PA.project_guid");
-    pinQuery.addBindValue(guid);
-    pinQuery.exec();
-    while (pinQuery.next()) {
-        QJsonObject pin;
-        pin["projectGuid"] = pinQuery.value(0).toString();
-        pin["oid"] = pinQuery.value(1).toString();
-        pin["size"] = pinQuery.value(2).toDouble();
-        pin["ext"] = pinQuery.value(3).toString();
-        pins.append(pin);
+    {
+        db::Statement pinQuery(conn, "SELECT PA.project_guid, PA.oid_pin, F.size, F.ext "
+                                     "FROM project_assets PA LEFT JOIN files F ON F.oid = PA.oid_pin "
+                                     "WHERE PA.asset_guid = ? AND PA.oid_pin IS NOT NULL AND PA.oid_pin <> '' "
+                                     "ORDER BY PA.project_guid");
+        dbqt::bindText(pinQuery, 1, guid);
+        db::Error e;
+        while (pinQuery.step(&e)) {
+            QJsonObject pin;
+            pin["projectGuid"] = dbqt::text(pinQuery, 0);
+            pin["oid"] = dbqt::text(pinQuery, 1);
+            pin["size"] = pinQuery.real(2);
+            pin["ext"] = dbqt::text(pinQuery, 3);
+            pins.append(pin);
+        }
+        if (e) {
+            if (errorOut) *errorOut = dbqt::describe(e);
+            return false;
+        }
     }
     sidecar["pins"] = pins;
 
@@ -645,64 +657,63 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     return false;
 }
 
-QString resolveFile(QSqlDatabase conn, const QString &root,
+QString resolveFile(db::Connection &conn, const QString &root,
                     const QString &guid, const QString &name)
 {
     // asset_files first (invariant I1)…
-    QSqlQuery query(conn);
-    query.prepare("SELECT AF.oid, F.ext FROM asset_files AF "
-                  "LEFT JOIN files F ON AF.oid = F.oid "
-                  "WHERE AF.asset_guid = ? AND AF.name = ?");
-    query.addBindValue(guid);
-    query.addBindValue(name);
-    if (query.exec() && query.next()) {
-        const QString path = AssetStorePaths::objectPathIn(
-            root, query.value(0).toString(), query.value(1).toString());
+    db::Statement query(conn, "SELECT AF.oid, F.ext FROM asset_files AF "
+                              "LEFT JOIN files F ON AF.oid = F.oid "
+                              "WHERE AF.asset_guid = ? AND AF.name = ?");
+    dbqt::bindText(query, 1, guid);
+    dbqt::bindText(query, 2, name);
+    db::Error e;
+    if (query.step(&e)) {
+        const QString path = AssetStorePaths::objectPathIn(root, dbqt::text(query, 0), dbqt::text(query, 1));
         if (QFileInfo::exists(path)) return path;
     }
     return QString();
 }
 
-bool writePin(QSqlDatabase conn, const QString &projectGuid,
+bool writePin(db::Connection &conn, const QString &projectGuid,
               const QString &assetGuid, const QString &oid)
 {
-    QSqlQuery upsert(conn);
-    upsert.prepare("INSERT INTO project_assets (project_guid, asset_guid, oid_pin) "
-                   "VALUES (?, ?, ?) "
-                   "ON CONFLICT(project_guid, asset_guid) DO UPDATE SET oid_pin = excluded.oid_pin");
-    upsert.addBindValue(projectGuid);
-    upsert.addBindValue(assetGuid);
-    upsert.addBindValue(oid);
-    return upsert.exec();
+    db::Statement upsert(conn, "INSERT INTO project_assets (project_guid, asset_guid, oid_pin) "
+                               "VALUES (?, ?, ?) "
+                               "ON CONFLICT(project_guid, asset_guid) DO UPDATE SET oid_pin = excluded.oid_pin");
+    dbqt::bindText(upsert, 1, projectGuid);
+    dbqt::bindText(upsert, 2, assetGuid);
+    dbqt::bindText(upsert, 3, oid);
+    db::Error e;
+    return upsert.run(&e);
 }
 
-QString pinnedOid(QSqlDatabase conn, const QString &projectGuid,
+QString pinnedOid(db::Connection &conn, const QString &projectGuid,
                   const QString &assetGuid)
 {
-    QSqlQuery query(conn);
-    query.prepare("SELECT oid_pin FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
-    query.addBindValue(projectGuid);
-    query.addBindValue(assetGuid);
-    if (query.exec() && query.next()) return query.value(0).toString();
+    db::Statement query(conn, "SELECT oid_pin FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
+    dbqt::bindText(query, 1, projectGuid);
+    dbqt::bindText(query, 2, assetGuid);
+    db::Error e;
+    if (query.step(&e)) return dbqt::text(query, 0);
     return QString();
 }
 
-QString resolvePinned(QSqlDatabase conn, const QString &root,
+QString resolvePinned(db::Connection &conn, const QString &root,
                       const QString &projectGuid, const QString &guid,
                       QString *nameOut)
 {
     const QString pin = pinnedOid(conn, projectGuid, guid);
     if (!pin.isEmpty()) {
-        QSqlQuery query(conn);
-        query.prepare("SELECT F.ext, AF.name FROM files F "
-                      "LEFT JOIN asset_files AF ON AF.oid = F.oid AND AF.asset_guid = ? "
-                      "WHERE F.oid = ?");
-        query.addBindValue(guid);
-        query.addBindValue(pin);
-        if (query.exec() && query.next()) {
-            const QString path = AssetStorePaths::objectPathIn(root, pin, query.value(0).toString());
+        db::Statement query(conn, "SELECT F.ext, AF.name FROM files F "
+                                  "LEFT JOIN asset_files AF ON AF.oid = F.oid AND AF.asset_guid = ? "
+                                  "WHERE F.oid = ?");
+        dbqt::bindText(query, 1, guid);
+        dbqt::bindText(query, 2, pin);
+        db::Error e;
+        if (query.step(&e)) {
+            const QString path = AssetStorePaths::objectPathIn(root, pin, dbqt::text(query, 0));
             if (QFileInfo::exists(path)) {
-                if (nameOut) *nameOut = query.value(1).toString();
+                if (nameOut) *nameOut = dbqt::text(query, 1);
                 return path;
             }
         }

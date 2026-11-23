@@ -12,9 +12,8 @@ For more information see the LICENSE file
 #include "services/presetedit.h"
 
 #include <QObject>
-#include <QSqlDatabase>
-#include <QSqlError>
-#include <QSqlQuery>
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 
 #include "commands/presetcopycommand.h"
 #include "data/database/database.h"
@@ -57,16 +56,17 @@ QStringList copiesOf(Database *db, const QString &masterGuid)
     // row's thumbnail (LARGE-LIBRARY-1). The index is named (the boot builds it
     // before the shell opens the library), and the type is a literal, because a
     // partial index serves only a WHERE that states its own.
-    QSqlQuery query(QSqlDatabase::database());
-    query.prepare(QStringLiteral("SELECT guid, properties FROM assets INDEXED BY idx_assets_material_copies "
-                                 "WHERE type = %1 ORDER BY rowid").arg(static_cast<int>(ModelTypes::Material)));
-    if (!query.exec()) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("presets: the copies of %1 could not be read: %2").arg(masterGuid, query.lastError().text()));
-        return out;
+    db::Statement query(db->connection(),
+                        dbqt::utf8(QStringLiteral("SELECT guid, properties FROM assets INDEXED BY idx_assets_material_copies "
+                                                  "WHERE type = %1 ORDER BY rowid").arg(static_cast<int>(ModelTypes::Material))));
+    db::Error e;
+    while (query.step(&e))
+        if (MaterialBundle::presetMasterOf(dbqt::bytes(query, 1)) == masterGuid)
+            out << dbqt::text(query, 0);
+    if (e) {   // a short list of copies is never the answer: none, said
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("presets: the copies of %1 could not be read: %2").arg(masterGuid, dbqt::describe(e)));
+        return {};
     }
-    while (query.next())
-        if (MaterialBundle::presetMasterOf(query.value(1).toByteArray()) == masterGuid)
-            out << query.value(0).toString();
     return out;
 }
 

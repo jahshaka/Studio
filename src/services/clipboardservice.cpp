@@ -545,7 +545,7 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
     // THREAD (STAGE-CLOSE-TRIAGE-1 F3): the nodes are placed now, with no geometry, and the geometry
     // arrives when the bake lands (MeshBakeStore::bakeLandedAsync; SceneEditService swaps it in).
     // A paste inside one library imports nothing and builds nothing.
-    MeshBakeStore::bakeLandedAsync(result.imported);
+    MeshBakeStore::bakeLandedAsync(db->connection(), result.imported);
 
     if (nodeItems.isEmpty()) {                    // an Assets-page paste is done
         if (!result.imported.isEmpty()) emit assetsImported(result.imported);

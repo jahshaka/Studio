@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
 #include <QUuid>
 #include <QVector>
 #include <QtConcurrent/QtConcurrentMap>
@@ -175,7 +174,7 @@ QByteArray objectNode(const QString &guid, const QString &meshGuid, const QStrin
 /// A DISTINCT store object: its bytes written beside the store (one filesystem: the stage hardlinks, so no
 /// flush), staged and committed for each of `guids` (an Object and its Mesh share their files, as an import
 /// writes them). The object's id in `oidOut`.
-bool storeObject(const QString &root, const QString &sources, const QStringList &guids, const QString &role,
+bool storeObject(Database *db, const QString &root, const QString &sources, const QStringList &guids, const QString &role,
                  const QString &name, const QByteArray &bytes, QString *oidOut, QString *error)
 {
     const QString src = sources + QLatin1Char('/') + newGuid() + QLatin1Char('.') + QFileInfo(name).suffix();
@@ -198,7 +197,7 @@ bool storeObject(const QString &root, const QString &sources, const QStringList 
         staged = batch.first();
     }
     for (const QString &guid : guids)
-        if (!AssetCas::commitStaged(QSqlDatabase::database(), root, guid, staged, error)) return false;
+        if (!AssetCas::commitStaged(db->connection(), root, guid, staged, error)) return false;
     QFile::remove(src);
     if (oidOut) *oidOut = staged.oid;
     return true;
@@ -281,7 +280,7 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                                                 { "metadata", imageMetadata(bytes.size()) } });
                 if (!row(db, guid, name, ModelTypes::Texture, QString(), assethome::assets(), assethome::Origin::Import,
                          thumb(i), props, QByteArray(), error)
-                    || !storeObject(storeRoot, sources, { guid }, QStringLiteral("source"), name, bytes, &oid, error))
+                    || !storeObject(db, storeRoot, sources, { guid }, QStringLiteral("source"), name, bytes, &oid, error))
                     return false;
                 if (lib.textures.size() % 4 == 0) db->switchAssetCollection(lib.drawer, guid);
                 lib.textures << guid;
@@ -294,7 +293,7 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                                                   .toJson(QJsonDocument::Compact);
                 if (!row(db, guid, matName, ModelTypes::Material, QString(), assethome::assets(),
                          assethome::Origin::ExplicitSave, thumb(i), QByteArray(), definition, error)
-                    || !storeObject(storeRoot, sources, { guid }, QStringLiteral("source"),
+                    || !storeObject(db, storeRoot, sources, { guid }, QStringLiteral("source"),
                                     QStringLiteral("material.json"), definition + guid.toUtf8(), nullptr, error))
                     return false;
                 lib.assetsMaterials << guid;
@@ -305,7 +304,7 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                                                 { "metadata", imageMetadata(bytes.size()) } });
                 if (!row(db, texGuid, texName, ModelTypes::Texture, QString(), assethome::assets(),
                          assethome::Origin::Import, thumb(i), props, QByteArray(), error)
-                    || !storeObject(storeRoot, sources, { texGuid }, QStringLiteral("source"), texName, bytes, &oid, error))
+                    || !storeObject(db, storeRoot, sources, { texGuid }, QStringLiteral("source"), texName, bytes, &oid, error))
                     return false;
                 db->createDependency(static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture),
                                      guid, texGuid);
@@ -322,7 +321,7 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                                                   .toJson(QJsonDocument::Compact);
                 if (!row(db, guid, name, ModelTypes::Material, QString(), assethome::materials(),
                          assethome::Origin::Create, thumb(i), QByteArray(), definition, error)
-                    || !storeObject(storeRoot, sources, { guid }, QStringLiteral("source"),
+                    || !storeObject(db, storeRoot, sources, { guid }, QStringLiteral("source"),
                                     QStringLiteral("material.json"), definition + guid.toUtf8(), nullptr, error))
                     return false;
                 lib.homeMaterials << guid;
@@ -333,7 +332,7 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                                                 { "metadata", imageMetadata(bytes.size()) } });
                 if (!row(db, texGuid, texName, ModelTypes::Texture, QString(), assethome::materials(),
                          assethome::Origin::Create, thumb(i), props, QByteArray(), error)
-                    || !storeObject(storeRoot, sources, { texGuid }, QStringLiteral("source"), texName, bytes, &oid, error))
+                    || !storeObject(db, storeRoot, sources, { texGuid }, QStringLiteral("source"), texName, bytes, &oid, error))
                     return false;
                 db->createDependency(static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture),
                                      guid, texGuid);
@@ -352,7 +351,7 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                          thumb(i), props, objectNode(guid, meshGuid, name), error)
                     || !row(db, meshGuid, file, ModelTypes::Mesh, guid, assethome::assets(), assethome::Origin::Import,
                             QByteArray(), QByteArray(), QByteArray(), error)
-                    || !storeObject(storeRoot, sources, { guid, meshGuid }, QStringLiteral("source"), file, source,
+                    || !storeObject(db, storeRoot, sources, { guid, meshGuid }, QStringLiteral("source"), file, source,
                                     &oid, error))
                     return false;
                 bakes.append({ AssetStorePaths::objectPathIn(storeRoot, oid, QStringLiteral("obj")), guid, false });
@@ -372,11 +371,11 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
     {
         QVector<MeshBakeStore::BakeJob> jobs;
         for (const MeshBakeStore::BakeTarget &target : std::as_const(bakes))
-            jobs.append(MeshBakeStore::prepareBake(QSqlDatabase::database(), storeRoot, target));
+            jobs.append(MeshBakeStore::prepareBake(db->connection(), storeRoot, target));
         QVector<MeshBakeStore::BakeResult> results = QtConcurrent::blockingMapped(
             jobs, [](const MeshBakeStore::BakeJob &job) { return MeshBakeStore::runBake(job, nullptr); });
         for (MeshBakeStore::BakeResult &result : results)
-            if (!MeshBakeStore::commitBake(QSqlDatabase::database(), storeRoot, result, error)) return false;
+            if (!MeshBakeStore::commitBake(db->connection(), storeRoot, result, error)) return false;
     }
 
     if (first) for (int i = 0; i < 5 && i < lib.textures.size(); ++i) db->addFavorite(lib.textures.at(i));
@@ -402,11 +401,11 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
             const QString name = QStringLiteral("own_%1.png").arg(i);
             if (!row(db, guid, name, ModelTypes::Texture, QString(), assethome::project(lib.openProject),
                      assethome::Origin::Create, thumb(i), QByteArray(), QByteArray(), error)
-                || !storeObject(storeRoot, sources, { guid }, QStringLiteral("source"), name, sourceBytes(guid), nullptr,
+                || !storeObject(db, storeRoot, sources, { guid }, QStringLiteral("source"), name, sourceBytes(guid), nullptr,
                                 error))
                 return false;
         }
-        QSqlDatabase conn = QSqlDatabase::database();
+        db::Connection &conn = db->connection();
         for (int i = 0; i < 10 && i < lib.textures.size(); ++i)
             AssetCas::writePin(conn, lib.openProject, lib.textures.at(i), AssetCas::sourceOid(conn, lib.textures.at(i)));
         for (int i = 0; i < 5 && i < lib.homeMaterials.size(); ++i)

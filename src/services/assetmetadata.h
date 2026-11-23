@@ -17,6 +17,8 @@ For more information see the LICENSE file
 
 #include <QString>
 
+#include "data/db/connection.h"
+
 class Database;
 namespace iris { struct ModelSceneInfo; }
 namespace animfile { struct Contents; }
@@ -89,10 +91,12 @@ public:
     /// a dozen small suites with no catalog — so the app sets it once
     /// (src/app/main.cpp) and everywhere else there is simply no bake.
     /// Database thread.
-    using BakePathResolver = std::function<QString(int assetType, const QString &sourcePath,
+    /// On the caller's library connection (`conn`): the resolver reads that catalog.
+    using BakePathResolver = std::function<QString(db::Connection &conn, int assetType, const QString &sourcePath,
                                                    const QString &assetGuid)>;
     static void setBakePathResolver(BakePathResolver resolver);
-    static QString bakePathFor(int assetType, const QString &sourcePath, const QString &assetGuid);
+    static QString bakePathFor(db::Connection &conn, int assetType, const QString &sourcePath,
+                               const QString &assetGuid);
 
     static QJsonObject forImageFile(const QString &filePath);   // header-only decode
     static QJsonObject forAudioFile(const QString &filePath);   // RIFF parse for wav

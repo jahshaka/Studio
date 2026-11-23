@@ -19,7 +19,6 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QFileInfo>
 #include <QSet>
-#include <QSqlDatabase>
 #include <QFutureWatcher>
 #include <QThread>
 #include <QElapsedTimer>
@@ -549,10 +548,10 @@ iris::ImportTransform AvatarApi::rigImportTransform(const iris::SceneNodePtr &ch
     walk(character);
     if (meshGuid.isEmpty()) return iris::ImportTransform();
 
-    const QString path = AssetCas::resolveSource(QSqlDatabase::database(),
+    const QString path = AssetCas::resolveSource(host.db->connection(),
                                                  AssetStorePaths::root(), meshGuid);
     if (path.isEmpty()) return iris::ImportTransform();
-    return MeshBakeStore::transformFor(path, meshGuid);
+    return MeshBakeStore::transformFor(host.db->connection(), AssetStorePaths::root(), path, meshGuid);
 }
 
 bool AvatarApi::record(const QString &message)
@@ -610,7 +609,7 @@ QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariant
 
     // The clip's BAKE (SHIPPED-BAKES-1) — built at its import, rebuilt from the
     // stored bytes on a worker when stale; the preview never parses.
-    const iris::BakedClipPtr clipBake = MeshBakeStore::ensureClip(path);
+    const iris::BakedClipPtr clipBake = MeshBakeStore::ensureClip(host.db->connection(), path);
     if (!clipBake) {
         record(QStringLiteral("avatar.loadAnimation: could not read '%1' (no clip bake could be "
                               "built from its stored bytes)").arg(QFileInfo(path).fileName()));
@@ -1113,7 +1112,7 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     QString definitionVersion;
     bool linked = false;
     if (assetRow.type == static_cast<int>(ModelTypes::Avatar)) {
-        if (AvatarAssets::projectVersion(assetGuid, host.project).isEmpty()) {
+        if (AvatarAssets::projectVersion(host.db, assetGuid, host.project).isEmpty()) {
             record(QStringLiteral("avatar.spawn: '%1' is not in this project — add it first "
                                   "(assets.addToProject), so the scene instantiates the "
                                   "PROJECT's version of it").arg(assetRow.name));
@@ -1398,9 +1397,9 @@ QString AvatarApi::resolveClipAsset(const char *verb, const QString &pathOrAsset
     // Pin-first when there is a pin, library source otherwise — the same
     // resolution order every other consumer of a stored asset uses.
     const QString path =
-        hasProject ? AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+        hasProject ? AssetCas::resolvePinned(host.db->connection(), AssetStorePaths::root(),
                                              host.project->getProjectGuid(), guid)
-                   : AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(),
+                   : AssetCas::resolveSource(host.db->connection(), AssetStorePaths::root(),
                                              guid);
     if (path.isEmpty() || !QFileInfo::exists(path)) {
         record(QStringLiteral("%1: the asset '%2' has no stored bytes to read").arg(v, guid));
@@ -1469,7 +1468,7 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     // keysOnly(), not the rotation or origin, which transform the character's
     // ROOT NODE — scales the position keys exactly as the parse it replaces
     // did (IMPORT-1, IMPORT_DIALOG_SPEC §10).
-    const iris::BakedClipPtr clipBake = MeshBakeStore::ensureClip(absolutePath);
+    const iris::BakedClipPtr clipBake = MeshBakeStore::ensureClip(host.db->connection(), absolutePath);
     if (!clipBake) {
         record(QStringLiteral("%1: could not read the clip file '%2' (no clip bake could be built "
                               "from its stored bytes)").arg(v, shown));
@@ -2300,8 +2299,8 @@ QVariantList AvatarApi::library(const QVariantMap &options)
     }
 
     const auto describe = [&](const AssetRecord &record, AvatarAssets::Scope s) {
-        const QString libraryVersion = AvatarAssets::libraryVersion(record.guid);
-        const QString projectVersion = AvatarAssets::projectVersion(record.guid, host.project);
+        const QString libraryVersion = AvatarAssets::libraryVersion(host.db, record.guid);
+        const QString projectVersion = AvatarAssets::projectVersion(host.db, record.guid, host.project);
         const auto loaded = AvatarAssets::load(record.guid, s, host.db, host.project);
         QVariantList clips;
         for (const auto &clip : loaded.definition.clips) clips.append(clip.name);
@@ -2314,7 +2313,7 @@ QVariantList AvatarApi::library(const QVariantMap &options)
             // `edited` is the module's [edited] marker: the project's version
             // is not the library's current one — either because the project
             // saved its own, or because the library moved on without it.
-            { "edited", AvatarAssets::isEdited(record.guid, host.project) },
+            { "edited", AvatarAssets::isEdited(host.db, record.guid, host.project) },
             { "bones", loaded.definition.rig.bones },
             { "clips", clips },
             { "error", loaded.error },
@@ -2345,7 +2344,7 @@ QVariantList AvatarApi::library(const QVariantMap &options)
     for (const auto &row : rows) {
         if (row.type != static_cast<int>(ModelTypes::Avatar)) continue;
         const bool pinned = hasProject
-                            && !AvatarAssets::projectVersion(row.guid, host.project).isEmpty();
+                            && !AvatarAssets::projectVersion(host.db, row.guid, host.project).isEmpty();
         if (wantLibrary && row.listed && row.projectGuid.isEmpty())
             out.append(describe(row, AvatarAssets::Scope::Library));
         if (wantProject && pinned)
@@ -2718,7 +2717,7 @@ void AvatarApi::startPreviewLoad(const QString &modelPath, const QString &rowNam
     // when it lands — it used to pump this thread for the whole bake with user input held back. A
     // newer open moves the epoch; the superseded rebuild then starts nothing.
     const quint64 bakeEpoch = mLoadEpoch;
-    if (MeshBakeStore::ensureFreshAsync(modelPath, modelGuid, this,
+    if (MeshBakeStore::ensureFreshAsync(host.db->connection(), modelPath, modelGuid, this,
             [this, bakeEpoch, modelPath, rowName, modelGuid](bool, const QString &dropped) {
                 if (bakeEpoch != mLoadEpoch) return;
                 // A LANDING THAT WAS DROPPED (a reset, a shutdown, a moved store) ENDS THE JOB with
@@ -2775,8 +2774,8 @@ void AvatarApi::startPreviewParse(const QString &modelPath, const QString &rowNa
         endJob(false, error);
     });
     // Everything catalog-shaped resolved HERE on the UI thread (the bake's
-    // plan, the row's material definition, its import recipe — QSqlDatabase
-    // connections are per-thread); the worker reads the bake and builds the
+    // plan, the row's material definition, its import recipe — a db::Connection
+    // belongs to its thread); the worker reads the bake and builds the
     // fragment (the same split the mesh prewarm uses). Never a parse.
     const avatar::AvatarPreviewModel::SubjectSource source =
         subjectSourceFor(modelPath, rowName, modelGuid, /*rebuild*/ false);
@@ -2806,7 +2805,7 @@ avatar::AvatarPreviewModel::SubjectSource AvatarApi::subjectSourceFor(const QStr
     source.displayName = rowName;
     // THE CHARACTER ASSET'S IMPORT RECIPE (IMPORT-1): what its bake was built
     // under, and what a clip loaded onto it is scaled by.
-    source.xf = MeshBakeStore::transformFor(modelPath, modelGuid);
+    source.xf = MeshBakeStore::transformFor(host.db->connection(), AssetStorePaths::root(), modelPath, modelGuid);
     if (host.db)
         source.definition = QJsonDocument::fromJson(host.db->fetchAssetData(modelGuid)).object();
     // A STALE BAKE IS REBUILT FROM ITS SOURCE first — the model is never parsed
@@ -2814,8 +2813,8 @@ avatar::AvatarPreviewModel::SubjectSource AvatarApi::subjectSourceFor(const QStr
     // avatar.open without `async`) owes its caller a loaded subject, so it waits
     // here on a worker, this thread pumping; the async open (the page) already
     // rebuilt it off this thread (startPreviewLoad) and passes rebuild = false.
-    if (rebuild) MeshBakeStore::ensureFresh(modelPath, modelGuid);
-    source.plan = MeshBakeStore::planFor(modelPath, modelGuid);
+    if (rebuild) MeshBakeStore::ensureFresh(host.db->connection(), modelPath, modelGuid);
+    source.plan = MeshBakeStore::planFor(host.db->connection(), AssetStorePaths::root(), modelPath, modelGuid);
     return source;
 }
 
@@ -2952,9 +2951,9 @@ QString AvatarApi::openDefinition(const QString &guid, AvatarAssets::Scope scope
     // exactly as an instance would resolve it.
     const QString modelPath =
         (scope == AvatarAssets::Scope::Project && host.project)
-            ? AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+            ? AssetCas::resolvePinned(host.db->connection(), AssetStorePaths::root(),
                                       host.project->getProjectGuid(), loaded.definition.modelAsset)
-            : AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(),
+            : AssetCas::resolveSource(host.db->connection(), AssetStorePaths::root(),
                                       loaded.definition.modelAsset);
     if (modelPath.isEmpty() || !QFileInfo::exists(modelPath)) return QString();
     return modelPath;
@@ -2984,7 +2983,7 @@ QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
         // version whose edits are this user's own, and opening the library's
         // by default would have made "edit my character" quietly edit
         // everyone's.
-        scope = (!AvatarAssets::projectVersion(guid, host.project).isEmpty())
+        scope = (!AvatarAssets::projectVersion(host.db, guid, host.project).isEmpty())
                     ? AvatarAssets::Scope::Project
                     : AvatarAssets::Scope::Library;
     }
@@ -3316,10 +3315,10 @@ bool AvatarApi::applyDefinition(const iris::SceneNodePtr &node,
 
     for (const auto &clip : definition.clips) {
         const QString path =
-            host.project ? AssetCas::resolvePinned(QSqlDatabase::database(),
+            host.project ? AssetCas::resolvePinned(host.db->connection(),
                                                    AssetStorePaths::root(),
                                                    host.project->getProjectGuid(), clip.asset)
-                         : AssetCas::resolveSource(QSqlDatabase::database(),
+                         : AssetCas::resolveSource(host.db->connection(),
                                                    AssetStorePaths::root(), clip.asset);
         if (path.isEmpty() || !QFileInfo::exists(path)) {
             if (warningsOut)
@@ -3385,7 +3384,7 @@ QVariantList AvatarApi::instances(const QString &assetGuid)
     collectLinkedInstances(scene->getRootNode(), found);
     for (const auto &node : found) {
         if (!assetGuid.isEmpty() && node->avatarLink.asset != assetGuid) continue;
-        const QString pinned = AvatarAssets::projectVersion(node->avatarLink.asset, host.project);
+        const QString pinned = AvatarAssets::projectVersion(host.db, node->avatarLink.asset, host.project);
         out.append(QVariantMap{
             { "node", node->getGUID() },
             { "name", node->getName() },

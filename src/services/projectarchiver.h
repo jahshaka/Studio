@@ -42,7 +42,7 @@ For more information see the LICENSE file
 //                          new SQLite database, its journal and its fsync — is
 //                          written by the worker.)
 //                          Database's methods all ride the implicit default
-//                          QSqlDatabase connection, which is bound to the
+//                          library connection (db::Connection), bound to the
 //                          thread that opened it; ImportBatchRunner hops its
 //                          DB half BACK to the UI thread rather than opening
 //                          a second connection, and SceneOpenRunner reached

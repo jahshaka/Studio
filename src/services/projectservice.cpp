@@ -378,7 +378,7 @@ bool ProjectService::removeProject(const QString &guid, QString *whyOut)
     bool rowsOk = false;
     QVector<Database::PendingAssetScrub> scrubs;
     {
-        DbTransaction tx(db->getDb());
+        DbTransaction tx(db->connection());
         bool foldersOk = true, assetsOk = true;
         const bool projectOk = db->deleteProject(guid, &scrubs);
         db->deleteFolderAndDependencies(guid, &foldersOk, &scrubs);
@@ -447,7 +447,7 @@ iris::ScenePtr ProjectService::readProjectScene(const QJsonObject &projectObj,
                                                 std::unique_ptr<EditorData> *editorData,
                                                 const iris::MeshPrewarmPtr &prewarm)
 {
-    std::unique_ptr<SceneReader> reader(new SceneReader);
+    std::unique_ptr<SceneReader> reader(new SceneReader(db->connection()));
     reader->setDatabaseHandle(db);
     reader->setProject(project);
     reader->setPrewarm(prewarm);
@@ -581,7 +581,7 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
         // the batch holds and reopens at the next statement (DbTransaction, database.h) — and this guard's own
         // commit is the save's truth. WAL + synchronous=NORMAL: a commit is a WAL append, no fsync.
         LoadTimeline::Accumulate row(QStringLiteral("save:write"));
-        DbTransaction tx(db->getDb());
+        DbTransaction tx(db->connection());
         ok = thumb.isEmpty() ? db->updateProjectBlob(blob, guid) : db->updateProject(blob, thumb, guid);
         if (ok && !tx.commit()) ok = false;
     }

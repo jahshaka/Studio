@@ -14,7 +14,6 @@ For more information see the LICENSE file
 
 #include <QFileInfo>
 #include <QJsonObject>
-#include <QSqlDatabase>
 
 #include "data/database/database.h"
 #include "data/project.h"
@@ -31,10 +30,10 @@ namespace {
 /// Guid → bytes, pin-first (a project pin, then the library source). The exact
 /// route SceneReader::resolveAssetPath takes for a project load: the renderer
 /// must open the same bytes the reader would.
-QString resolvePath(const QString &guid, Project *project)
+QString resolvePath(Database *db, const QString &guid, Project *project)
 {
-    if (guid.isEmpty()) return QString();
-    QSqlDatabase conn = QSqlDatabase::database();
+    if (guid.isEmpty() || !db) return QString();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
     if (project && !project->getProjectGuid().isEmpty()) {
         const QString pinned =
@@ -89,7 +88,7 @@ bool LightBindings::bindProfile(const iris::LightNodePtr &light, const QString &
     if (project && !project->getProjectGuid().isEmpty())
         ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Binding);
 
-    const QString path = resolvePath(guid, project);
+    const QString path = resolvePath(db, guid, project);
     if (path.isEmpty() || !QFileInfo::exists(path)) {
         if (errorOut)
             *errorOut = QStringLiteral("the bytes of '%1' are not in the asset store")
@@ -156,7 +155,7 @@ bool LightBindings::bindSkyCube(const iris::LightNodePtr &light, const QJsonObje
         }
         kept.insert(QLatin1String(role), guid);
     }
-    auto cube = loadSkyCube(kept, [project](const QString &guid) { return resolvePath(guid, project); });
+    auto cube = loadSkyCube(kept, [db, project](const QString &guid) { return resolvePath(db, guid, project); });
     if (!cube) {
         if (errorOut) *errorOut = QStringLiteral("a dome face's bytes are not in the asset store, or do not decode");
         return false;
@@ -176,7 +175,7 @@ void LightBindings::resolve(const iris::LightNodePtr &light, Database *db, Proje
 {
     if (!light) return;
     if (!light->iesProfileGuid.isEmpty()) {
-        light->iesProfilePath = resolvePath(light->iesProfileGuid, project);
+        light->iesProfilePath = resolvePath(db, light->iesProfileGuid, project);
         light->iesNormalisation = normalisationFor(light->iesProfileGuid, db);
     } else {
         light->iesProfilePath.clear();

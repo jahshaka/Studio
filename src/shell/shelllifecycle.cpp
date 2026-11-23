@@ -119,7 +119,7 @@ Database *ShellLifecycle::openLibrary()
     // STALE BAKES, IN THE BACKGROUND (FORWARD-ONLY-1 D1): a build that changed
     // the bake's producer rebuilds every stale bake from its own source, at the
     // lowest priority; an open rebuilds the ones it needs first, itself.
-    MeshBakeStore::startBackgroundRebuild(mBoot.sweep);
+    MeshBakeStore::startBackgroundRebuild(*mDb, mBoot.sweep);
     return mDb;
 }
 

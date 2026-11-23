@@ -51,6 +51,13 @@ public:
 
     /// A row? false at the end (e cleared) or on an error (e filled).
     bool step(Error *e);
+    /// THE STATEMENT RUN TO ITS END (a write; a statement whose rows are not read: a PRAGMA, a write with
+    /// RETURNING - its rows are stepped through and DISCARDED). True when it finished without an error; a
+    /// statement that fails part-way answers false with the FAILING step's error, never true. ONE RUN A
+    /// STATEMENT: run() on a statement already stepped since its last reset() is REFUSED by name (reset() first
+    /// to run it again). Its answer cannot be dropped: [[nodiscard]] (GCC's -Wunused-result names a call that
+    /// does).
+    [[nodiscard]] bool run(Error *e);
     /// Back to before the first step; the binds stay.
     void reset();
 

@@ -146,7 +146,7 @@ ImportResult importBundle(Database *db, Project *project, const QString &path)
     // placed before then shows its geometry when the bake lands, and a failure is logged by name.
     // (In a library that already held a bake of the same content under another row this finds
     // it fresh and builds nothing — which is how a pool hid the miss.)
-    MeshBakeStore::bakeLandedAsync(report.imported);
+    MeshBakeStore::bakeLandedAsync(db->connection(), report.imported);
 
     // EVERY ENTRY the file is about (a pack names several), in its order.
     for (const clipboardformat::ClipItem &item : envelope.items) {

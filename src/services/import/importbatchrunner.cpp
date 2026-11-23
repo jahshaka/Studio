@@ -140,7 +140,7 @@ void ImportBatchRunner::runBatch()
         }
 
         // ---- DB half, shutdown-safe hop to the UI thread -----------------
-        // (the default QSqlDatabase connection, AssetManager registration and
+        // (the editor's library connection, AssetManager registration and
         // drawer filing are all UI-thread-bound; one file in flight at a time
         // keeps the staging dir alive across its own commit only.)
         //

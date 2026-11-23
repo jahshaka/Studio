@@ -29,6 +29,7 @@ class FilePickerWidget;
 class BaseWidget;
 
 class Project;
+struct StudioServices;
 
 class PropertyWidget : public QWidget, iris::PropertyListener
 {
@@ -42,6 +43,8 @@ public:
     /// AccordianBladeWidget::addPropertyWidget(); forwarded to the texture
     /// pickers this widget builds.
     Project *project = nullptr;
+    /// The shell's services, handed to the texture pickers it builds (ruling 15). Set by its owner.
+    StudioServices *services = nullptr;
 
     void setProperties(const std::vector<iris::Property *> &);
 

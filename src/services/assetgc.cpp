@@ -17,13 +17,12 @@ For more information see the LICENSE file
 #include <QFile>
 #include <QFileInfo>
 #include <QSet>
-#include <QSqlDatabase>
-#include <QSqlError>
-#include <QSqlQuery>
 #include <QVariantList>
 
 #include "services/assetstorepaths.h"
 #include "data/database/database.h"   // DbTransaction
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 
 namespace AssetGc
 {
@@ -107,30 +106,34 @@ bool isStagingTemp(const QString &fileName)
     return fileName.contains(QLatin1String(".tmp-"));
 }
 
-bool tableExists(QSqlDatabase conn, const QString &name)
+bool tableExists(db::Connection &conn, const char *name)
 {
-    QSqlQuery q(conn);
-    q.prepare("SELECT 1 FROM sqlite_master WHERE type IN ('table','view') AND name = ?");
-    q.addBindValue(name);
-    return q.exec() && q.next();
+    db::Statement q(conn, "SELECT 1 FROM sqlite_master WHERE type IN ('table','view') AND name = ?");
+    q.bindText(1, name);
+    db::Error e;
+    return q.step(&e);
 }
 
-int scalar(QSqlDatabase conn, const QString &sql)
+int scalar(db::Connection &conn, const char *sql)
 {
-    QSqlQuery q(conn);
-    if (!q.exec(sql) || !q.next()) return -1;
-    return q.value(0).toInt();
+    db::Statement q(conn, sql);
+    db::Error e;
+    if (!q.step(&e)) return -1;
+    return int(q.int64(0));
 }
 
-QSet<QString> stringSet(QSqlDatabase conn, const QString &sql)
+/// A READ WHOSE EMPTINESS DECIDES A DELETE: `readOk` is CLEARED when it failed (an empty set from a failed read
+/// would make every object look unreferenced - the one input under which the sweep deletes a whole library).
+QSet<QString> stringSet(db::Connection &conn, const char *sql, bool *readOk)
 {
     QSet<QString> out;
-    QSqlQuery q(conn);
-    if (!q.exec(sql)) return out;
-    while (q.next()) {
-        const QString value = q.value(0).toString();
+    db::Statement q(conn, sql);
+    db::Error e;
+    while (q.step(&e)) {
+        const QString value = dbqt::text(q, 0);
         if (!value.isEmpty()) out.insert(value);
     }
+    if (e) *readOk = false;
     return out;
 }
 
@@ -143,7 +146,7 @@ void add(ClassReport &report, const QString &id, const QString &path,
 
 } // namespace
 
-Report collect(QSqlDatabase conn, const QString &root, bool force)
+Report collect(db::Connection &conn, const QString &root, bool force)
 {
     Report report;
     report.root = root;
@@ -151,7 +154,7 @@ Report collect(QSqlDatabase conn, const QString &root, bool force)
     QElapsedTimer timer;
     timer.start();
 
-    if (!conn.isValid() || !conn.isOpen()) {
+    if (!conn.isOpen()) {
         report.error = QStringLiteral("the catalog connection is not open");
         return report;
     }
@@ -187,22 +190,30 @@ Report collect(QSqlDatabase conn, const QString &root, bool force)
     }
 
     // --- Reachability, read from the rows (property 1) ---------------------
-    const QSet<QString> mappedOids = stringSet(conn, "SELECT DISTINCT oid FROM asset_files");
+    // A FAILED READ HERE REFUSES THE SWEEP (NOQT-DATABASE-1 stage 2): an empty set it returned would make every
+    // object, pin and sidecar look unreferenced.
+    bool readsOk = true;
+    const QSet<QString> mappedOids = stringSet(conn, "SELECT DISTINCT oid FROM asset_files", &readsOk);
     const QSet<QString> pinnedOids =
         tableExists(conn, "project_assets")
-            ? stringSet(conn, "SELECT DISTINCT oid_pin FROM project_assets WHERE oid_pin <> ''")
+            ? stringSet(conn, "SELECT DISTINCT oid_pin FROM project_assets WHERE oid_pin <> ''", &readsOk)
             : QSet<QString>();
-    const QSet<QString> assetGuids = stringSet(conn, "SELECT guid FROM assets");
+    const QSet<QString> assetGuids = stringSet(conn, "SELECT guid FROM assets", &readsOk);
+    const QSet<QString> catalogued = stringSet(conn, "SELECT oid FROM files", &readsOk);
+    if (!readsOk) {
+        report.error = QStringLiteral("refusing to sweep %1: a read of the catalog failed (the log names it)").arg(root);
+        return report;
+    }
 
     // --- (a) catalogued objects nothing references -------------------------
     {
-        QSqlQuery q(conn);
-        q.exec("SELECT oid, ext, size, refcount FROM files");
-        while (q.next()) {
-            const QString oid = q.value(0).toString();
-            const QString ext = q.value(1).toString();
-            const qint64  size = q.value(2).toLongLong();
-            const int     refcount = q.value(3).toInt();
+        db::Statement q(conn, "SELECT oid, ext, size, refcount FROM files");
+        db::Error e;
+        while (q.step(&e)) {
+            const QString oid = dbqt::text(q, 0);
+            const QString ext = dbqt::text(q, 1);
+            const qint64  size = q.int64(2);
+            const int     refcount = int(q.int64(3));
 
             const bool mapped = mappedOids.contains(oid);
             const bool pinned = pinnedOids.contains(oid);
@@ -217,11 +228,14 @@ Report collect(QSqlDatabase conn, const QString &root, bool force)
                 info.exists() ? info.size() : size,
                 QStringLiteral("no asset_files row and no project pin names this content"));
         }
+        if (e) {   // a class read short is never swept: the rest of it would look like garbage next time
+            report.error = QStringLiteral("refusing to sweep %1: the files read failed: %2").arg(root, dbqt::describe(e));
+            return report;
+        }
     }
 
     // --- (b) objects on disk the catalog never recorded --------------------
     if (objectsDir.exists()) {
-        const QSet<QString> catalogued = stringSet(conn, "SELECT oid FROM files");
         const QDateTime cutoff = QDateTime::currentDateTime().addSecs(-kStaleTempSeconds);
         QDirIterator it(objectsDir.path(), QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
         while (it.hasNext()) {
@@ -279,17 +293,15 @@ Report collect(QSqlDatabase conn, const QString &root, bool force)
     // could make a LIVE pin look dead is a catalog whose projects table is
     // missing, so that case reports nothing at all.
     if (tableExists(conn, "project_assets") && tableExists(conn, "projects")) {
-        QSqlQuery q(conn);
-        q.prepare("SELECT PA.project_guid, PA.asset_guid FROM project_assets PA "
-                  "LEFT JOIN projects P ON P.guid = PA.project_guid "
-                  "WHERE P.guid IS NULL");
-        if (q.exec()) {
-            while (q.next()) {
-                const QString project = q.value(0).toString();
-                const QString asset = q.value(1).toString();
-                add(report.deadPins, project + QLatin1Char('/') + asset, QString(), 0,
-                    QStringLiteral("project '%1' no longer exists").arg(project));
-            }
+        db::Statement q(conn, "SELECT PA.project_guid, PA.asset_guid FROM project_assets PA "
+                              "LEFT JOIN projects P ON P.guid = PA.project_guid "
+                              "WHERE P.guid IS NULL");
+        db::Error e;
+        while (q.step(&e)) {
+            const QString project = dbqt::text(q, 0);
+            const QString asset = dbqt::text(q, 1);
+            add(report.deadPins, project + QLatin1Char('/') + asset, QString(), 0,
+                QStringLiteral("project '%1' no longer exists").arg(project));
         }
     }
 
@@ -298,7 +310,7 @@ Report collect(QSqlDatabase conn, const QString &root, bool force)
     return report;
 }
 
-Report sweep(QSqlDatabase conn, const QString &root, bool dryRun, bool force)
+Report sweep(db::Connection &conn, const QString &root, bool dryRun, bool force)
 {
     Report report = collect(conn, root, force);
     report.dryRun = dryRun;
@@ -331,13 +343,13 @@ Report sweep(QSqlDatabase conn, const QString &root, bool dryRun, bool force)
         const bool inTransaction = tx.isActive();
         bool rowsOk = true;
         for (const Item &item : report.unreferencedObjects.items) {
-            QSqlQuery del(conn);
-            del.prepare("DELETE FROM files WHERE oid = ?");
-            del.addBindValue(item.id);
-            if (!del.exec()) {
+            db::Statement del(conn, "DELETE FROM files WHERE oid = ?");
+            dbqt::bindText(del, 1, item.id);
+            db::Error e;
+            if (!del.run(&e)) {
                 rowsOk = false;
                 report.failures << QStringLiteral("could not drop the files row for %1: %2")
-                                       .arg(item.id, del.lastError().text());
+                                       .arg(item.id, dbqt::describe(e));
             }
         }
         if (inTransaction) {
@@ -359,14 +371,14 @@ Report sweep(QSqlDatabase conn, const QString &root, bool dryRun, bool force)
         for (const Item &item : report.deadPins.items) {
             const int slash = item.id.indexOf(QLatin1Char('/'));
             if (slash <= 0) { rowsOk = false; continue; }
-            QSqlQuery del(conn);
-            del.prepare("DELETE FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
-            del.addBindValue(item.id.left(slash));
-            del.addBindValue(item.id.mid(slash + 1));
-            if (!del.exec()) {
+            db::Statement del(conn, "DELETE FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
+            dbqt::bindText(del, 1, item.id.left(slash));
+            dbqt::bindText(del, 2, item.id.mid(slash + 1));
+            db::Error e;
+            if (!del.run(&e)) {
                 rowsOk = false;
                 report.failures << QStringLiteral("could not drop the dead pin %1: %2")
-                                       .arg(item.id, del.lastError().text());
+                                       .arg(item.id, dbqt::describe(e));
             }
         }
         if (inTransaction) {

@@ -72,6 +72,12 @@ struct StudioServices
     PreviewDemand    *previewDemand = nullptr;
     AssetService     *assets     = nullptr;
     AmbienceService  *ambience   = nullptr;   ///< the world's music, played (audit D8)
+    /// THE SHELL's ONE RESOLVER of a bound asset's file (NOQT-DATABASE-1 ruling 15): `guid`'s bytes as
+    /// `projectGuid` pins them, else the library source (AssetCas::resolvePinned on the shell's library
+    /// connection). Set by ShellServices; empty in hosts with no library (a call then answers nothing). The
+    /// property widgets that hold no Database reach the library through it — never the Qt global, never a
+    /// Database pointer of their own.
+    std::function<QString(const QString &projectGuid, const QString &guid)> resolvePinned;
     /// The session log's periodic performance sampler (SESSION_LOG_SPEC §8-R3).
     /// Behind log.perf / log.sample; null in hosts with no shell.
     PerfSampler      *perfSampler = nullptr;

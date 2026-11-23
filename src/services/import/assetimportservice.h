@@ -90,7 +90,7 @@ public:
 
     /// The DB half: publish (CAS) + register + drawer filing, one transaction
     /// with the existing rollback/orphan-cleanup semantics. MUST run on the
-    /// thread that owns the default QSqlDatabase connection (the UI thread in
+    /// thread that owns the editor's library connection (the UI thread in
     /// the app), which is exactly why it no longer writes bytes: prepare
     /// prepaid the hashing, the copy and the flush (StagedAsset::fileOids /
     /// ::stagedBytes), so publishing an object here is one rename(2).

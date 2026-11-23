@@ -15,11 +15,11 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 
 #include "data/constants.h"
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "data/project.h"
 #include "io/assetmanager.h"
 #include "services/assetcas.h"
@@ -31,7 +31,7 @@ For more information see the LICENSE file
 
 namespace {
 
-QString sourceOidOf(QSqlDatabase conn, const QString &guid)
+QString sourceOidOf(db::Connection &conn, const QString &guid)
 {
     // ONE implementation (AssetCas::sourceOid): the library's current source
     // oid is the "what version is this?" answer, and the avatar module asks it
@@ -63,7 +63,7 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
         return result;
     }
 
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
     const QString projectGuid = project->getProjectGuid();
 
@@ -106,7 +106,7 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
     // the companion is a Material, and Materials never auto-create.
     if (kind == AddKind::Direct
         && static_cast<ModelTypes>(record.type) == ModelTypes::Texture
-        && !ImageMaterial::hasCompanionMaterial(guid, projectGuid)) {
+        && !ImageMaterial::hasCompanionMaterial(db, guid, projectGuid)) {
         const QString materialGuid = ImageMaterial::createMaterialAsset(
             guid, db, project, assethome::project(projectGuid));
         if (!materialGuid.isEmpty()) {
@@ -132,7 +132,7 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db, Proj
     row.type = memberRecord.type;
     row.name = memberRecord.name;
     row.asset = memberRecord.asset;
-    row.path = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+    row.path = AssetCas::resolvePinned(db->connection(), AssetStorePaths::root(),
                                        project->getProjectGuid(), guid);
     return registerSessionRow(row);
 }
@@ -147,7 +147,7 @@ QVector<int> ProjectAssets::sessionTypes()
              static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Music) };
 }
 
-QVector<ProjectAssets::SessionRow> ProjectAssets::readSessionRows(QSqlDatabase conn, const QString &root,
+QVector<ProjectAssets::SessionRow> ProjectAssets::readSessionRows(db::Connection &conn, const QString &root,
                                                                   const QString &projectGuid, int type,
                                                                   int *queries)
 {
@@ -163,8 +163,7 @@ QVector<ProjectAssets::SessionRow> ProjectAssets::readSessionRows(QSqlDatabase c
     // pinned object when the pin names one the files table knows, else the
     // library source (asset_files, the 'source' role first, then by name).
     // Existence on disk is checked below, exactly as the resolver does.
-    QSqlQuery query(conn);
-    query.prepare(QStringLiteral(
+    db::Statement query(conn,
         "SELECT A.guid, A.name, A.asset, PA.asset_guid IS NOT NULL, PF.oid, PF.ext, "
         "  (SELECT AF.oid FROM asset_files AF WHERE AF.asset_guid = A.guid "
         "     ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name LIMIT 1), "
@@ -174,28 +173,26 @@ QVector<ProjectAssets::SessionRow> ProjectAssets::readSessionRows(QSqlDatabase c
         "LEFT JOIN project_assets PA ON PA.asset_guid = A.guid AND PA.project_guid = ? "
         "LEFT JOIN files PF ON PF.oid = PA.oid_pin AND PA.oid_pin <> '' "
         "WHERE A.type = ? AND (PA.asset_guid IS NOT NULL OR (? AND A.project_guid = ?)) "
-        "ORDER BY PA.asset_guid IS NOT NULL, A.rowid"));
-    query.addBindValue(projectGuid);
-    query.addBindValue(type);
-    query.addBindValue(legacy ? 1 : 0);
-    query.addBindValue(projectGuid);
+        "ORDER BY PA.asset_guid IS NOT NULL, A.rowid");
+    dbqt::bindText(query, 1, projectGuid);
+    query.bindInt(2, type);
+    query.bindInt(3, legacy ? 1 : 0);
+    dbqt::bindText(query, 4, projectGuid);
     if (queries) ++*queries;
-    if (!query.exec()) return rows;
-    while (query.next()) {
+    db::Error e;
+    while (query.step(&e)) {
         SessionRow row;
-        row.guid = query.value(0).toString();
+        row.guid = dbqt::text(query, 0);
         if (row.guid.isEmpty()) continue;
         row.type = type;
-        row.name = query.value(1).toString();
-        if (t == ModelTypes::ParticleSystem) row.asset = query.value(2).toByteArray();
-        if (query.value(3).toBool() && !query.value(4).isNull()) {
-            const QString pinned = AssetStorePaths::objectPathIn(root, query.value(4).toString(),
-                                                                 query.value(5).toString());
+        row.name = dbqt::text(query, 1);
+        if (t == ModelTypes::ParticleSystem) row.asset = dbqt::bytes(query, 2);
+        if (query.int64(3) != 0 && !query.isNull(4)) {
+            const QString pinned = AssetStorePaths::objectPathIn(root, dbqt::text(query, 4), dbqt::text(query, 5));
             if (QFileInfo::exists(pinned)) row.path = pinned;
         }
-        if (row.path.isEmpty() && !query.value(6).isNull()) {
-            const QString source = AssetStorePaths::objectPathIn(root, query.value(6).toString(),
-                                                                 query.value(7).toString());
+        if (row.path.isEmpty() && !query.isNull(6)) {
+            const QString source = AssetStorePaths::objectPathIn(root, dbqt::text(query, 6), dbqt::text(query, 7));
             if (QFileInfo::exists(source)) row.path = source;
         }
         rows.append(row);
@@ -299,7 +296,7 @@ bool ProjectAssets::registerSessionRow(const SessionRow &row)
 bool ProjectAssets::updatePinToLatest(const QString &guid, Database *db, Project *project)
 {
     if (!db || !project || project->getProjectGuid().isEmpty()) return false;
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     // THE WHOLE CLOSURE, not one pin (bundles audit G3). "Update from Library"
     // used to move the asset's own pin and stop, so a project that took a
     // newer version of a bundle kept pointing at the members the OLD version
@@ -350,7 +347,7 @@ QString ProjectAssets::copyOnWrite(const QString &guid, const QString &newConten
         if (errorOut) *errorOut = QStringLiteral("no open project");
         return QString();
     }
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString root = AssetStorePaths::root();
 
     // The edited bytes become a new object recorded under the asset. The

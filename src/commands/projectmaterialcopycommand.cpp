@@ -15,7 +15,6 @@ For more information see the LICENSE file
 
 #include <QJsonDocument>
 #include <QObject>
-#include <QSqlDatabase>
 
 #include "data/database/database.h"
 #include "irisgl/core/guid.h"
@@ -80,7 +79,7 @@ void ProjectMaterialCopyCommand::redo()
     }
 
     if (mRetracted) return;
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = mDb->connection();
     DbTransaction tx(conn);
     QString error;
     // The project-owned mint with a caller-supplied guid (the redo contract).
@@ -109,7 +108,7 @@ void ProjectMaterialCopyCommand::retract()
 void ProjectMaterialCopyCommand::undo()
 {
     if (mRetracted || !mDb || mCopyGuid.isEmpty() || mProjectGuid.isEmpty()) return;
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = mDb->connection();
     DbTransaction tx(conn);
     assetdelete::removeFromProject(mDb, mCopyGuid, mProjectGuid);
     assetdelete::remove(mDb, mCopyGuid, /*keepShared*/ true, /*force*/ true);

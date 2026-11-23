@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/sceneopenrunner.h"
+#include "data/database/database.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -25,7 +26,6 @@ For more information see the LICENSE file
 #include "services/jahlog.h"
 #include "services/assetstorepaths.h"
 #include "services/openreads.h"
-#include <QSqlDatabase>
 
 SceneOpenRunner::SceneOpenRunner(Database *db, Project *project, QObject *parent)
     : QObject(parent), db(db), project(project),
@@ -103,11 +103,10 @@ void SceneOpenRunner::runWorker()
         results->append(MeshBakeStore::runBake(mRebuild.at(i)));
     }
     QMetaObject::invokeMethod(this, [this, results]() {
-        QSqlDatabase conn = QSqlDatabase::database();
         const QString root = AssetStorePaths::root();
         for (MeshBakeStore::BakeResult &result : *results) {
             QString error;
-            if (!MeshBakeStore::commitBake(conn, root, result, &error))
+            if (!db || !MeshBakeStore::commitBake(db->connection(), root, result, &error))
                 JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("open: a stale bake could not be rebuilt (%1)").arg(error));
         }
         mRebuild.clear();
@@ -119,7 +118,7 @@ void SceneOpenRunner::runWorker()
     }, Qt::QueuedConnection);
 }
 
-void SceneOpenRunner::readBakes(QSqlDatabase &conn)
+void SceneOpenRunner::readBakes(db::Connection &conn)
 {
     {
         LoadTimeline::Accumulate plan(QStringLiteral("worker:plan"));

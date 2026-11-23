@@ -150,6 +150,19 @@ bool Statement::step(Error *e)
     return false;
 }
 
+bool Statement::run(Error *e)
+{
+    Error local;
+    if (mStarted && !mError) {
+        local = detail::refusal(mConnection, "the statement already ran (reset() runs it again)", mSql);
+        if (e) *e = local;
+        return false;
+    }
+    while (step(&local)) {}   // a returned row is discarded
+    if (e) *e = local;
+    return !local;
+}
+
 void Statement::reset()
 {
     if (mStatement) sqlite3_reset(mStatement);

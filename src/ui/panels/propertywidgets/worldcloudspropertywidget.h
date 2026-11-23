@@ -37,7 +37,7 @@ class WorldCloudsPropertyWidget : public AccordianBladeWidget
 public:
     WorldCloudsPropertyWidget();
     void setScene(std::shared_ptr<iris::Scene> scene);
-    void setServices(StudioServices *s) { services = s; }
+    void setServices(StudioServices *s);   ///< also the picker's: its drop resolves through it (ruling 15)
     /// The weather-map picker resolves an asset guid to the project's pin.
     void setProject(Project *p) { project = p; }
 

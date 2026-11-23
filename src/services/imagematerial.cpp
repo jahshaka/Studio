@@ -18,10 +18,10 @@ For more information see the LICENSE file
 #include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
+#include "data/db/statement.h"
 #include "data/project.h"
 #include "io/scenewriter.h"
 #include "services/assetcas.h"
@@ -41,7 +41,7 @@ iris::PbrMaterialPtr fromTexture(const QString &textureGuid, Database *db,
     // Pin-first byte resolution; resolvePinned itself falls back to the
     // library source, so store context (no open project) works too. Never a
     // projectFolder join (the flat folder died with the pin world).
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db->connection();
     const QString projectGuid =
         project ? project->getProjectGuid() : QString();
     const QString path = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
@@ -157,31 +157,32 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
     return materialGuid;
 }
 
-bool hasCompanionMaterial(const QString &textureGuid, const QString &projectGuid)
+bool hasCompanionMaterial(Database *db, const QString &textureGuid, const QString &projectGuid)
 {
-    QSqlQuery query(QSqlDatabase::database());
-    query.prepare("SELECT 1 FROM dependencies D JOIN assets A ON A.guid = D.depender "
+    if (!db) return false;
+    db::Statement query(db->connection(), "SELECT 1 FROM dependencies D JOIN assets A ON A.guid = D.depender "
                   "WHERE D.dependee = ? AND D.depender_type = ? "
                   "AND ((A.project_guid = ? AND A.view_filter = ?) "
                   "     OR EXISTS (SELECT 1 FROM project_assets PA "
                   "                WHERE PA.asset_guid = A.guid AND PA.project_guid = ?)) "
                   "LIMIT 1");
-    query.addBindValue(textureGuid);
-    query.addBindValue(static_cast<int>(ModelTypes::Material));
-    query.addBindValue(projectGuid);
-    query.addBindValue(static_cast<int>(assethome::StoredProject));
-    query.addBindValue(projectGuid);
-    return query.exec() && query.next();
+    dbqt::bindText(query, 1, textureGuid);
+    query.bindInt(2, static_cast<int>(ModelTypes::Material));
+    dbqt::bindText(query, 3, projectGuid);
+    query.bindInt(4, static_cast<int>(assethome::StoredProject));
+    dbqt::bindText(query, 5, projectGuid);
+    db::Error e;
+    return query.step(&e);
 }
 
-QHash<QString, QStringList> companionMaterials(const QStringList &textureGuids)
+QHash<QString, QStringList> companionMaterials(Database *db, const QStringList &textureGuids)
 {
     QHash<QString, QStringList> out;
     QStringList unique = textureGuids;
     unique.removeAll(QString());
     unique.removeDuplicates();
-    if (unique.isEmpty()) return out;
-    QSqlDatabase conn = QSqlDatabase::database();
+    if (unique.isEmpty() || !db) return out;
+    db::Connection &conn = db->connection();
     if (!conn.isOpen()) return out;
 
     const auto placeholders = [](int count) {
@@ -194,18 +195,19 @@ QHash<QString, QStringList> companionMaterials(const QStringList &textureGuids)
     QHash<QString, QStringList> candidatesOf;   // texture -> materials
     QStringList candidates;
     {
-        QSqlQuery query(conn);
-        query.prepare("SELECT dependee, depender FROM dependencies "
-                      "WHERE depender_type = ? AND dependee IN (" +
-                      placeholders(unique.size()) + ")");
-        query.addBindValue(static_cast<int>(ModelTypes::Material));
-        for (const QString &guid : unique) query.addBindValue(guid);
-        if (!query.exec()) return out;
-        while (query.next()) {
-            const QString material = query.value(1).toString();
-            candidatesOf[query.value(0).toString()].append(material);
+        db::Statement query(conn, dbqt::utf8("SELECT dependee, depender FROM dependencies "
+                                             "WHERE depender_type = ? AND dependee IN (" +
+                                             placeholders(unique.size()) + ")"));
+        int at = 0;
+        query.bindInt(++at, static_cast<int>(ModelTypes::Material));
+        for (const QString &guid : unique) dbqt::bindText(query, ++at, guid);
+        db::Error e;
+        while (query.step(&e)) {
+            const QString material = dbqt::text(query, 1);
+            candidatesOf[dbqt::text(query, 0)].append(material);
             candidates << material;
         }
+        if (e) return out;   // a fold from a failed read folds nothing (as before: said by none; now by name)
     }
     candidates.removeDuplicates();
     if (candidates.isEmpty()) return out;
@@ -218,17 +220,17 @@ QHash<QString, QStringList> companionMaterials(const QStringList &textureGuids)
     // pin the user removes by hand.
     QHash<QString, QString> stampOf;
     {
-        QSqlQuery query(conn);
-        query.prepare("SELECT guid, asset FROM assets WHERE guid IN (" +
-                      placeholders(candidates.size()) + ")");
-        for (const QString &guid : candidates) query.addBindValue(guid);
-        if (!query.exec()) return out;
-        while (query.next()) {
-            const QJsonObject definition =
-                QJsonDocument::fromJson(query.value(1).toByteArray()).object();
-            stampOf.insert(query.value(0).toString(),
+        db::Statement query(conn, dbqt::utf8("SELECT guid, asset FROM assets WHERE guid IN (" +
+                                             placeholders(candidates.size()) + ")"));
+        int at = 0;
+        for (const QString &guid : candidates) dbqt::bindText(query, ++at, guid);
+        db::Error e;
+        while (query.step(&e)) {
+            const QJsonObject definition = QJsonDocument::fromJson(dbqt::bytes(query, 1)).object();
+            stampOf.insert(dbqt::text(query, 0),
                            definition.value(QStringLiteral("companionOf")).toString());
         }
+        if (e) return out;
     }
 
     // 3. Still UNEDITED: a companion the user has since given a second map is
@@ -236,16 +238,17 @@ QHash<QString, QStringList> companionMaterials(const QStringList &textureGuids)
     // from; this says it has not become something else.)
     QHash<QString, QStringList> dependeesOf;
     {
-        QSqlQuery query(conn);
-        query.prepare("SELECT DISTINCT depender, dependee FROM dependencies WHERE depender IN (" +
-                      placeholders(candidates.size()) + ")");
-        for (const QString &guid : candidates) query.addBindValue(guid);
-        if (!query.exec()) return out;
-        while (query.next()) {
-            QStringList &list = dependeesOf[query.value(0).toString()];
-            const QString dependee = query.value(1).toString();
+        db::Statement query(conn, dbqt::utf8("SELECT DISTINCT depender, dependee FROM dependencies WHERE depender IN (" +
+                                             placeholders(candidates.size()) + ")"));
+        int at = 0;
+        for (const QString &guid : candidates) dbqt::bindText(query, ++at, guid);
+        db::Error e;
+        while (query.step(&e)) {
+            QStringList &list = dependeesOf[dbqt::text(query, 0)];
+            const QString dependee = dbqt::text(query, 1);
             if (!list.contains(dependee)) list.append(dependee);
         }
+        if (e) return out;
     }
 
     for (auto it = candidatesOf.constBegin(); it != candidatesOf.constEnd(); ++it) {
@@ -260,10 +263,10 @@ QHash<QString, QStringList> companionMaterials(const QStringList &textureGuids)
     return out;
 }
 
-QStringList companionMaterials(const QString &textureGuid)
+QStringList companionMaterials(Database *db, const QString &textureGuid)
 {
     if (textureGuid.isEmpty()) return {};
-    return companionMaterials(QStringList{ textureGuid }).value(textureGuid);
+    return companionMaterials(db, QStringList{ textureGuid }).value(textureGuid);
 }
 
 } // namespace ImageMaterial

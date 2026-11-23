@@ -124,7 +124,7 @@ int main(int argc, char **argv)
         db.createAssetEntry(newGuid(), QStringLiteral("own_%1.png").arg(i), static_cast<int>(ModelTypes::Texture),
                             QString(), assethome::project(projectGuid), assethome::Origin::Create, QString(), QString(), png(i), QByteArray(), QByteArray(),
                             QByteArray());
-    for (int i = 0; i < 10; ++i) AssetCas::writePin(QSqlDatabase::database(), projectGuid, guids.at(i), QString());
+    for (int i = 0; i < 10; ++i) AssetCas::writePin(db.connection(), projectGuid, guids.at(i), QString());
     for (int i = 0; i < 5; ++i) db.addFavorite(guids.at(i));
 
     // ---- THE INDEXES (§3.5) -------------------------------------------------

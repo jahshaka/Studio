@@ -29,7 +29,7 @@ iris::SceneNodePtr fromLibrary(Database *db, Project *project, const QString &gu
     QJsonObject blob = QJsonDocument::fromJson(db->fetchAssetData(guid)).object();
     if (blob.isEmpty()) return iris::SceneNodePtr();
 
-    SceneReader reader;
+    SceneReader reader(db->connection());
     reader.setDatabaseHandle(db);       // mesh + texture guids -> store files
     reader.setProject(project);
     reader.setLibrarySource();          // the STORE asset's own bytes, not a project pin

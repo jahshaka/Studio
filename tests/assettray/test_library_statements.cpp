@@ -259,7 +259,7 @@ static void theRule(Database &db)
     // The editor tray applies the same rule to a project's pinned pictures.
     const QString project = newGuid();
     db.createProject(project, QStringLiteral("rule project"));
-    for (const QString &g : { folds, nodeUses }) AssetCas::writePin(QSqlDatabase::database(), project, g, QString());
+    for (const QString &g : { folds, nodeUses }) AssetCas::writePin(db.connection(), project, g, QString());
     QStringList tray;
     for (const AssetRecord &r : assettray::list(&db, project, QString(), -1, false)) tray << r.guid;
     QStringList trayMembers;
@@ -437,9 +437,9 @@ static QVector<ResidueRow> residueRows()
         { "fetchFavorites (listed, by guid)", "database.cpp fetchFavorites", "favourites",
           [](Database &d, L) { d.fetchFavorites(); } },
         { "a project open's session rows (readSessionRows, Texture: a scan by type, asset)", "services/projectassets.cpp readSessionRows",
-          "library", [](Database &, L l) {
+          "library", [](Database &d, L l) {
               int queries = 0;
-              ProjectAssets::readSessionRows(QSqlDatabase::database(), QDir::currentPath(), l.openProject,
+              ProjectAssets::readSessionRows(d.connection(), QDir::currentPath(), l.openProject,
                                              static_cast<int>(ModelTypes::Texture), &queries);
           } },
     };
@@ -462,47 +462,35 @@ static QVector<Reading> coldResidue(Database &db, const QString &dbPath, const l
 /// trace, databasereads, is the default connection's only: the ruled limit). `perModel` true runs the single-row
 /// planner (MeshBakeStore::planFor) once per model instead: the negative control, N statements and more.
 struct SweepPlan { qint64 statements = -1; int needed = -1; qint64 ms = 0; };
-#if defined(JAH_HAVE_SQLITE3)
-static int countStatement(unsigned type, void *counter, void *, void *sql)
-{
-    const char *text = static_cast<const char *>(sql);
-    if (type == SQLITE_TRACE_STMT && !(text && text[0] == '-' && text[1] == '-')) ++*static_cast<qint64 *>(counter);
-    return 0;
-}
-#endif
 static SweepPlan sweepPlan(const QString &dbPath, const QString &store, const QStringList &perModel = {})
 {
     SweepPlan out;
-#if defined(JAH_HAVE_SQLITE3)
-    const QString name = QStringLiteral("sweep-plan-") + newGuid();
-    {
-        QSqlDatabase conn = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), name);
-        conn.setDatabaseName(dbPath);
-        conn.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
-        if (conn.open()) {
-            qint64 counter = 0;
-            sqlite3 *handle = *static_cast<sqlite3 *const *>(conn.driver()->handle().constData());
-            sqlite3_trace_v2(handle, SQLITE_TRACE_STMT, countStatement, &counter);
-            QElapsedTimer t;
-            t.start();
-            if (perModel.isEmpty()) {
-                out.needed = int(MeshBakeStore::modelBakesNeeded(conn, store).size());
-            } else {
-                out.needed = 0;
-                for (const QString &guid : perModel)
-                    if (MeshBakeStore::planFor(conn, store, MeshBakeStore::modelSourceFor(conn, store, guid), guid).bakePath.isEmpty())
-                        ++out.needed;
-            }
-            out.ms = t.elapsed();
-            out.statements = counter;
-            sqlite3_trace_v2(handle, 0, nullptr, nullptr);
-            conn.close();
-        }
+    // The sweep's own kind of connection (read-only, opened by the layer), its statements counted by the layer's
+    // trace on THAT connection (a trigger's `--` sub-statements excluded, as the app's count does).
+    db::Options options;
+    options.readOnly = true;
+    options.busyMs = db::kEditorBusyMs;
+    options.name = "SweepPlan";
+    db::Error error;
+    db::Connection conn = db::Connection::open(dbPath.toStdString(), options, &error);
+    if (!conn.isOpen()) return out;
+    qint64 counter = 0;
+    conn.trace([&counter](std::string_view sql) {
+        if (!(sql.size() >= 2 && sql[0] == '-' && sql[1] == '-')) ++counter;
+    });
+    QElapsedTimer t;
+    t.start();
+    if (perModel.isEmpty()) {
+        out.needed = int(MeshBakeStore::modelBakesNeeded(conn, store).size());
+    } else {
+        out.needed = 0;
+        for (const QString &guid : perModel)
+            if (MeshBakeStore::planFor(conn, store, MeshBakeStore::modelSourceFor(conn, store, guid), guid).bakePath.isEmpty())
+                ++out.needed;
     }
-    QSqlDatabase::removeDatabase(name);
-#else
-    Q_UNUSED(dbPath); Q_UNUSED(store); Q_UNUSED(perModel);
-#endif
+    out.ms = t.elapsed();
+    out.statements = counter;
+    conn.trace({});
     return out;
 }
 

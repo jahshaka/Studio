@@ -27,13 +27,12 @@ For more information see the LICENSE file
 // this store hands both of them the same deserialized model, so the double
 // build is gone as well as the double parse.
 //
-// THREADING. Resolution touches the database, and QSqlDatabase connections are
-// per-thread, so `planFor`/`load` are UI-thread calls. The prewarm WORKER only
+// THREADING. Resolution touches the database, and a db::Connection belongs to its
+// thread, so `planFor`/`load` run on the thread of the connection they are given. The prewarm WORKER only
 // ever receives an already-resolved iris::PrewarmItem (path + bake path +
 // fingerprint) and reads files. The scope cache is mutex-guarded regardless.
 
 #include <QSet>
-#include <QSqlDatabase>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -78,31 +77,25 @@ namespace MeshBakeStore
 ///
 /// UI-THREAD/DB-THREAD, like planFor: it reads the catalog on the caller's
 /// per-thread connection. Memoised per (path, guid) for the life of a scope.
-QString settingsHashFor(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+QString settingsHashFor(db::Connection &conn, const QString &root, const QString &sourcePath,
                         const QString &assetGuid = QString());
-QString settingsHashFor(const QString &sourcePath, const QString &assetGuid = QString());
-iris::ImportTransform transformFor(QSqlDatabase conn, const QString &root,
+iris::ImportTransform transformFor(db::Connection &conn, const QString &root,
                                    const QString &sourcePath,
-                                   const QString &assetGuid = QString());
-iris::ImportTransform transformFor(const QString &sourcePath,
                                    const QString &assetGuid = QString());
 
 /// Where the bake for a resolved model file should be, and the fingerprint it
 /// must carry. `bakePath` empty = this build has no bake for that content
 /// (never baked, or the file is not a store object).
-iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+iris::PrewarmItem planFor(db::Connection &conn, const QString &root, const QString &sourcePath,
                           const QString &assetGuid = QString());
-
-/// Same, on the default connection and the active store root.
-iris::PrewarmItem planFor(const QString &sourcePath, const QString &assetGuid = QString());
 
 /// Resolve + read. Null when there is no usable bake — every failure mode
 /// (absent, stale fingerprint, wrong version, truncated, corrupt) is a null
 /// return, and the caller shows the model missing (never a parse).
 ///
 /// Cached while a scope is open, so the scene reader and the session
-/// registration share ONE deserialized model.
-iris::BakedModelPtr load(const QString &sourcePath, const QString &assetGuid = QString());
+/// registration share ONE deserialized model. On `conn` (the caller's) and the active store root.
+iris::BakedModelPtr load(db::Connection &conn, const QString &sourcePath, const QString &assetGuid = QString());
 
 /// Refcounted cache window. An open brackets itself with these; outside a
 /// scope `load` still works, it just does not retain.
@@ -111,14 +104,14 @@ void endScope();
 void clear();
 
 /// True when this build can read the bake recorded for `sourcePath`.
-bool isFresh(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+bool isFresh(db::Connection &conn, const QString &root, const QString &sourcePath,
              const QString &assetGuid = QString());
 
 /// Build (or rebuild) the bake for ONE Object/Mesh asset and record it in the
 /// CAS under `guid` and its mesh member. Returns false with `errorOut` set on
 /// a real failure; a `dryRun` reports what WOULD be baked and writes nothing.
 /// `bakedOut` (optional) receives true when a bake was written/needed.
-bool bakeAsset(Database *db, QSqlDatabase conn, const QString &root, const QString &guid,
+bool bakeAsset(Database *db, db::Connection &conn, const QString &root, const QString &guid,
                bool dryRun, bool *neededOut, QString *errorOut);
 
 /// Every MODEL FILE in the store that has no fresh bake, as absolute object
@@ -153,13 +146,13 @@ struct BakeTarget
 /// non-null restricts the sweep to rows with those guids (an archive import
 /// bakes what IT brought, not the rest of the library). `allRows` non-null receives EVERY row over a
 /// present model file the query saw, before the by-content dedupe (fresh or not).
-QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
+QVector<BakeTarget> modelBakesNeeded(db::Connection &conn, const QString &root,
                                      const QSet<QString> *onlyGuids = nullptr,
                                      QVector<BakeTarget> *allRows = nullptr);
 
 // --- A bake as three steps, for a caller that owns the threading ------------
 //
-// The catalog is per-thread (QSqlDatabase), the parse is the expensive part and
+// The catalog is per-thread (db::Connection), the parse is the expensive part and
 // must never run on the UI thread, and the store write is a rename once the
 // bytes are staged. So: PREPARE on the database thread (resolve the settings
 // and the transform), RUN anywhere (parse, serialize, stage + flush into the
@@ -189,13 +182,13 @@ struct BakeResult
     AssetCas::Staged staged;              ///< already in the store and flushed, or empty
 };
 
-BakeJob prepareBake(QSqlDatabase conn, const QString &root, const BakeTarget &target);
+BakeJob prepareBake(db::Connection &conn, const QString &root, const BakeTarget &target);
 /// `cancel` (F5): when it reads true the bake stops at its next cancel point (MeshBake's, then
 /// before the write and the store's stage) and answers `error = "cancelled"`. Worker thread.
 BakeResult runBake(const BakeJob &job, const std::atomic<bool> *cancel = nullptr);
 /// Publishes `result` (or discards it on failure). False with `errorOut` set
 /// when the catalog write failed.
-bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QString *errorOut);
+bool commitBake(db::Connection &conn, const QString &root, BakeResult &result, QString *errorOut);
 
 // --- A STALE BAKE IS REBUILT FROM ITS OWN SOURCE (FORWARD-ONLY-1 D1) --------
 //
@@ -208,32 +201,34 @@ bool commitBake(QSqlDatabase conn, const QString &root, BakeResult &result, QStr
 /// The rebuild jobs for these model files: every (content, settings) variant
 /// named by a library row whose bake is stale or absent and whose source object
 /// is on disk. Database thread.
-QVector<BakeJob> staleJobsFor(QSqlDatabase conn, const QString &root, const QStringList &paths);
+QVector<BakeJob> staleJobsFor(db::Connection &conn, const QString &root, const QStringList &paths);
 
 /// Runs `jobs` on a worker while THIS (the database) thread pumps — user input
 /// excluded, the open's own prewarm shape — then commits them. `progress(i, n)`
 /// runs on this thread as each job starts. Returns how many failed.
-int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, int)> &progress);
+int rebuildPumped(db::Connection &conn, const QVector<BakeJob> &jobs, const std::function<void(int, int)> &progress);
 
 /// THE LIBRARY'S BACKGROUND SWEEP: every stale bake in the store, one at a
 /// time, on a lowest-priority thread, each committed as it lands. Started
 /// once a library is open; idempotent. stop joins (shutdown, a reset).
 /// `plan` (services/bootreport.h, the boot's result; never null) gets a TERMINAL state on every way out: Off on
 /// each early return here, then the worker's Planned with its count, Unread, Stopped - or Silent from its exit
-/// guard if it ever ends without one - so a reader joins it and is never left at "not yet".
-void startBackgroundRebuild(std::shared_ptr<SweepPlan> plan);
+/// guard if it ever ends without one - so a reader joins it and is never left at "not yet". The plan reads
+/// `library`'s file through a read-only connection of the worker's own (opened by the layer); each landing
+/// commits on `library`'s connection, and a landing queued after stopBackgroundRebuild commits nothing.
+void startBackgroundRebuild(Database &library, std::shared_ptr<SweepPlan> plan);
 void stopBackgroundRebuild();
 bool backgroundRebuildRunning();
 
 /// The paths of the above, for a caller that only wants to know how much work
 /// there is. Kept because the shape reads better at a call site that reports.
-QStringList modelSourcesNeedingBake(QSqlDatabase conn, const QString &root);
+QStringList modelSourcesNeedingBake(db::Connection &conn, const QString &root);
 
 /// Bake ONE model FILE (a resolved store object) and record it under every
 /// asset row that names that content. Parses the file — this is the expensive
 /// direction, for `assets.bakeAll` and Preferences' bake-all. A CLIP file (the
 /// content of a ModelTypes::Animation row) gets its clip bake.
-bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePath,
+bool bakeSource(db::Connection &conn, const QString &root, const QString &sourcePath,
                 QString *errorOut, const QString &assetGuid = QString());
 
 // --- THE CLIP BAKE (SHIPPED-BAKES-1) -----------------------------------------
@@ -249,28 +244,28 @@ bool bakeSource(QSqlDatabase conn, const QString &root, const QString &sourcePat
 
 /// True when any library row naming this content is an animation clip
 /// (ModelTypes::Animation). Database thread.
-bool isClipContent(QSqlDatabase conn, const QString &root, const QString &sourcePath);
+bool isClipContent(db::Connection &conn, const QString &root, const QString &sourcePath);
 
 /// Where the CURRENT clip bake of `sourcePath` is (the plan's cheap test: the
 /// object's size and the header's fingerprint), or empty.
-QString clipBakePath(QSqlDatabase conn, const QString &root, const QString &sourcePath);
+QString clipBakePath(db::Connection &conn, const QString &root, const QString &sourcePath);
 
 /// Read the current clip bake. Null when there is none — never a parse. UI /
 /// database thread (the lookup reads the catalog).
-iris::BakedClipPtr loadClip(const QString &sourcePath);
+iris::BakedClipPtr loadClip(db::Connection &conn, const QString &sourcePath);
 
 /// `loadClip`, and when there is no current bake, BUILD it from the store's own
 /// source on a worker while this thread pumps (user input excluded — the open's
 /// rebuild shape), commit it, and read it. For the verbs that read a clip a
 /// person just asked for (avatar.loadAnimation, avatar.loadClip, a thumbnail
 /// rebuild). Null when the source is gone or unreadable.
-iris::BakedClipPtr ensureClip(const QString &sourcePath);
+iris::BakedClipPtr ensureClip(db::Connection &conn, const QString &sourcePath);
 
 /// The MODEL counterpart of `ensureClip`'s rebuild, for a verb that reads one
 /// model a person just asked for (the avatar module's subject): when its bake
 /// is stale or absent, rebuild it from the store's source on a worker while
 /// this thread pumps. True when a current bake exists afterwards.
-bool ensureFresh(const QString &sourcePath, const QString &assetGuid = QString());
+bool ensureFresh(db::Connection &conn, const QString &sourcePath, const QString &assetGuid = QString());
 
 /// THE ROWS AN IMPORT JUST LANDED, BAKED — OFF THE UI THREAD (TC2-BUNDLE-NO-BAKE; async since
 /// STAGE-CLOSE-TRIAGE-1 F3): every model (and clip) row among `guids` whose bake is stale or absent
@@ -281,14 +276,14 @@ bool ensureFresh(const QString &sourcePath, const QString &assetGuid = QString()
 /// whose bake is in flight as missing). It used to pump this thread for the whole bake with user
 /// input held back — a large model froze the editor's input for seconds on a paste. Returns how many
 /// bakes were started (0: every row was already fresh). Database thread.
-int bakeLandedAsync(const QStringList &guids);
+int bakeLandedAsync(db::Connection &conn, const QStringList &guids);
 
 /// One model's rebuild, asynchronously — `ensureFresh` for a caller that can wait: when the bake of
 /// (`sourcePath`, `assetGuid`) is stale or absent, it is built on a worker and committed here, and
 /// `landed(fresh, dropped)` runs on `context`'s thread afterwards (never when `context` is gone);
 /// `dropped` names why nothing was committed (a reset, a shutdown, a moved store), else empty. Returns false
 /// when nothing was started (already fresh, or no source to build from: `landed` is NOT called).
-bool ensureFreshAsync(const QString &sourcePath, const QString &assetGuid, QObject *context,
+bool ensureFreshAsync(db::Connection &conn, const QString &sourcePath, const QString &assetGuid, QObject *context,
                       std::function<void(bool fresh, const QString &dropped)> landed);
 
 /// True while an async bake of this model file (bakeLandedAsync / ensureFreshAsync) has not
@@ -299,7 +294,7 @@ bool bakePending(const QString &sourcePath);
 /// the row records no model file of its own (a bundle's object tile names its model through its Mesh
 /// member). The scene's nodes resolve through SceneReader::resolveAssetPath instead — the reader's
 /// pending check and the landing share that one function.
-QString modelSourceFor(QSqlDatabase conn, const QString &root, const QString &guid);
+QString modelSourceFor(db::Connection &conn, const QString &root, const QString &guid);
 
 /// How many async bakes are in flight (the `assets.pendingBakes` verb). Database thread.
 int pendingBakeCount();
@@ -324,9 +319,9 @@ void addLandedListener(QObject *context, std::function<void(const QVector<Landed
 
 /// THE CURRENT BAKE of a library row's source, by the row's type: a clip row's
 /// clip bake, any other model row's model bake. Empty when there is none.
-/// Database thread. The shape AssetMetadata::setBakePathResolver takes — the app
-/// installs exactly this (src/app/main.cpp), and so does a suite with a library.
-QString currentBakePath(int assetType, const QString &sourcePath, const QString &assetGuid);
+/// Database thread. What AssetMetadata::setBakePathResolver's resolver calls with its library's
+/// connection (src/app/main.cpp), and so does a suite with a library.
+QString currentBakePath(db::Connection &conn, int assetType, const QString &sourcePath, const QString &assetGuid);
 
 }   // namespace MeshBakeStore
 

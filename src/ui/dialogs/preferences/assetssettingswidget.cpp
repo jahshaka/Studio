@@ -23,11 +23,11 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QShowEvent>
 #include <QStorageInfo>
-#include <QUuid>
 #include <QtConcurrent/QtConcurrentRun>
 #include <QVBoxLayout>
 
-#include <QSqlDatabase>
+#include "data/database/database.h"
+#include "data/db/connection.h"
 
 #include "data/settingsmanager.h"
 #include "services/assetgc.h"
@@ -118,7 +118,7 @@ void AssetsSettingsWidget::refresh()
     mFreeSpace->setText(QStringLiteral("…"));
     mStatus->setText(QStringLiteral("reading…"));
 
-    const QString dbPath = mDb ? QSqlDatabase::database().databaseName() : QString();
+    const QString dbPath = mDb ? mDb->filePath() : QString();
     const int generation = ++mRefreshGeneration;
     auto *watcher = new QFutureWatcher<QVariantMap>(this);
     connect(watcher, &QFutureWatcher<QVariantMap>::finished, this, [this, watcher, generation]() {
@@ -127,19 +127,19 @@ void AssetsSettingsWidget::refresh()
     });
     watcher->setFuture(QtConcurrent::run([root, dbPath]() {
         QVariantMap st;
-        const QString name = QStringLiteral("StoreStatus-%1")
-                                 .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
-        {
-            QSqlDatabase conn = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), name);
+        {   // THE WORKER's OWN READ-ONLY CONNECTION, OPENED BY THE LAYER (NOQT-DATABASE-1 stage 2: statusOn reads
+            // a db::Connection); none for an empty path (statusOn then counts nothing missing).
+            db::Connection conn;
             if (!dbPath.isEmpty()) {
-                conn.setDatabaseName(dbPath);
-                conn.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
-                conn.open();
+                db::Options options;
+                options.readOnly = true;
+                options.busyMs = db::kEditorBusyMs;
+                options.name = "StoreStatus";
+                db::Error error;
+                conn = db::Connection::open(dbPath.toStdString(), options, &error);
             }
             st = AssetStoreService::statusOn(conn, root);
-            if (conn.isOpen()) conn.close();
         }
-        QSqlDatabase::removeDatabase(name);
         if (st.value(QStringLiteral("online")).toBool()) {
             const QStorageInfo storage(root);
             if (storage.isValid()) st.insert(QStringLiteral("bytesAvailable"), storage.bytesAvailable());
@@ -223,8 +223,9 @@ void AssetsSettingsWidget::cleanUpStorage()
     // until the owner says yes to these exact numbers.
     const QString root = AssetStorePaths::root();
 
+    if (!mDb) return;   // no library: nothing to collect
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const auto preview = AssetGc::sweep(QSqlDatabase::database(), root, /*dryRun*/ true);
+    const auto preview = AssetGc::sweep(mDb->connection(), root, /*dryRun*/ true);
     QApplication::restoreOverrideCursor();
 
     if (!preview.ok) {
@@ -262,7 +263,7 @@ void AssetsSettingsWidget::cleanUpStorage()
     }
 
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const auto done = AssetGc::sweep(QSqlDatabase::database(), root, /*dryRun*/ false);
+    const auto done = AssetGc::sweep(mDb->connection(), root, /*dryRun*/ false);
     QApplication::restoreOverrideCursor();
 
     if (!done.failures.isEmpty()) {
@@ -282,7 +283,8 @@ void AssetsSettingsWidget::bakeAllModels()
 {
     // Same verb, same implementation as `assets.bakeAll` (API-first): a dry
     // run to say what would happen, then the work on confirmation.
-    QSqlDatabase conn = QSqlDatabase::database();
+    if (!mDb) return;
+    db::Connection &conn = mDb->connection();
     const QString root = AssetStorePaths::root();
     const QStringList needing = MeshBakeStore::modelSourcesNeedingBake(conn, root);
     if (needing.isEmpty()) {

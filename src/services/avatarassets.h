@@ -97,12 +97,12 @@ public:
                                  QString *errorOut);
 
     /// The library's current source oid for `guid` (no project involved).
-    static QString libraryVersion(const QString &guid);
+    static QString libraryVersion(Database *db, const QString &guid);
     /// The open project's pinned oid for `guid`, empty when it pins nothing.
-    static QString projectVersion(const QString &guid, Project *project);
+    static QString projectVersion(Database *db, const QString &guid, Project *project);
     /// True when the project's version differs from the library's current one
     /// — the module's `[edited]` marker.
-    static bool isEdited(const QString &guid, Project *project);
+    static bool isEdited(Database *db, const QString &guid, Project *project);
 
     /// Is this row an avatar? (A guid that names something else must refuse in
     /// the verb, not be treated as an empty avatar.)

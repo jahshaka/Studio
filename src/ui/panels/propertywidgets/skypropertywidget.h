@@ -93,7 +93,8 @@ public:
     void wireViewportEvents(IEditorViewport *viewport);
     /// Selection + undo. Nullable: without it the rows still write, they just
     /// record no step (headless hosts, the panel suites).
-    void setServices(StudioServices *s) { this->services = s; }
+    /// Also hands it to the pickers: their drops resolve through it (ruling 15).
+    void setServices(StudioServices *s);
 
     void hideEvent(QHideEvent *event) override;
 

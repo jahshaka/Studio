@@ -14,10 +14,7 @@ For more information see the LICENSE file
 
 #include <QHash>
 #include <QSet>
-#include <QSqlDatabase>
-#include <QSqlDriver>
-#include <QSqlError>
-#include <QSqlQuery>
+#include <QSqlDatabase>   // stage 3's side connections (openPreviewConnection, writePreview) and the borrowed default
 #include <QJsonArray>
 #include <QCryptographicHash>
 
@@ -36,7 +33,7 @@ For more information see the LICENSE file
 
 class QImage;
 
-// RAII transaction over one QSqlDatabase connection (ASSET_PIPELINE_SPEC
+// RAII transaction over one db::Connection (ASSET_PIPELINE_SPEC
 // phase 0): begin on construction, roll back on destruction unless commit()
 // was called — so every early-return path inside a multi-statement DB
 // operation unwinds cleanly instead of leaving half the rows behind (and a
@@ -46,19 +43,10 @@ class QImage;
 class DbTransaction
 {
 public:
-    // THE SIGNATURE STAYS QSqlDatabase until its callers' connections move (NOQT-DATABASE-1 stage 2,
-    // with AssetCas); the BODY is the std-only layer's: a db::Transaction on the db::Connection
-    // borrowed from this connection's handle, which shares the handle's one state with every other
-    // borrower (Database::connection() included) - so nesting, the refusal and the lock's holder
-    // are the connection's, whoever asks.
-    explicit DbTransaction(QSqlDatabase database)
+    // A db::Transaction on the caller's connection (NOQT-DATABASE-1 stage 2): nesting, the refusal and
+    // the lock's holder are the connection's, whoever asks.
+    explicit DbTransaction(db::Connection &connection) : conn(connection)
     {
-        QString why;
-        db::Error borrowed;
-        conn = db::Connection::borrow(
-            databasereads::systemHandle(database.isOpen() && database.driver() ? database.driver()->handle() : QVariant(),
-                                        &why),
-            database.connectionName().toStdString(), &borrowed);
         // THE BATCH STANDS DOWN FOR A REAL OWNER (CLOSE-2 item 1).
         //
         // Database::beginBatch keeps a transaction open for a whole gesture so
@@ -97,9 +85,8 @@ public:
         beginError = begin.code == 517   // SQLITE_BUSY_SNAPSHOT
             ? QStringLiteral("a read left active on this connection holds a stale snapshot (%1)").arg(dbqt::describe(begin))
             : dbqt::describe(begin);
-        if (borrowed) beginError += QStringLiteral(" [%1]").arg(why);
         qWarning("DbTransaction: the transaction on '%s' could NOT BEGIN: %s - every write on it is REFUSED "
-                 "until this scope ends, and its commit() answers false", qUtf8Printable(database.connectionName()),
+                 "until this scope ends, and its commit() answers false", conn.name().c_str(),
                  qUtf8Printable(beginError));
     }
 
@@ -188,7 +175,7 @@ private:
         --sActiveTotal;
     }
 
-    db::Connection conn;                  ///< borrowed: the handle's one state
+    db::Connection &conn;                 ///< the caller's: it outlives this guard
     std::optional<db::Transaction> tx;    ///< the unit; reset at its commit or rollback
     bool outermost = false;
     bool counted = false;                 ///< this outermost guard is in sActiveTotal
@@ -931,11 +918,12 @@ public:
     /// is unit-testable without a database file (deep audit 2026-09, area 6).
     static bool jafVersionAccepted(const QString &version);
 
-    QSqlDatabase getDb() { return db; }
     /// The library's connection on the std-only layer (src/data/db/, NOQT-DATABASE-1): the handle
     /// under Qt's default connection, BORROWED until the Database opens its own (ruling 3). No
     /// handle before initializeDatabase or after closeDatabase: a statement on it answers a named error.
+    /// Its name is kEditorConnection (MeshBakeStore's shared settings cache is filled by its lookups only).
     db::Connection &connection() { return *mConnection; }
+    static constexpr const char *kEditorConnection = "editor";
 
 private:
     bool checkIfVersionSupported(const QString& pathToDb, const QString& table_name);

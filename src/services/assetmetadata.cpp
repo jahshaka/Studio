@@ -35,7 +35,6 @@ For more information see the LICENSE file
 #include "services/rigsignature.h"
 #include "irisgl/document/assets/avatardefinition.h"
 #include "services/assetstorepaths.h"
-#include <QSqlDatabase>
 #include "data/project.h"
 #include "services/videoutils.h"
 
@@ -182,11 +181,11 @@ void AssetMetadata::setBakePathResolver(BakePathResolver resolver)
     sBakePathResolver = std::move(resolver);
 }
 
-QString AssetMetadata::bakePathFor(int assetType, const QString &sourcePath,
+QString AssetMetadata::bakePathFor(db::Connection &conn, int assetType, const QString &sourcePath,
                                    const QString &assetGuid)
 {
     if (!sBakePathResolver || sourcePath.isEmpty()) return QString();
-    return sBakePathResolver(assetType, sourcePath, assetGuid);
+    return sBakePathResolver(conn, assetType, sourcePath, assetGuid);
 }
 
 QJsonObject AssetMetadata::forModelBake(const QString &bakePath, const QString &sourceFile)
@@ -370,9 +369,9 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
 
     const QString root = storeRoot.isEmpty() ? storeRootPath() : storeRoot;
     // The resolved source object (guid-first — the store is content-addressed).
-    const QString source = AssetCas::resolveSource(QSqlDatabase::database(), root, guid);
+    const QString source = AssetCas::resolveSource(db->connection(), root, guid);
     QJsonObject meta = computeForSource(record.type, source,
-                                        bakePathFor(record.type, source, guid), record.name);
+                                        bakePathFor(db->connection(), record.type, source, guid), record.name);
     if (meta.isEmpty()) return meta;   // nothing to describe — don't persist a stub
     // A video block computed off the GUI thread is degraded (no QMediaPlayer
     // there) — hand it back for display but let a GUI-thread call enrich later.

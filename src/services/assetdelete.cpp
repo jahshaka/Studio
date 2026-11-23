@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
-#include <QSqlDatabase>
 
 #include "data/database/database.h"
 #include "services/assetstorepaths.h"
@@ -117,7 +116,7 @@ Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
             if (heldFromOutside) continue;
             dying.append(member);
         }
-        DbTransaction tx(QSqlDatabase::database());
+        DbTransaction tx(db->connection());
         for (const QString &g : dying) {
             ok = db->deleteAsset(g, force) && ok;
             ok = db->deleteDependency(g) && ok;
@@ -202,7 +201,7 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
     // companion is the project's own row now, reaped below with its last pin) — so
     // the worst case of a wrong guess is a pin the user re-adds with one drag.
     if (static_cast<ModelTypes>(record.type) == ModelTypes::Texture) {
-        for (const QString &companion : ImageMaterial::companionMaterials(guid)) {
+        for (const QString &companion : ImageMaterial::companionMaterials(db, guid)) {
             if (toUnpin.contains(companion)) continue;
             if (!db->isAssetPinnedBy(projectGuid, companion)) continue;
             if (!db->hasMultipleDependers(companion).isEmpty()) continue;  // something rides it

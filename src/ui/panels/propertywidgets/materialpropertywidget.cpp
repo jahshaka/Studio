@@ -291,6 +291,7 @@ void MaterialPropertyWidget::setWidgetProperties()
     if (!details.empty()) {
         auto *section = this->addSection(tr("Detail Layers"));
         detailPropWidget = section->addPropertyWidget();
+        detailPropWidget->services = services;
         detailPropWidget->setListener(this);
         detailPropWidget->setProperties(details);
         // The one thing a user cannot see from the rows: detail tiling is the
@@ -466,4 +467,11 @@ iris::Value MaterialPropertyWidget::undoValueOf(iris::Property *prop) const
     if (prop->type == iris::PropertyType::Texture && material)
         return material->textureRefOf(prop->name);
     return prop->getValue();
+}
+
+void MaterialPropertyWidget::setServices(StudioServices *s)
+{
+    services = s;
+    if (materialPropWidget) materialPropWidget->services = s;
+    if (detailPropWidget) detailPropWidget->services = s;
 }

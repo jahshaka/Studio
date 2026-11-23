@@ -34,9 +34,9 @@ cd "$ROOT" || { echo "source.no_raw_transaction: no such root $ROOT"; exit 1; }
 failures=0
 
 # The allowed raw calls, each on a connection that TU opened itself:
-#   src/data/database/database.cpp  exportConnection / dbe  (bundle writers)
-#   src/services/assetmigration.cpp conn  (a ScopedConnection over a recovery DB)
-ALLOWED='^src/data/database/database\.cpp:[0-9]+:.*(exportConnection|dbe)\.transaction\(\)|^src/services/assetmigration\.cpp:[0-9]+:.*conn\.transaction\(\)'
+#   src/data/database/database.cpp  exportConnection / dbe  (bundle writers; stage 3 moves them onto the layer)
+#   (src/services/assetmigration.cpp's rebuild is a db::Transaction since NOQT-DATABASE-1 stage 2: no entry)
+ALLOWED='^src/data/database/database\.cpp:[0-9]+:.*(exportConnection|dbe)\.transaction\(\)'
 
 # Comments are not calls: a line whose first non-space characters are // or *
 # is prose about the rule, which several of these files carry.

@@ -92,7 +92,6 @@ For more information see the LICENSE file
 #include "services/assetstore.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
-#include <QSqlDatabase>
 #include "services/projectservice.h"
 #include "ui/controls/librarymodel.h"
 #include "ui/controls/tilecache.h"
@@ -1278,7 +1277,7 @@ void AssetView::openTile(const QString &guid)
 
 	// The row's primary file, resolved through the CAS by guid.
 	const QString storeFile = AssetCas::resolveSource(
-	    QSqlDatabase::database(), AssetStorePaths::root(), guid);
+	    db->connection(), AssetStorePaths::root(), guid);
 
 	switch (page) {
 	case PreviewPage::Viewer3D: {
@@ -2185,7 +2184,7 @@ void AssetView::backfillMetadata(const QString &guid, int assetType)
 	// per-thread); the worker only reads the file. This used to hand the worker
 	// the retired per-guid folder <root>/<guid>/, which no CAS asset has — so
 	// the async half described nothing (FORWARD-ONLY-1).
-	const QString source = AssetCas::resolveSource(QSqlDatabase::database(),
+	const QString source = AssetCas::resolveSource(db->connection(),
 	                                               AssetStorePaths::root(), guid);
 
 	// Video is the one kind whose rich fields need the GUI thread
@@ -2221,7 +2220,7 @@ void AssetView::backfillMetadata(const QString &guid, int assetType)
 	// The row's BAKE and name are resolved HERE (catalog, this thread); the
 	// worker only reads files — a bake, an image header, a wav header. No
 	// model or clip is ever parsed for its description (SHIPPED-BAKES-1).
-	const QString bakePath = AssetMetadata::bakePathFor(assetType, source, guid);
+	const QString bakePath = AssetMetadata::bakePathFor(db->connection(), assetType, source, guid);
 	const QString rowName = db->fetchAsset(guid).name;
 	watcher->setFuture(QtConcurrent::run([assetType, source, bakePath, rowName]() {
 		return AssetMetadata::computeForSource(assetType, source, bakePath, rowName);
@@ -2687,7 +2686,7 @@ void AssetView::rebuildTileThumbnail(const QString &guid)
 	if (record.guid.isEmpty()) return;
 
 	const QString sourceFile = AssetCas::resolveSource(
-	    QSqlDatabase::database(), AssetStorePaths::root(), guid);
+	    db->connection(), AssetStorePaths::root(), guid);
 	const ModelTypes type = static_cast<ModelTypes>(record.type);
 
 	// The preview pane follows the gesture: the user sees what was rebuilt.
