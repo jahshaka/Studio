@@ -6,8 +6,9 @@
 //      the control: libIrisDocument and libIrisCore are among them;
 //  (b) A DOCUMENT IS BUILT AND EDITED: Scene::create; a MeshNode under the root and a LightNode under it; a light property
 //      set through its row and read back; a material set on the mesh; a World row pinned as an override;
-//  (c) THE ONE NODE-ID COUNTER (IrisCore's, core/ids.h): a node's id drawn by the library, then reserveNodeId() called by
-//      this executable, then a node's id again: consecutive (n1, n1 + 1, n1 + 2) - one counter in the process;
+//  (c) THE ONE COUNTER PER KIND OF ID (IrisCore's, core/ids.h): a node's id drawn by the library, then reserveNodeId()
+//      called by this executable, then a node's id again: consecutive (n1, n1 + 1, n1 + 2) - one counter in the process;
+//      and two draws of each of the engine's mesh, material and texture ids consecutive, interleaved;
 //  (d) THE DOCUMENT's VALUE-SHAPED PARTS through IrisCore's JSON: the input map, an avatar definition and the World
 //      overrides, each written by iris::json::write, parsed back and read back equal.
 #include "irisgl/core/json.h"
@@ -101,6 +102,14 @@ int main()
     CHECK(n1 > 0 && b == n1 + 1 && n2 == b + 1,
           "the library's id %lld, this program's %lld, the library's %lld: consecutive (one counter)",
           (long long)n1, (long long)b, (long long)n2);
+    // the engine's three resource counters (Ids.h) are IrisCore's too: two draws of each are consecutive, and drawing one
+    // kind moves no other (the document draws none of them: the engine and the mirror do)
+    const unsigned m1 = jahshaka::engine::reserveMeshId(), t1 = jahshaka::engine::reserveTextureId();
+    const unsigned a1 = jahshaka::engine::reserveMaterialId(), a2 = jahshaka::engine::reserveMaterialId();
+    const unsigned m2 = jahshaka::engine::reserveMeshId(), t2 = jahshaka::engine::reserveTextureId();
+    CHECK(m1 > 0 && t1 > 0 && a1 > 0 && m2 == m1 + 1 && a2 == a1 + 1 && t2 == t1 + 1,
+          "mesh ids %u, %u; material ids %u, %u; texture ids %u, %u: each kind consecutive, one counter each", m1, m2, a1,
+          a2, t1, t2);
 
     std::printf("== (d) the Value-shaped parts through iris::json ==\n");
     const iris::InputMap input = iris::InputMap::defaults();
