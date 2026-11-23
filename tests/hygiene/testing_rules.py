@@ -781,8 +781,9 @@ def target_sources(build):
 
 def _binary_of(row, cmd):
     """The executable a row runs: the last argument that is a path to a file named like a target (no `=`, not the row's
-    own home, which fresh_home.sh names after the row)."""
-    c = [a for a in cmd if "=" not in a and "/" in a and os.path.basename(a) != row and not a.endswith((".sh", ".py"))]
+    own home, which fresh_home.sh names after the row, not a script it hands a host: .sh, .py, and the .js an engine
+    script row hands jahengine - SCRIPT-IN-ENGINE-1 2f, the first script twin, atom.component_asan)."""
+    c = [a for a in cmd if "=" not in a and "/" in a and os.path.basename(a) != row and not a.endswith((".sh", ".py", ".js"))]
     return os.path.basename(c[-1]) if c else None
 
 
@@ -1039,6 +1040,16 @@ def the_rules_catch():
           and len(unread) == 1 and "sources unread" in unread[0],
           "R17 flags a twin whose _asan binary compiles other sources than its plain row's binary, or whose sources are "
           "unread, never the same file set (%s %s)" % (other, unread))
+    # AN ENGINE SCRIPT's TWIN (SCRIPT-IN-ENGINE-1 2f): the binary is jahengine / jahengine_asan, never the .js both hand it
+    J = lambda name, exe, labels, env=(): dict(A(name, exe, labels, list(env)),
+                                              command=["/b/" + exe, "--script", "/s/tests/l/l.js", "--name", name])
+    js_twin = r17_bad([J("l.j", "jahengine", ["engine"]), J("l.j_asan", "jahengine_asan", ["engine", "long"], [asan])],
+                      {"jahengine": {"/s/main.cpp"}, "jahengine_asan": {"/s/main.cpp"}})
+    js_other = r17_bad([J("l.j", "jahengine", ["engine"]), J("l.j_asan", "jahengine_asan", ["engine", "long"], [asan])],
+                       {"jahengine": {"/s/main.cpp"}, "jahengine_asan": {"/s/main.cpp", "/s/extra_law.cpp"}})
+    check(not js_twin and len(js_other) == 1 and "jahengine_asan is built from other sources than jahengine" in js_other[0],
+          "R17 reads an engine script row's binary as its host (jahengine / jahengine_asan), never the .js both hand it, and "
+          "still flags the host twin built from other sources (%s %s)" % (js_twin, js_other))
     check(not guarded and len(other_bin) == 1 and "another argv" in other_bin[0],
           "R17 reads a twin run through the on-demand guard (on_demand.sh <build> <target>) as the plain row's twin, and "
           "still flags a guarded twin running another binary (%s %s)" % (guarded, other_bin))
