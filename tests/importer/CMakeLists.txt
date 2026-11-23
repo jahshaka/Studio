@@ -30,7 +30,7 @@ add_executable(test_importer_meshformats test_importer_meshformats.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
     # The import record (SESSION_LOG_SPEC §5) is emitted from the one pipeline
-    # entry point; JahLog is a leaf service (Qt + iris::Logger, nothing else).
+    # entry point; JahLog is a leaf service (Qt + IrisCore's log, nothing else).
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp

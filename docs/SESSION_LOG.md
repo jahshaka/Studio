@@ -47,7 +47,7 @@ new abort path would be a stability regression, not a logging feature.
 still has them. `Log` and below are file-only and buffered.
 
 Categories in v1: `app scene engine ogre render perf shader assets db script ui mirror
-physics media qt legacy`. `log.categories()` lists them with their levels and how many
+physics media qt legacy iris`. `log.categories()` lists them with their levels and how many
 records each has actually emitted.
 
 Verbosity comes from four layers, in this order — **compiled default → `jahsettings.ini` →

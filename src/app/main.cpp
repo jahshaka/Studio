@@ -340,10 +340,10 @@ int main(int argc, char *argv[])
     // the slow-frame warning, the watchdog's stall line, SceneMirror's skeleton
     // diagnostics. It CHAINS to the previous handler, so stderr is unchanged.
     JahLog::installQtMessageHandler();
-    // And this is fork F5-A: IrisGL's own irisLog() lines (the document and the
-    // importer: Studio's write JahLog directly) reach the session log's `legacy`
-    // category, until IrisCore's own log replaces them (NOQT-CORE-1 stage 2).
-    JahLog::absorbIrisLogger();
+    // And this is fork F5-A: IrisCore's log (the document's and the importer's
+    // lines; Studio's write JahLog directly) reaches the session log's `iris`
+    // category.
+    JahLog::absorbIrisLog();
 
     // THE BAKE SEAM (SHIPPED-BAKES-1, services/assetmetadata.h): a library
     // row's metadata backfill describes its current BAKE — a model's carries

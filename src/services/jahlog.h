@@ -137,7 +137,8 @@ extern Category mirror;
 extern Category physics;
 extern Category media;
 extern Category qt;         ///< the Qt message-handler funnel
-extern Category legacy;     ///< iris::Logger, absorbed at the sink (fork F5-A)
+extern Category legacy;     ///< Studio's lines not yet in a category of their own
+extern Category iris;       ///< the document's and the importer's lines: IrisCore's log, through the forwarder
 
 /// The category with this name, creating it if it does not exist. Never null.
 /// Dynamically created categories are heap-allocated and intentionally leaked:
@@ -279,9 +280,9 @@ void removeQtMessageHandler();
 
 /// While one of these is alive on this thread, the Qt funnel forwards to the
 /// previous handler (stderr) but writes NOTHING to the file. Exists for exactly
-/// one caller: the iris::Logger forwarder, which has already written the record
-/// under `legacy` and only calls qInfo/qWarning/qCritical to keep stderr the
-/// same as it always was. Without it every legacy line would appear twice.
+/// one caller: the forwarder of IrisCore's log, which has already written the
+/// record under `iris` and only calls qInfo/qWarning/qCritical to keep stderr the
+/// same as it always was. Without it every such line would appear twice.
 class ScopedQtFunnelBypass
 {
 public:
@@ -289,11 +290,13 @@ public:
     ~ScopedQtFunnelBypass();
 };
 
-/// Installs the iris::Logger → `legacy` forwarder (fork F5-A: absorb at the
-/// SINK, so IrisGL's own irisLog lines gain timestamps, categories, routing and
-/// rotation; Studio's lines write `legacy` directly). Studio-side because irisgl must not
-/// depend on Studio: this is the only place the two meet.
-void absorbIrisLogger();
+/// Installs the forwarder of IrisCore's log (irisgl/core/log.h) into the
+/// `iris` category (fork F5-A: absorb at the SINK, so the document's and the
+/// importer's lines gain timestamps, categories, routing and rotation). Its
+/// severities: Info -> Log, Warning -> Warning, Error -> Error. Studio-side
+/// because IrisCore must not depend on Studio: this is the only place the two
+/// meet. The sink is removed before JahLog's own state dies (jahlog.cpp).
+void absorbIrisLog();
 
 /// The header block (spec §4). `rows` are label/value pairs; groups separate.
 void writeHeaderBlock(const QString &title, const QList<QPair<QString, QString>> &rows);

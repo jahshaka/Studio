@@ -9,10 +9,11 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "app/qtstd.h"
 #include "services/apppaths.h"
 #include "services/jahlog.h"
 
-#include "irisgl/core/logger.h"
+#include "irisgl/core/log.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -31,6 +32,7 @@ For more information see the LICENSE file
 
 #include <array>
 #include <cstdio>
+#include <string_view>
 
 namespace JahLog {
 
@@ -82,6 +84,7 @@ Category physics("physics");
 Category media("media");
 Category qt("qt");
 Category legacy("legacy");
+Category iris("iris");
 
 Category *category(const QString &name)
 {
@@ -178,6 +181,7 @@ QVariantMap defaultLevels(Profile p)
     put("media",   dev ? Level::Log : Level::Warning);
     put("qt",      dev ? Level::Log : Level::Warning);
     put("legacy",  dev ? Level::Log : Level::Warning);
+    put("iris",    dev ? Level::Log : Level::Warning);
     return m;
 }
 
@@ -251,7 +255,7 @@ namespace {
 
 /// Re-entrancy / duplication guard, thread-local because it is per call stack.
 ///
-/// TWO jobs. (1) The iris::Logger forwarder raises it around its qInfo/qWarning
+/// TWO jobs. (1) IrisCore's log forwarder raises it around its qInfo/qWarning
 /// so the funnel keeps writing to stderr but does NOT put the same line in the
 /// file a second time. (2) Our own locked sections raise it so that a Qt
 /// warning emitted from inside them (QFile can complain) chains to stderr
@@ -413,7 +417,7 @@ quint64 frameCounter() { return sink().frame.load(std::memory_order_relaxed); }
 namespace {
 
 /// The one emission path. `mirrorStderr` is false for exactly one caller — the
-/// iris::Logger forwarder, which reaches stderr through the qInfo/qWarning it
+/// forwarder of IrisCore's log, which reaches stderr through the qInfo/qWarning it
 /// has always emitted and must not print the line twice.
 void writeImpl(const Category &cat, Level level, const QString &message, bool mirrorStderr)
 {
@@ -683,8 +687,6 @@ void stop(const QString &reason)
               .arg(QDateTime::currentDateTime().toString(Qt::ISODateWithMs),
                    reason.isEmpty() ? QString() : QStringLiteral(" (") + reason + QLatin1Char(')')));
 
-    iris::Logger::getSingleton()->flush();
-
     QMutexLocker lock(&s.mutex);
     flushLocked();
     s.fd.store(-1, std::memory_order_relaxed);
@@ -703,11 +705,6 @@ void flush()
         QMutexLocker lock(&s.mutex);
         flushLocked();
     }
-    // The legacy file rides the same schedule now that its per-line flush is
-    // gone. Deliberately OUTSIDE our lock: iris::Logger's write path calls our
-    // sink (with its own lock released first), so nesting the two the other way
-    // round here is the only way to build a cycle.
-    iris::Logger::getSingleton()->flush();
 }
 
 int rawFd() { return sink().fd.load(std::memory_order_relaxed); }
@@ -1028,30 +1025,44 @@ ScopedQtFunnelBypass::ScopedQtFunnelBypass() { ++tlBypass; }
 ScopedQtFunnelBypass::~ScopedQtFunnelBypass() { --tlBypass; }
 
 // ---------------------------------------------------------------------------
-// iris::Logger absorption (fork F5-A)
+// IrisCore's log, absorbed at its sink (fork F5-A)
 // ---------------------------------------------------------------------------
 
-void absorbIrisLogger()
+void absorbIrisLog()
 {
     // The dependency direction is the reason this lives here and not in
-    // irisgl/core/logger.cpp: IrisGL is the document library and must never
-    // link Studio. iris::Logger grew a sink hook; this is its one installer.
-    iris::Logger::setSink([](int severity, const QString &text) {
-        Level l = Level::Log;
-        if (severity == 1) l = Level::Warning;
-        else if (severity >= 2) l = Level::Error;
+    // irisgl/core/log.cpp: IrisCore is below the document library and must never
+    // link Studio. IrisCore's log has one sink hook; this is its one installer.
+    //
+    // THE LOCK ORDER (core/log.h): IrisCore calls this sink UNDER its log's
+    // mutex, so the order is the log's mutex, then ours (writeImpl). Nothing
+    // here calls iris::log: a sink that logs would deadlock on that mutex.
+    iris::log::setSink([](iris::log::Severity severity, std::string_view text) {
+        const Level l = severity == iris::log::Severity::Error     ? Level::Error
+                        : severity == iris::log::Severity::Warning ? Level::Warning
+                                                                   : Level::Log;
+        const QString message = qtstd::toQString(text);
         // No stderr mirror here: the q* call below is the stderr copy, and it
-        // is the one that has always been there.
-        writeImpl(legacy, l, text, /*mirrorStderr*/ false);
-        // Keep the stderr duplication iris::Logger has always done, but stop
-        // the funnel writing the SAME line into the file a second time.
+        // is the one irisgl's lines have always had.
+        writeImpl(iris, l, message, /*mirrorStderr*/ false);
+        // Keep that stderr copy, but stop the funnel writing the SAME line
+        // into the file a second time.
         ScopedQtFunnelBypass bypass;
         switch (severity) {
-        case 0:  qInfo().noquote() << text; break;
-        case 1:  qWarning().noquote() << text; break;
-        default: qCritical().noquote() << text; break;
+        case iris::log::Severity::Info:    qInfo().noquote() << message; break;
+        case iris::log::Severity::Warning: qWarning().noquote() << message; break;
+        case iris::log::Severity::Error:   qCritical().noquote() << message; break;
         }
     });
+    // THE SINK GOES BEFORE OUR STATE DOES (the lead's ruling, 2026-11-23): IrisCore's
+    // log state is never destroyed, ours dies at static destruction - the sink
+    // (SinkState, a function-local static) and the Category globals. sink() is
+    // constructed FIRST, so this guard, constructed after it, is destroyed BEFORE
+    // it and after nothing of ours it reads: on every exit path, a record logged
+    // from then on goes to IrisCore's stderr default, never into a dead JahLog.
+    (void)sink();
+    struct RemoveSinkAtExit { ~RemoveSinkAtExit() { iris::log::setSink({}); } };
+    static RemoveSinkAtExit removeSinkAtExit;
 }
 
 }   // namespace JahLog

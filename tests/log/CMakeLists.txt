@@ -7,9 +7,9 @@
 # scenarios that need a real session file, because JahLog::start() is
 # once-per-process by design.
 #
-# IrisGL is linked for one symbol: iris::Logger, which JahLog forwards into
-# (fork F5-A, absorb at the sink). Nothing else in the document library is
-# touched, and no engine boots.
+# IrisGL is linked for one library: IrisCore's log (irisgl/core/log.h), which JahLog
+# forwards into (fork F5-A, absorb at the sink). Nothing else in the document
+# library is touched, and no engine boots.
 find_package(Qt6 REQUIRED COMPONENTS Core Gui)
 # No display at all: the whole point of the services.core shape.
 
