@@ -108,11 +108,11 @@ function readOrder(recs, tags) {
 }
 
 // the monitor over n frames, the first frame's records dropped (a record arrives late: pop across frames)
-function monitored(n, last) {
+function monitored(n) {
     engine.monitor.set("review");
     engine.frames(1);
     engine.monitor.popRecords();
-    if (last) last(n); else engine.frames(n);
+    engine.frames(n);
     engine.monitor.set("off");
     return engine.monitor.popRecords();
 }
@@ -163,12 +163,7 @@ function main() {
     engine.frames(3);
     engine.scene.destroy(b);
     engine.frames(12);
-    const o2 = readOrder(monitored(3, n => {
-        engine.frames(n - 1);                                                           // MEASURING ARM - reverted
-        const shot = engine.view.readPixels({view: va});                               // MEASURING ARM - reverted
-        console.log("ARM picture fnv1a64 " + engine.picture.hash(shot.picture));     // MEASURING ARM - reverted
-        engine.picture.release(shot.picture);                                         // MEASURING ARM - reverted
-    }), ["atomcompA"]);
+    const o2 = readOrder(monitored(3), ["atomcompA"]);
     const sa2 = engine.scene.atomDrawStatus(a);
     console.log("   after B went: " + o2.frames + " frames, " + o2.good + " in order, " + o2.casters + " caster passes; A's caster maps " +
                 sa2.casterMaps + " (instances " + sa2.casterInstances + ")");

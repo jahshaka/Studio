@@ -86,13 +86,6 @@ static Verdict measure(Engine *engine, View *view, Scene *s)
     // runs the GATHER (every view does), over the voxel store, paused (budget 0) - asserted on the first frame after it
     enginetest::declareRoutes(view, s, enginetest::Routes().gather().store().paused(), "gi.probe_court's view");
     enginetest::frames(engine, 10);
-    {   // MEASURING ARM (SCRIPT-IN-ENGINE-1 2f, the equality proof): the 10th frame's picture FNV-1a 64 - reverted by a new commit
-        Image img;
-        view->readPixels(img);
-        unsigned long long h = 14695981039346656037ull;
-        for (unsigned char b : img.rgba) { h ^= b; h *= 1099511628211ull; }
-        std::printf("ARM picture fnv1a64 %016llx (%ux%u)\n", h, img.width, img.height);
-    }
     const GiStatus st = s->published().gi;
     Verdict v;
     v.probes = st.probeCount;

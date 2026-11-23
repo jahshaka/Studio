@@ -66,7 +66,6 @@ function pointRangeCase() {
         engine.view.lookAt(view, {eye: [0, 0.6, 0.001], target: [0, 0, 0]});
         engine.frames(2);
         const r = engine.view.readPixels({view, content: "radiance"});
-        console.log("ARM radiance fnv1a64 " + engine.radiance.hash(r.radiance));   // MEASURING ARM - reverted
         const m = engine.radiance.mean(r.radiance, {x0: C, y0: C, x1: C + 1, y1: C + 1});
         engine.radiance.release(r.radiance);
         return f(f(f(m[0] + m[1]) + m[2]) / 3);
@@ -129,7 +128,6 @@ function spotConeCase() {
         engine.view.lookAt(view, {eye: [x, 3, 0.001], target: [x, 0, 0]});
         engine.frames(2);
         const r = engine.view.readPixels({view});
-        console.log("ARM picture fnv1a64 " + engine.picture.hash(r.picture));   // MEASURING ARM - reverted
         const m = engine.picture.mean(r.picture, {x0: C, y0: C, x1: C + 1, y1: C + 1});
         engine.picture.release(r.picture);
         return f(f(f(f(m[0] / 255) + f(m[1] / 255)) + f(m[2] / 255)) / 3);

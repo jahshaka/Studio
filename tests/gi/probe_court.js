@@ -79,10 +79,7 @@ function court(name, walls, roof) {
     host.check({ok: engine.gi.set(s, {mode: "vctPccHybrid", quality: "medium", bounces: true, updateBudget: 0}),
                 what: name + ": GI builds"});
     engine.view.declareRoutes(view, {gather: true, store: true, paused: true});
-    engine.frames(9);
-    const shot = engine.view.readPixels({view});                                         // MEASURING ARM - reverted
-    console.log("ARM picture fnv1a64 " + engine.picture.hash(shot.picture));           // MEASURING ARM - reverted
-    engine.picture.release(shot.picture);                                               // MEASURING ARM - reverted
+    engine.frames(10);
     const gi = engine.scene.published(s, {select: ["gi"]}).gi;
     const v = {probes: gi.probeCount, dropped: gi.probesDropped, overBudget: gi.probesOverBudget, byRays: gi.probeGridByRays};
     engine.scene.destroy(s);
