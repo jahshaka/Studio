@@ -209,9 +209,11 @@ QVector<VerbInfo> AppApi::verbs() const
           "'planned' (then `staleRebuilds` is the stale bakes it planned to rebuild), 'off' (no sweep runs: "
           "JAHSHAKA_BAKE_SWEEP=0, no open library), 'unread' (its connection never opened), 'stopped' (a reset or a "
           "quit cut the plan), 'silent' (its worker ended without saying: a defect), 'planning' (not done yet), "
-          "'notStarted'; `staleRebuilds` is -1 unless 'planned'. {joinSweep: true} first JOINS the plan: it returns "
-          "when the worker has published one of those terminal states (its bound is the worker's own end, never a "
-          "clock). `available` false (and nothing else) in a host with no shell.",
+          "'notStarted'; `staleRebuilds` is -1 unless 'planned'. {joinSweep: true} first JOINS the plan IN A COMMAND-"
+          "LINE SCRIPT RUN (`--script`): it returns when the worker has published one of those terminal states (its "
+          "bound is the worker's own end, never a clock). joinSweep waits only in a command-line script run; in the "
+          "editor, an MCP session or any other process it answers at once: poll `sweep` if you need the end. "
+          "`available` false (and nothing else) in a host with no shell.",
           Needs::Document },
         { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
           "Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and "
@@ -939,8 +941,9 @@ QVariantMap AppApi::bootReport(const QVariantMap &options)
 {
     const BootReport *r = host.services ? host.services->boot : nullptr;
     if (!r) return { { QStringLiteral("available"), false } };
-    const SweepPlan::State sweep = options.value(QStringLiteral("joinSweep")).toBool() ? r->sweep->join()
-                                                                                         : r->sweep->state();
+    // NEVER A WAIT ON A LIVE WINDOW: the join is honoured only in a command-line script run (app/firstrun.h).
+    const SweepPlan::State sweep = r->sweep->read(options.value(QStringLiteral("joinSweep")).toBool(),
+                                                  FirstRun::isScriptRun());
     return { { QStringLiteral("available"), true },
              { QStringLiteral("seed"), QVariantMap{ { QStringLiteral("planned"), r->seed.planned },
                                                     { QStringLiteral("created"), r->seed.created },

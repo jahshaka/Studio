@@ -216,6 +216,7 @@ int main(int argc, char *argv[])
     // budget waiting to be dismissed. (The data root is not initialised yet: the
     // forced-root half of "driven" is read live, FirstRun::isDrivenSession().)
     FirstRun::rememberScripted(FirstRun::isScriptedSession(cli));
+    FirstRun::rememberScriptRun(cli.isScriptRun());
 
     // Pin the application identity instead of letting Qt infer it from the
     // executable's file name — that inference is what a renamed or bundled

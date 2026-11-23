@@ -62,6 +62,10 @@ public:
         mCv.wait(lock, [this] { return mState != State::Planning; });
         return mState;
     }
+    /// THE READER's ANSWER: a join only when one is asked for AND `mayWait` (a command-line script run:
+    /// FirstRun::isScriptRun()); anywhere else the state as it stands, `Planning` included - never a wait on the
+    /// thread that draws (the editor's console evaluates on the UI thread).
+    State read(bool joinAsked, bool mayWait) const { return joinAsked && mayWait ? join() : state(); }
 
     static const char *name(State s)
     {

@@ -25,8 +25,10 @@ For more information see the LICENSE file
 #include <QUndoStack>
 
 #include <cstdio>
+#include <future>
 #include <thread>
 
+#include "services/bootreport.h"
 #include "services/selectionservice.h"
 #include "services/uistep.h"
 #include "services/undoservice.h"
@@ -406,9 +408,33 @@ void testUnsavedDecision()
           "unsaved: auto-save off and nothing changed - closes");
 }
 
+// THE SWEEP's PLAN IS NEVER WAITED FOR ON A LIVE WINDOW (NOQT-CORE-1 E2's audit F1'): app.bootReport({joinSweep})
+// reads SweepPlan::read(join, FirstRun::isScriptRun()) - a join only in a command-line script run, the state as it
+// stands anywhere else. This process is no script run (main() never set the latch), like the editor's console.
+void testSweepRead()
+{
+    SweepPlan plan;
+    plan.start();   // the "worker" is this test: the plan stays Planning until the test publishes (an event it controls)
+    CHECK(!FirstRun::isScriptRun(), "sweep: this process is not a command-line script run (the latch is unset)");
+    CHECK(plan.read(true, FirstRun::isScriptRun()) == SweepPlan::State::Planning,
+          "sweep: OUTSIDE a script run a joinSweep read answers AT ONCE - 'planning' - while the worker is held");
+    // THE CONTROL: in a script run the read JOINS, and answers the worker's publish (sent from another thread).
+    std::promise<void> go;
+    std::thread worker([&plan, ready = go.get_future()]() mutable {
+        ready.wait();
+        plan.finish(SweepPlan::State::Planned, 3);
+    });
+    go.set_value();
+    const SweepPlan::State joined = plan.read(true, true);
+    worker.join();
+    CHECK(joined == SweepPlan::State::Planned && plan.rebuilds() == 3,
+          "sweep: IN a script run the read joins and answers the worker's publish (planned, 3)");
+}
+
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    testSweepRead();
     testUndoService();
     testSelectionService();
     testUiStep();

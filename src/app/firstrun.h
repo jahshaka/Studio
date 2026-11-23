@@ -103,10 +103,23 @@ inline bool &scriptedLatch()    // one instance per program (inline function sta
     static bool scripted = false;
     return scripted;
 }
+inline bool &scriptRunLatch()
+{
+    static bool scriptRun = false;
+    return scriptRun;
+}
 }   // namespace detail
 
 /// Called once from main(), with what isScriptedSession(cli) answered.
 inline void rememberScripted(bool scripted) { detail::scriptedLatch() = scripted; }
+/// Called once from main(), with what cli.isScriptRun() answered.
+inline void rememberScriptRun(bool scriptRun) { detail::scriptRunLatch() = scriptRun; }
+
+/// Is this process a COMMAND-LINE SCRIPT RUN (`--script`, headless or windowed)? The process exists to run its
+/// script and exit: nobody is at its window, so a verb may wait for a worker there (app.bootReport's joinSweep)
+/// - never in the editor (its console evaluates on the UI thread), an MCP session (windowed: an assistant drives
+/// a live editor) or a forced data root (a person may be using it).
+inline bool isScriptRun() { return detail::scriptRunLatch(); }
 
 /// Is nobody at the screen? The latch main() set.
 inline bool isScriptedSession() { return detail::scriptedLatch(); }
