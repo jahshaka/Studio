@@ -10,14 +10,10 @@
 # the SQL statements one listing (and one search keystroke) executes — the
 # tray runs on every edge write and every keypress, so its cost is per-key.
 # Headless (offscreen platform); never touches the user's live JahLibrary.db.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 
-# THE STATEMENT COUNT comes from sqlite3_trace_v2 on the handle Qt's own
-# QSQLITE driver opened (QSqlDriver::handle) — no instrumentation in the
-# production path. Where the header/library is absent the suite still runs and
-# still checks every RULE; it just does not assert the counts.
-find_path(JAH_SQLITE3_INCLUDE sqlite3.h)
-find_library(JAH_SQLITE3_LIB sqlite3)
+# THE STATEMENT COUNT comes from the layer's statement observer (data/database/databasereads.h): no instrumentation
+# in the production path; SQLite reaches the suites through jahshaka_db alone.
 
 # ---------------------------------------------------------------------------
 # D11-LIBRARY-SCALE's two suites, on the same REAL Database link closure.
@@ -68,7 +64,7 @@ function(jah_d11_suite _target _test _source)
     set_target_properties(${_target} PROPERTIES AUTOMOC ON)
     target_include_directories(${_target} PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-    target_link_libraries(${_target} PRIVATE jahshaka_db IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent Qt6::Test Qt6::Qml)
+    target_link_libraries(${_target} PRIVATE jahshaka_db IrisGL Qt6::Widgets Qt6::Multimedia Qt6::Concurrent Qt6::Test Qt6::Qml)
     add_test(NAME ${_test} COMMAND ${_target} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(${_test} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets" TIMEOUT 60)
     jah_no_display(${_test})

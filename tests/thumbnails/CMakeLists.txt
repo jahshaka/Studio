@@ -12,7 +12,7 @@ find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 # texturemanager.cpp. Binary in bin/ so app/content/primitives/sphere.obj
 # resolves next to the executable; its OWN working directory so the throwaway
 # database and the ogre log never land in the shared bin/.
-find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Multimedia Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Multimedia Concurrent)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
 
 # THE ASSET FIXTURE (PREVIEWS-1 stage 0): a 1 m box centred on the origin, written here at configure so no binary
@@ -61,7 +61,7 @@ f 4//6 8//6 7//6 3//6
 # it tells "nothing to draw" apart from "broken". Real Database on a throwaway
 # file, a NULL engine (what a headless session hands it), no window: the
 # assertions are about control flow and bookkeeping, never about pixels.
-find_package(Qt6 REQUIRED COMPONENTS Gui Sql Widgets Multimedia Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Multimedia Concurrent)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sweep-run)
 
 # thumbnails.studio_env — THE ONE STUDIO ENVIRONMENT, measured

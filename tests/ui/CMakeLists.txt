@@ -2,7 +2,7 @@
 # just its Property list (the dead-panel regression, 2026-08-31). Compiles the
 # panel slice with link stubs for Database/MaterialReader/SceneWriter
 # (tests/ui/test_stubs.cpp) so the suite stays free of Sql and the io/ layer.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Test Sql)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
 
 # ui.viewport_cover is GONE with the widget it tested (owner decision D2,
 # SPECS/STATS_OVERLAY_SPEC.md §6): the loading cover is drawn by the engine now,
@@ -392,7 +392,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets HttpServer)
 # emptied both tabs for every user. Link stubs for Database (the tests/ui
 # idiom) — the subject is the call order, so a fake library that counts its
 # reads proves more than a real one.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent)
 
 # ui.import_dialog (archived: archive/tests/ui) — THE IMPORT DECISION, AS A DIALOG
 # (SPECS/IMPORT_DIALOG_SPEC.md §8/§9). The dialog's product is an

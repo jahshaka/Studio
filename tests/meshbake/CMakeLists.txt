@@ -6,7 +6,7 @@
 # corruption mode, then the real import pipeline's store behaviour.
 #
 # Document-side by construction: no engine, no display.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 add_executable(test_mesh_bake test_mesh_bake.cpp
     # the cut curve's STOCK arm: upstream clusterlod unpatched, renamed (ATOM-UPGRADE stage 0; a reference, never a product path)
     cutcurve_stock.cpp
@@ -59,7 +59,7 @@ target_include_directories(test_mesh_bake PRIVATE
 target_compile_definitions(test_mesh_bake PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_mesh_bake PRIVATE jahshaka_db IrisGL
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia
+    Qt6::Widgets Qt6::Multimedia
     meshoptimizer)   # the cut curve's STOCK arm: the clusterizer + partitioner libIrisGL no longer pulls in
 jah_links_assimp(test_mesh_bake)
 

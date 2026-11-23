@@ -5,7 +5,7 @@
 # for the services they notify (test_stubs.cpp) — the tests/ui idiom. No Sql, no
 # io/ layer, no database: this suite is about sibling indices and SCENE_STATIC
 # bookkeeping, and it must stay fast enough to run on every gate.
-find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql)
+find_package(Qt6 REQUIRED COMPONENTS Gui Widgets)
 add_executable(test_structural_undo
     test_structural_undo.cpp
     test_stubs.cpp
@@ -40,7 +40,7 @@ target_include_directories(test_structural_undo PRIVATE
     # target links no engine.
     ${CMAKE_SOURCE_DIR}/irisgl/engine/include
 )
-target_link_libraries(test_structural_undo PRIVATE IrisGL Qt6::Gui Qt6::Widgets Qt6::Sql)
+target_link_libraries(test_structural_undo PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
 # A document node IS an engine node (SCENEGRAPH_SPEC D2), so even this suite
 # boots the headless engine — NULL render system, no display, no GPU.
 jah_document_graph(test_structural_undo)
@@ -62,15 +62,7 @@ jah_no_display(commands.structural_undo)
 # database.cpp (and reuses the same stubs with JAH_REAL_DATABASE, which stands
 # the Database stub down): the subject IS the destructor's effect on the
 # library, so a stubbed database would prove nothing.
-find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql Multimedia)
-
-# THE COMMIT COUNT — one commit is one fdatasync, which is the unit the owner's
-# 33 s was spent in — comes from sqlite3_commit_hook on the handle Qt's own
-# QSQLITE driver opened (the tests/assettray idiom): no instrumentation in the
-# production path. Without the header the suite still checks every RULE and the
-# wall-clock bound; it just cannot assert the counts.
-find_path(JAH_SQLITE3_INCLUDE sqlite3.h)
-find_library(JAH_SQLITE3_LIB sqlite3)
+find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Multimedia)
 
 # ---------------------------------------------------------------------------
 # commands.db_batch (archived: archive/tests/commands) — CLOSE-2: ONE GESTURE, ONE COMMIT.
@@ -84,7 +76,7 @@ find_library(JAH_SQLITE3_LIB sqlite3)
 #
 # Same shape as its sibling above: the REAL database.cpp, and SQLite's own
 # commit hook as ground truth.
-find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Multimedia)
 
 # ---------------------------------------------------------------------------
 # commands.preset_copy (archived: archive/tests/commands) — PRESET-EDIT-1: the first edit of a preset a project
@@ -93,7 +85,7 @@ find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql Multimedia)
 # The same idiom as commands.pin_asset (archived: archive/tests/commands) below it: the REAL Database and the REAL
 # content-addressed store on a throwaway SQLite file, because a pin, an edge
 # and a row are catalog facts a stub could not tell the truth about.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 
 # ---------------------------------------------------------------------------
 # commands.pin_asset (archived: archive/tests/commands) — MATERIAL_BUNDLE_SPEC phase 3 / the materials audit's F5:
@@ -104,4 +96,4 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 # the command against the REAL Database and the REAL content-addressed store on
 # a throwaway SQLite file — the tests/materialbundle idiom, same source list —
 # because a pin is a catalog fact and a stub could not tell the truth about it.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)

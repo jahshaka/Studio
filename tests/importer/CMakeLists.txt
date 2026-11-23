@@ -5,7 +5,7 @@
 # relative skeletal sources, engine tolerant texture reads, and double-import
 # transform stability. Engine sections need a reachable DISPLAY (Vulkan),
 # platform stays offscreen.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia OpenGL)
 
 # PLY + STL: the two mesh formats added to irisgl/CMakeLists.txt's assimp
 # importer allowlist. The suite is a build-configuration gate as much as a
@@ -15,7 +15,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 # preset -> iris::loadAsSceneFragment -> AssetHelper -> the ONE import
 # pipeline (AssetImportService, the assets.importFile path) -> the engine
 # thumbnail, with pixels. Needs the engine, so a reachable DISPLAY.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia OpenGL)
 add_executable(test_importer_meshformats test_importer_meshformats.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
@@ -70,7 +70,7 @@ target_compile_definitions(test_importer_meshformats PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_importer_meshformats PRIVATE jahshaka_db IrisGL JahshakaEngine
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
+    Qt6::Widgets Qt6::Multimedia Qt6::OpenGL)
 jah_links_assimp(test_importer_meshformats)
 add_dependencies(test_importer_meshformats JahshakaEngineMedia)
 jah_gpu_row(importer.meshformats SHIP CLASS engine COMMAND test_importer_meshformats
@@ -84,7 +84,7 @@ set_tests_properties(importer.meshformats PROPERTIES
 # size cap, and the .blend extension-list correction. No engine — the whole
 # point is the pipeline's handling of hostile FILE CONTENT, which happens long
 # before anything renders.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia OpenGL)
 
 # ANIMATION-ASSET suite (ModelTypes::Animation): the structural sniff, the
 # clip reader (clip table + rig signature + pose strip) and the three import
@@ -93,7 +93,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 # synthesised in the test (the walker reads record headers only), so no real
 # character file has to ship as a fixture; the animation-only GLB, the rigged
 # control and the .bvh are the avatar module's committed fixtures.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia OpenGL)
 
 # The leak lane (scripts/sanitize.sh lsan): assimp scenes and the importer's own
 # buffers. Only the two suites that do NOT link the engine — importer.glb (archived: archive/tests/importer) and
@@ -106,7 +106,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 # import path, the emissiveIntensity round trip through the asset blob, and
 # PIXELS (the imported spec-gloss material against the full-metal reading it
 # used to get). Renders, so it needs the engine and a reachable DISPLAY.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia OpenGL)
 
 # TEXTURE-GUID suite (the owner's "GLB imports come in without textures",
 # 2026-09-09): the SAVE + REOPEN half of an imported model. The textures are
@@ -116,7 +116,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 # Runs the REAL import pipeline into a throwaway store/db, saves a material the
 # way a scene save does, reopens it, and drives the reader-side repair for
 # scenes already saved wrong. No engine, no display, no GPU.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Concurrent)
 
 # importer.extent (archived: archive/tests/importer) — the IMPORT SETTINGS and the measurement
 # (SPECS/IMPORT_DIALOG_SPEC.md §9). The three unit_cube fixtures pin what a
@@ -129,7 +129,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
 # It replaces importer.fitsize: the size POLICY it gated (envelopes, an
 # inferred fitScale, a per-instance multiply and the avatar double-normalisation
 # order) retired with the import dialog.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Concurrent)
 
 # importer.scene (archived: archive/tests/importer) — THE FBX SCENE (BISTRO-IMPORT-1, SPECS/BISTRO-FIXES-1.md stages 1-3).
 # One hand-written fixture of ours (fixtures/make_scene_fbx.py: a split specular pair,
@@ -138,5 +138,5 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
 # pipeline; the rows are counts: maps bound and missing, alpha modes, the root's
 # name, the box's size, the light/camera nodes, one movable and the rest static.
 # Headless document graph, no display.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Concurrent)
 

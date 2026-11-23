@@ -4,7 +4,7 @@
 # the test also carries the graph/baker slice: a node graph is compiled and
 # baked to a PNG map by GraphBaker and that baked-map material must reach
 # pixels in the preview (widget-backed nodes need Widgets + AUTOMOC).
-find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Concurrent)
 add_executable(test_engine_material_preview test_engine_material_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginematerialpreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
@@ -40,7 +40,7 @@ target_include_directories(test_engine_material_preview PRIVATE ${CMAKE_SOURCE_D
 target_compile_definitions(test_engine_material_preview PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_material_preview PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL
-    Qt6::Widgets Qt6::Sql Qt6::Concurrent)
+    Qt6::Widgets Qt6::Concurrent)
 add_dependencies(test_engine_material_preview JahshakaEngineMedia)
 jah_gpu_row(materialpreview.engine SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_engine_material_preview WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(materialpreview.engine PROPERTIES JAHSHAKA_TEST_FRAMES 96)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)

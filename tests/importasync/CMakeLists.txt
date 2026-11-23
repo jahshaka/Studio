@@ -5,7 +5,7 @@
 # stage, and a mid-import cancel rolls back to zero rows and zero orphan CAS
 # objects. Headless, throwaway store/db; the sync (verb) path stays covered
 # by scripting.e2e.import_pipeline.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Concurrent)
 add_executable(test_import_async test_import_async.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
     # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
@@ -55,7 +55,7 @@ target_include_directories(test_import_async PRIVATE
 target_compile_definitions(test_import_async PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_import_async PRIVATE jahshaka_db IrisGL
-    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
+    Qt6::Widgets Qt6::Multimedia Qt6::Concurrent)
 add_test(NAME import.async COMMAND test_import_async
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(import.async PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"

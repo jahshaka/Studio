@@ -28,7 +28,7 @@
 # shells the last one baked), one sub-directory per bake FORMAT VERSION (v<kFormatVersion>,
 # scale_world.cpp cacheDir; ~1.1 GB): every reader checks a blob's fingerprint from its header,
 # and a blob another bake producer made is STALE — scripts/scale-shells.sh re-bakes it in place (a row only FAILS naming it).
-find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Core Network Sql)
+find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Core Network)
 find_package(X11 REQUIRED)
 
 set(JAH_SCALE_ASSET_CACHE_ROOT "$ENV{HOME}/Developer/testing/scale-cache" CACHE PATH

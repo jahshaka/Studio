@@ -167,7 +167,7 @@ if(JAH_COVERAGE)
 endif()
 
 find_package(OpenGL REQUIRED) # is this needed?
-find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia Qml HttpServer)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Svg Multimedia Qml HttpServer)
 
 include(UseModernCpp)
 include(AddExternalSubdirectories)
@@ -997,7 +997,7 @@ endif()
 # QLEMENTINE_SANDBOX/QLEMENTINE_SHOWCASE stay off.
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/qlementine)
 
-set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::Qml Qt6::HttpServer IrisGL JahshakaEngine qlementine ${OPENGL_LIBRARIES})
+set(LIBS Qt6::Concurrent Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::Qml Qt6::HttpServer IrisGL JahshakaEngine qlementine ${OPENGL_LIBRARIES})
 if(JAH_XCB_FOUND)
     list(APPEND LIBS PkgConfig::JAH_XCB)
 endif()

@@ -3,7 +3,7 @@
 # parent-column migration, drawer CRUD, nesting, delete-reassigns-to-
 # Uncategorized, and cycle rejection. Headless (offscreen platform); never
 # touches the user's live JahLibrary.db.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 add_executable(test_drawers_db test_drawers_db.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/databasereads.cpp
@@ -34,7 +34,7 @@ target_include_directories(test_drawers_db PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_drawers_db PRIVATE jahshaka_db IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia)
+target_link_libraries(test_drawers_db PRIVATE jahshaka_db IrisGL Qt6::Widgets Qt6::Multimedia)
 add_test(NAME drawers.db COMMAND test_drawers_db
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(drawers.db)   # THE SHIP SET (TEST-CUT-1)

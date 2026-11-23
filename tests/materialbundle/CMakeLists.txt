@@ -5,7 +5,7 @@
 # project stamp (audit G2), a path in a texture slot is REFUSED (F3), a
 # project-scope save moves only that project's pin (F11 / the owner's Q2
 # model), and a graph rides the definition as a payload with no second row.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 add_executable(test_material_bundle test_material_bundle.cpp
     ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakedmembers.cpp
@@ -47,7 +47,7 @@ target_include_directories(test_material_bundle PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_material_bundle PRIVATE jahshaka_db IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia)
+target_link_libraries(test_material_bundle PRIVATE jahshaka_db IrisGL Qt6::Widgets Qt6::Multimedia)
 add_test(NAME materials.bundle COMMAND test_material_bundle
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(materials.bundle)   # THE SHIP SET (TEST-CUT-1)

@@ -33,7 +33,7 @@ jah_no_display(previews.demand)
 # updateAssetThumbnail blanks the tile); a write submitted under the UI's write lock returns at once and lands after it;
 # submit order; past a (short) budget a write is dropped, reported and re-queued at the head; the UI connection's busy
 # timeout read; the writer's end drains. No engine, no display.
-find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql Multimedia Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Multimedia Concurrent)
 set(_previews_db_closure
     ${CMAKE_SOURCE_DIR}/src/services/previewwriter.cpp
     ${CMAKE_SOURCE_DIR}/src/services/previewkey.cpp
@@ -64,7 +64,7 @@ add_executable(test_preview_writer test_preview_writer.cpp ${_previews_db_closur
 set_target_properties(test_preview_writer PROPERTIES AUTOMOC ON CXX_STANDARD 17)
 target_include_directories(test_preview_writer PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_preview_writer PRIVATE jahshaka_db IrisGL Qt6::Gui Qt6::Widgets Qt6::Sql Qt6::Multimedia)
+target_link_libraries(test_preview_writer PRIVATE jahshaka_db IrisGL Qt6::Gui Qt6::Widgets Qt6::Multimedia)
 add_test(NAME previews.writer COMMAND test_preview_writer WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(previews.writer PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "previews" TIMEOUT 60)
 jah_no_display(previews.writer)
@@ -77,7 +77,7 @@ add_executable(test_ui_writes test_ui_writes.cpp ${_previews_db_closure})
 set_target_properties(test_ui_writes PROPERTIES AUTOMOC ON CXX_STANDARD 17)
 target_include_directories(test_ui_writes PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_ui_writes PRIVATE jahshaka_db IrisGL Qt6::Gui Qt6::Widgets Qt6::Sql Qt6::Multimedia)
+target_link_libraries(test_ui_writes PRIVATE jahshaka_db IrisGL Qt6::Gui Qt6::Widgets Qt6::Multimedia)
 add_test(NAME previews.ui_writes COMMAND test_ui_writes WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(previews.ui_writes PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "previews" TIMEOUT 60)
 jah_no_display(previews.ui_writes)

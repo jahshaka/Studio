@@ -35,7 +35,7 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/pieces")
 # graph/evaluator slice (Qt widgets, because node models carry live widgets) and
 # the engine (to render what the emitter produced). Modelled on
 # tests/materialpreview, which pairs the same two worlds.
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent)
 add_executable(test_emitter_parity test_emitter_parity.cpp
     ${CMAKE_SOURCE_DIR}/tests/shadergraph/test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
@@ -69,7 +69,7 @@ target_include_directories(test_emitter_parity PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_emitter_parity PRIVATE IrisGL JahshakaEngine
-    Qt6::Widgets Qt6::Sql Qt6::Concurrent)
+    Qt6::Widgets Qt6::Concurrent)
 add_dependencies(test_emitter_parity JahshakaEngineMedia)
 jah_gpu_row(shadergraph.emitter_parity CLASS engine
          COMMAND test_emitter_parity "${CMAKE_CURRENT_BINARY_DIR}/pieces"
@@ -80,7 +80,7 @@ set_tests_properties(shadergraph.emitter_parity PROPERTIES TIMEOUT 60 LABELS "pi
 # pieces.mirror — the document -> mirror -> renderer hop for a graph material
 # that carries a generated piece. Same source slice as tests/materialpreview
 # (the preview scene owns a real SceneMirror), plus the emitter.
-find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Concurrent Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Concurrent Multimedia)
 add_executable(test_piece_mirror test_piece_mirror.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginematerialpreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
@@ -121,7 +121,7 @@ target_include_directories(test_piece_mirror PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_piece_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL
-    Qt6::Widgets Qt6::Sql Qt6::Concurrent Qt6::Multimedia)
+    Qt6::Widgets Qt6::Concurrent Qt6::Multimedia)
 add_dependencies(test_piece_mirror JahshakaEngineMedia)
 jah_gpu_row(pieces.mirror SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_piece_mirror
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
