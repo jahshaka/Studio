@@ -53,6 +53,12 @@
 #include "services/materialbundle.h"
 #include "services/materialmembers.h"
 #include "services/assetdelete.h"
+#include "services/assetgc.h"
+#include "services/assetmigration.h"
+#include "data/database/casschema.h"
+#include <QSqlDriver>
+#include <sqlite3.h>
+#include <cstring>
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -86,6 +92,24 @@ static QString textureRow(Database &db, const QString &guid, const QString &name
     AssetCas::ingestFile(db.connection(), storeRoot, srcPath, guid,
                          QStringLiteral("source"), name, &oid, &err);
     return oid;
+}
+
+// THE TEST's OWN FAULT INJECTION (case 14): an SQLite authorizer on the library's handle. mode 1: every read of
+// sqlite_master denied (the table probes); mode 2: reads of `projects` denied INSIDE A SELECT (a pin count), its
+// DELETE untouched; mode 3: sqlite_master's reads denied from the GC's 7th statement on (its pin-table probe:
+// tableExists x3, COUNT x2, the mapped oids, then the probe).
+struct Deny { int mode = 0; int selects = 0; bool inSelect = false; int probesDenied = 0; };
+static Deny gDeny;
+static int denyReads(void *, int action, const char *table, const char *, const char *, const char *)
+{
+    if (action == SQLITE_SELECT) { gDeny.inSelect = true; ++gDeny.selects; return SQLITE_OK; }
+    if (action == SQLITE_INSERT || action == SQLITE_UPDATE || action == SQLITE_DELETE) gDeny.inSelect = false;
+    if (action != SQLITE_READ || !table) return SQLITE_OK;
+    const bool master = std::strcmp(table, "sqlite_master") == 0 || std::strcmp(table, "sqlite_schema") == 0;
+    if (gDeny.mode == 1 && master) return SQLITE_DENY;
+    if (gDeny.mode == 2 && gDeny.inSelect && std::strcmp(table, "projects") == 0) return SQLITE_DENY;
+    if (gDeny.mode == 3 && master && gDeny.selects >= 7) { ++gDeny.probesDenied; return SQLITE_DENY; }
+    return SQLITE_OK;
 }
 
 int main(int argc, char **argv)
@@ -630,6 +654,145 @@ int main(int argc, char **argv)
         CHECK(alive(QStringLiteral("gone-pinned")) && !direct.ok && direct.error.contains(QStringLiteral("could not be read")),
               QStringLiteral("13b: assetdelete::remove with its pin count unread is REFUSED by name: '%1'")
                   .arg(direct.error).toUtf8().constData());
+    }
+
+    // =======================================================================
+    // 14. THE AUDIT's FINDINGS 1-5 (stage 2): a FAILED READ never decides a delete. THE INJECTION, test-side only:
+    //     an SQLite AUTHORIZER the test installs on the library's own handle (the Qt driver's, which the layer
+    //     borrows until stage 3) DENIES a table's reads at prepare - the statement fails by name, the product
+    //     unchanged; a persistent TRIGGER that RAISEs on one row's insert; a library that is CLOSED.
+    // =======================================================================
+    {
+        sqlite3 *raw = *static_cast<sqlite3 *const *>(QSqlDatabase::database().driver()->handle().constData());
+        const auto alive = [&db](const QString &guid) { return !db.fetchAsset(guid).guid.isEmpty(); };
+        const auto libraryRow = [&db](const QString &guid, bool listed) {
+            db.createAssetEntry(guid, guid, static_cast<int>(ModelTypes::Texture), QString(), assethome::materials(),
+                                assethome::Origin::Create, QString(), QString(), QByteArray(), QByteArray(),
+                                QByteArray(), QByteArray());
+            if (!listed) db.setAssetListed(guid, false);
+        };
+        const auto project = [&db](const QString &guid) { db.createProject(guid, guid); };
+        const auto pin = [&conn](const QString &projectGuid, const QString &guid) {
+            AssetCas::writePin(conn, projectGuid, guid, QString());
+        };
+
+        // (2) THE TABLE PROBE's failure (sqlite_master's read denied) is no answer either.
+        libraryRow(QStringLiteral("f2-pinned"), true);
+        project(QStringLiteral("f2-project"));
+        pin(QStringLiteral("f2-project"), QStringLiteral("f2-pinned"));
+        {
+            bool read = true;
+            const int count = (gDeny = Deny{ 1 }, sqlite3_set_authorizer(raw, denyReads, nullptr),
+                               db.countAssetPins(QStringLiteral("f2-pinned"), &read));
+            sqlite3_set_authorizer(raw, nullptr, nullptr);
+            CHECK(!read, QStringLiteral("14.2: a failed table probe answers NO READ (count %1, read %2)").arg(count).arg(read)
+                             .toUtf8().constData());
+        }
+
+        // (3) THE ROW's OWN VETO (deleteAssetRow) and THE PROJECT's ORPHAN REAP (deleteProject): a failed pin count
+        //     (the projects table's reads denied inside a SELECT; its own DELETE still runs) keeps the row.
+        libraryRow(QStringLiteral("f3-pinned"), true);
+        project(QStringLiteral("f3-holder"));
+        pin(QStringLiteral("f3-holder"), QStringLiteral("f3-pinned"));
+        gDeny = Deny{ 2 };
+        sqlite3_set_authorizer(raw, denyReads, nullptr);
+        db.deleteAsset(QStringLiteral("f3-pinned"));
+        sqlite3_set_authorizer(raw, nullptr, nullptr);
+        CHECK(alive(QStringLiteral("f3-pinned")), "14.3: a pinned asset whose pin count could not be read SURVIVES deleteAsset");
+        libraryRow(QStringLiteral("f3-orphan"), false);
+        project(QStringLiteral("f3-dying"));
+        pin(QStringLiteral("f3-dying"), QStringLiteral("f3-orphan"));
+        pin(QStringLiteral("f3-holder"), QStringLiteral("f3-orphan"));
+        gDeny = Deny{ 2 };
+        sqlite3_set_authorizer(raw, denyReads, nullptr);
+        db.deleteProject(QStringLiteral("f3-dying"));
+        sqlite3_set_authorizer(raw, nullptr, nullptr);
+        CHECK(alive(QStringLiteral("f3-orphan")),
+              "14.3: an unlisted row another project pins SURVIVES the reap when its pin count could not be read");
+
+        // (4) removeFromProject: the same refusal as remove.
+        libraryRow(QStringLiteral("f4-shared"), false);
+        project(QStringLiteral("f4-p"));
+        project(QStringLiteral("f4-q"));
+        pin(QStringLiteral("f4-p"), QStringLiteral("f4-shared"));
+        pin(QStringLiteral("f4-q"), QStringLiteral("f4-shared"));
+        CHECK(alive(QStringLiteral("f4-shared")) && db.countAssetPins(QStringLiteral("f4-shared")) == 2,
+              "14.4: CONTROL: the shared row exists, pinned by two projects");
+        gDeny = Deny{ 2 };
+        sqlite3_set_authorizer(raw, denyReads, nullptr);
+        const assetdelete::Outcome dropped = assetdelete::removeFromProject(&db, QStringLiteral("f4-shared"), QStringLiteral("f4-p"));
+        sqlite3_set_authorizer(raw, nullptr, nullptr);
+        CHECK(alive(QStringLiteral("f4-shared")) && db.isAssetPinnedBy(QStringLiteral("f4-p"), QStringLiteral("f4-shared"))
+                  && dropped.error.contains(QStringLiteral("could not be read")),
+              QStringLiteral("14.4: removeFromProject with a read failing is REFUSED by name before its first unpin: '%1'")
+                  .arg(dropped.error).toUtf8().constData());
+
+        // (5) THE GC's PIN-TABLE PROBE: a pin-only object is never "unreferenced" because the probe failed.
+        {
+            db::Error e;
+            conn.exec("INSERT INTO files (oid, size, ext, refcount) VALUES ('f5pinonly', 3, 'png', 0)", &e);
+            pin(QStringLiteral("f3-holder"), QStringLiteral("f2-pinned"));
+            conn.exec("UPDATE project_assets SET oid_pin = 'f5pinonly' WHERE project_guid = 'f3-holder' AND asset_guid = 'f2-pinned'", &e);
+            gDeny = Deny{ 3 };
+            sqlite3_set_authorizer(raw, denyReads, nullptr);
+            const AssetGc::Report gc = AssetGc::collect(conn, storeRoot);
+            sqlite3_set_authorizer(raw, nullptr, nullptr);
+            bool listed = false;
+            for (const AssetGc::Item &item : gc.unreferencedObjects.items) listed = listed || item.id == QLatin1String("f5pinonly");
+            CHECK(gDeny.probesDenied > 0, QStringLiteral("14.5: CONTROL: the pin-table probe was denied (%1; %2 selects; gc '%3')")
+                                               .arg(gDeny.probesDenied).arg(gDeny.selects).arg(gc.error)
+                                               .toUtf8().constData());
+            CHECK(!gc.ok || !listed, "14.5: a pin-only object is never listed unreferenced from a failed pin-table probe");
+        }
+
+        // (1) THE REBUILD COUNTS ITS FAILED ROWS: one sidecar's insert RAISEs (a trigger on a fresh catalog).
+        {
+            const QString rebuildRoot = scratchDir.filePath("rebuild_store");
+            QDir().mkpath(QDir(rebuildRoot).filePath("sidecar"));
+            for (const char *guid : { "r1-good", "r1-poisoned" }) {
+                QJsonObject sidecar;
+                sidecar["formatVersion"] = 3;
+                sidecar["guid"] = QString::fromLatin1(guid);
+                sidecar["name"] = QString::fromLatin1(guid);
+                sidecar["type"] = static_cast<int>(ModelTypes::Material);
+                sidecar["home"] = assethome::kindName(assethome::Kind::MaterialsLibrary);
+                sidecar["origin"] = QStringLiteral("create");
+                QFile f(QDir(rebuildRoot).filePath(QStringLiteral("sidecar/%1.json").arg(QString::fromLatin1(guid))));
+                f.open(QIODevice::WriteOnly);
+                f.write(QJsonDocument(sidecar).toJson());
+            }
+            const QString rebuildDb = scratchDir.filePath("rebuild_target.db");
+            {
+                db::Options o;
+                o.name = "rebuild-setup";
+                db::Error e;
+                db::Connection setup = db::Connection::open(rebuildDb.toStdString(), o, &e);
+                setup.exec(CasSchema::kAssetsTableForRebuild, &e);
+                setup.exec("CREATE TRIGGER poison BEFORE INSERT ON assets WHEN NEW.guid = 'r1-poisoned' "
+                           "BEGIN SELECT RAISE(ABORT, 'injected: this row is refused'); END", &e);
+            }
+            const AssetMigration::RebuildReport rebuilt = AssetMigration::rebuildCatalog(rebuildDb, rebuildRoot);
+            CHECK(rebuilt.assets == 1, QStringLiteral("14.1: CONTROL: the good row was rebuilt (%1)").arg(rebuilt.assets)
+                                           .toUtf8().constData());
+            CHECK(!rebuilt.ok, QStringLiteral("14.1: a rebuild with a FAILED row is not ok (ok %1, error '%2')")
+                                   .arg(rebuilt.ok).arg(rebuilt.error).toUtf8().constData());
+            CHECK(rebuilt.failedRows == 1 && rebuilt.failedGuids == QStringList{ QStringLiteral("r1-poisoned") }
+                      && rebuilt.error.contains(QStringLiteral("r1-poisoned")) && rebuilt.committed,
+                  QStringLiteral("14.1: ...the failed row is COUNTED and NAMED (%1: %2)").arg(rebuilt.failedRows)
+                      .arg(rebuilt.failedGuids.join(QLatin1Char(','))).toUtf8().constData());
+        }
+        // (2) A CLOSED LIBRARY's pin reads are NO ANSWER, never "no pins". LAST in this test: a second Database
+        //     takes Qt's DEFAULT connection name and so closes the first one's handle (stage 3 removes that).
+        {
+            Database closed;
+            closed.initializeDatabase(scratchDir.filePath("closed_probe.db"));
+            closed.createAllTables();
+            closed.closeDatabase();
+            bool countRead = true, listRead = true;
+            closed.countAssetPins(QStringLiteral("any"), &countRead);
+            closed.fetchAssetPins(QStringLiteral("any"), &listRead);
+            CHECK(!countRead && !listRead, "14.2: a closed library's pin count and pin list answer NO READ (never 0 pins)");
+        }
     }
 
     printf(failures ? "\n%d FAILURES\n" : "\nall material bundle assertions passed\n", failures);

@@ -300,21 +300,22 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
         options.dropDerived = keep.dropDerived;
         const AssetMigration::RebuildReport rebuilt =
             AssetMigration::rebuildCatalog(db->filePath(), storeRoot, options);
-        if (!rebuilt.ok) {
+        // ONLY AFTER A WHOLE REBUILD (sweepAllowedAfter): else the reset fails by name, the store as it is.
+        if (!sweepAllowedAfter(rebuilt.ok, rebuilt.failedRows, rebuilt.committed)) {
             if (result.error.isEmpty())
-                result.error = QStringLiteral("the kept storages could not be rebuilt: %1")
-                                   .arg(rebuilt.error);
+                result.error = QStringLiteral("the kept storages could not be rebuilt: %1 - the store was left as "
+                                              "it is (nothing collected)").arg(rebuilt.error);
         } else {
             result.kept.rows = rebuilt.assets;
             result.kept.edges = rebuilt.edges;
             result.kept.unreadable = rebuilt.unreadable;
             result.kept.objects = AssetMigration::keptObjects(storeRoot, options).size();
+            const AssetGc::Report collected =
+                AssetGc::sweep(db->connection(), storeRoot, /*dryRun*/ false, /*force*/ true);
+            if (!collected.ok && result.error.isEmpty() && !collected.error.isEmpty())
+                result.error = QStringLiteral("the store could not be collected: %1")
+                                   .arg(collected.error);
         }
-        const AssetGc::Report collected =
-            AssetGc::sweep(db->connection(), storeRoot, /*dryRun*/ false, /*force*/ true);
-        if (!collected.ok && result.error.isEmpty() && !collected.error.isEmpty())
-            result.error = QStringLiteral("the store could not be collected: %1")
-                               .arg(collected.error);
     }
 
     // ---- 5. THE FRESH-INSTALL BOOTSTRAP ----------------------------------

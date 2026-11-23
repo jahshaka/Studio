@@ -59,6 +59,9 @@ struct RebuildReport
     int unlistedDropped = 0;    // unlisted rows with no project left to pin them
     int unreadable = 0;         // sidecars not read: unparseable, or no recorded home
     QStringList unreadableFiles;  // ...and which (also named in the log)
+    int failedRows = 0;         // sidecars one of whose rows FAILED to write (the rebuild is then not ok)
+    QStringList failedGuids;    // ...and which (named in `error`)
+    bool committed = false;     // the rebuild's unit committed
     qint64 elapsedMs = 0;
 
     QVariantMap toMap() const;

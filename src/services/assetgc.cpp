@@ -106,12 +106,15 @@ bool isStagingTemp(const QString &fileName)
     return fileName.contains(QLatin1String(".tmp-"));
 }
 
-bool tableExists(db::Connection &conn, const char *name)
+/// `readOk` (when given) is CLEARED by a probe whose read failed: such a probe answers false, never "absent".
+bool tableExists(db::Connection &conn, const char *name, bool *readOk = nullptr)
 {
     db::Statement q(conn, "SELECT 1 FROM sqlite_master WHERE type IN ('table','view') AND name = ?");
     q.bindText(1, name);
     db::Error e;
-    return q.step(&e);
+    if (q.step(&e)) return true;
+    if (e && readOk) *readOk = false;
+    return false;
 }
 
 int scalar(db::Connection &conn, const char *sql)
@@ -195,7 +198,7 @@ Report collect(db::Connection &conn, const QString &root, bool force)
     bool readsOk = true;
     const QSet<QString> mappedOids = stringSet(conn, "SELECT DISTINCT oid FROM asset_files", &readsOk);
     const QSet<QString> pinnedOids =
-        tableExists(conn, "project_assets")
+        tableExists(conn, "project_assets", &readsOk)   // a FAILED probe refuses the sweep (the audit's finding 5)
             ? stringSet(conn, "SELECT DISTINCT oid_pin FROM project_assets WHERE oid_pin <> ''", &readsOk)
             : QSet<QString>();
     const QSet<QString> assetGuids = stringSet(conn, "SELECT guid FROM assets", &readsOk);

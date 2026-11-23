@@ -12,6 +12,8 @@ add_executable(test_material_bundle test_material_bundle.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/databasereads.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
     ${CMAKE_SOURCE_DIR}/src/services/materialmembers.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetgc.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetmigration.cpp
     ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
     ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp

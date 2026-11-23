@@ -61,6 +61,8 @@ QVariantMap RebuildReport::toMap() const
     map["unlistedDropped"] = unlistedDropped;
     map["unreadable"] = unreadable;
     map["unreadableFiles"] = unreadableFiles;
+    map["failedRows"] = failedRows;
+    map["failedGuids"] = failedGuids;
     map["elapsedMs"] = elapsedMs;
     return map;
 }
@@ -311,6 +313,15 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
     // ONE UNIT (the layer's door: source.no_raw_transaction), named as the lock's holder.
     db::Transaction unit(conn, "the catalog rebuild");
     QSet<QString> restored;
+    // EVERY ROW's ANSWER IS READ (the audit's finding 1): a sidecar one of whose rows failed is COUNTED and NAMED,
+    // and the rebuild is then not ok - a catalog missing a row must never look whole to the sweep after it.
+    QString firstFailure;
+    const auto failed = [&report, &firstFailure](const QString &guid, const db::Error &e) {
+        if (firstFailure.isEmpty()) firstFailure = QStringLiteral("%1: %2").arg(guid, dbqt::describe(e));
+        if (report.failedGuids.contains(guid)) return;
+        report.failedGuids.append(guid);
+        ++report.failedRows;
+    };
     for (const QJsonObject &sidecar : sidecars) {
         const QString guid = sidecar.value("guid").toString();
         assethome::Home home;
@@ -347,7 +358,8 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
         dbqt::bindText(insertAsset, 16, sidecar.value("dateCreated").toString());
         insertAsset.bindInt(17, sidecar.value("timesUsed").toInt());
         db::Error e;
-        if (insertAsset.run(&e) && conn.changes() > 0) ++report.assets;
+        if (!insertAsset.run(&e)) { failed(guid, e); continue; }   // its files, pins and edges name nothing
+        if (conn.changes() > 0) ++report.assets;
         restored.insert(guid);
 
         for (const auto &value : sidecar.value("files").toArray()) {
@@ -358,14 +370,16 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
             dbqt::bindText(insertFile, 1, fileObj.value("oid").toString());
             insertFile.bindInt(2, qint64(fileObj.value("size").toDouble()));
             dbqt::bindText(insertFile, 3, fileObj.value("ext").toString());
-            if (insertFile.run(&e) && conn.changes() > 0) ++report.files;
+            if (!insertFile.run(&e)) failed(guid, e);
+            else if (conn.changes() > 0) ++report.files;
 
             db::Statement insertLink(conn, "INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
             dbqt::bindText(insertLink, 1, guid);
             dbqt::bindText(insertLink, 2, fileObj.value("role").toString());
             dbqt::bindText(insertLink, 3, fileObj.value("oid").toString());
             dbqt::bindText(insertLink, 4, fileObj.value("name").toString());
-            if (insertLink.run(&e) && conn.changes() > 0) ++report.links;
+            if (!insertLink.run(&e)) failed(guid, e);
+            else if (conn.changes() > 0) ++report.links;
         }
 
         // PINS (item 1c'): a project's version of this asset — restored only
@@ -385,14 +399,16 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
             insertFile.bindInt(2, qint64(pinObj.value("size").toDouble()));
             dbqt::bindText(insertFile, 3, pinObj.value("ext").toString());
             db::Error e;
-            if (insertFile.run(&e) && conn.changes() > 0) ++report.files;
+            if (!insertFile.run(&e)) failed(guid, e);
+            else if (conn.changes() > 0) ++report.files;
 
             db::Statement insertPin(conn, "INSERT OR IGNORE INTO project_assets (project_guid, asset_guid, oid_pin) "
                                           "VALUES (?, ?, ?)");
             dbqt::bindText(insertPin, 1, projectGuid);
             dbqt::bindText(insertPin, 2, guid);
             dbqt::bindText(insertPin, 3, oid);
-            if (insertPin.run(&e) && conn.changes() > 0) ++report.pins;
+            if (!insertPin.run(&e)) failed(guid, e);
+            else if (conn.changes() > 0) ++report.pins;
         }
     }
 
@@ -414,6 +430,7 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
                 dbqt::bindText(have, 2, dependee);
                 db::Error e;
                 known = have.step(&e);
+                if (e) { failed(guid, e); continue; }   // a failed read never decides the insert
             }
             if (known) continue;
             db::Statement insertEdge(conn, "INSERT INTO dependencies (depender_type, dependee_type, project_guid, "
@@ -425,6 +442,7 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
             dbqt::bindText(insertEdge, 5, QString::fromStdString(iris::newGuid()));
             db::Error e;
             if (insertEdge.run(&e)) ++report.edges;
+            else failed(guid, e);
         }
     }
 
@@ -433,8 +451,14 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
         report.error = QStringLiteral("commit failed: %1").arg(dbqt::describe(commitError));
         return report;
     }
+    report.committed = true;
 
     report.elapsedMs = timer.elapsed();
+    if (report.failedRows > 0) {
+        report.error = QStringLiteral("%1 stored item(s) could not be rebuilt (%2; first failure %3)")
+                           .arg(report.failedRows).arg(report.failedGuids.join(QStringLiteral(", ")), firstFailure);
+        return report;
+    }
     report.ok = true;
     return report;
 }

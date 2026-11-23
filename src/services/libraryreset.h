@@ -123,6 +123,17 @@ struct Result
     Kept kept;
 };
 
+/// THE KEPT STORE IS COLLECTED ONLY AFTER A WHOLE REBUILD (NOQT-DATABASE-1 stage 2, the audit's finding 1). The
+/// collector after a rebuild runs FORCED over the catalog the rebuild just wrote into an emptied library: a
+/// rebuild that failed, lost a row or never committed leaves a catalog that names too little, and a forced sweep
+/// over it deletes every kept object and sidecar it does not name - the whole store, for a rebuild that wrote
+/// nothing. So the sweep runs only for a rebuild that is ok, failed NO row and committed; otherwise the reset
+/// fails by name and the store is left as it is. (Pure, so db.failed_opens holds its truth table.)
+inline bool sweepAllowedAfter(bool rebuildOk, int failedRows, bool committed)
+{
+    return rebuildOk && failedRows == 0 && committed;
+}
+
 /// Why a reset must not run right now, or empty when it may.
 ///
 /// THE THREE WRITERS THAT OWN BYTES WE ARE ABOUT TO DELETE: a threaded import

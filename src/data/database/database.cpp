@@ -880,20 +880,17 @@ void Database::closeDatabase()
     if (!name.isEmpty()) QSqlDatabase::removeDatabase(name);
 }
 
-bool Database::checkIfTableExists(const QString &tableName)
+Database::TableProbe Database::checkIfTableExists(const QString &tableName)
 {
     db::Statement query(connection(), "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?");
     dbqt::bindText(query, 1, tableName);
 
     db::Error error;
-    if (query.step(&error)) return query.int64(0) != 0;
-    if (error) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
-            QString("There was an error checking if table %1 exists: %2").arg(tableName, dbqt::describe(error))
-        );
-    }
-
-    return false;
+    if (query.step(&error)) return query.int64(0) != 0 ? TableProbe::Exists : TableProbe::Absent;
+    // A COUNT always answers a row: no row is a failed read, never "absent".
+    JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+        QString("There was an error checking if table %1 exists: %2").arg(tableName, dbqt::describe(error)));
+    return TableProbe::Failed;
 }
 
 bool Database::checkIfColumnExists(const QString &tableName, const QString &columnName)
@@ -967,7 +964,9 @@ bool Database::createThumbnailsTable() {
 
 bool Database::createCollectionsTable()
 {
-    if (!checkIfTableExists("collections")) {
+    const TableProbe probe = checkIfTableExists("collections");
+    if (probe == TableProbe::Failed) return false;   // never a table and its default row on a failed probe
+    if (probe == TableProbe::Absent) {
         DbQuery query(connection(), dbqt::utf8(collectionsTableSchema));
         
         if (executeAndCheckQuery(query, "CreateCollectionsTable")) {
@@ -1023,14 +1022,27 @@ bool Database::createFavoritesTable()
 void Database::createAllTables()
 {
     DbTransaction tx(connection());
-    if (!checkIfTableExists("projects"))        createProjectsTable();
-    if (!checkIfTableExists("thumbnails"))      createThumbnailsTable();
-    if (!checkIfTableExists("collections"))     createCollectionsTable();
-    if (!checkIfTableExists("assets"))          createAssetsTable();
-    if (!checkIfTableExists("dependencies"))    createDependenciesTable();
-    if (!checkIfTableExists("author"))          createAuthorTable();
-    if (!checkIfTableExists("folders"))         createFoldersTable();
-    if (!checkIfTableExists("favorites"))       createFavoritesTable();
+    // A FAILED PROBE CREATES NOTHING: the unit is not committed and says so.
+    bool probesRead = true;
+    const auto absent = [this, &probesRead](const QString &table) {
+        const TableProbe probe = checkIfTableExists(table);
+        if (probe == TableProbe::Failed) probesRead = false;
+        return probe == TableProbe::Absent;
+    };
+    if (absent("projects"))        createProjectsTable();
+    if (absent("thumbnails"))      createThumbnailsTable();
+    if (absent("collections"))     createCollectionsTable();
+    if (absent("assets"))          createAssetsTable();
+    if (absent("dependencies"))    createDependenciesTable();
+    if (absent("author"))          createAuthorTable();
+    if (absent("folders"))         createFoldersTable();
+    if (absent("favorites"))       createFavoritesTable();
+    if (!probesRead) {
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            "Database::createAllTables: a table probe could not be read - the schema unit was NOT committed, the "
+            "library's tables are as they were.");
+        return;
+    }
     createCasTables();
     createIndexes();   // after every table, the CAS ones included: the list indexes asset_files too
     // A FAILED UNIT WRITES NOTHING (DbTransaction): a library whose tables did not commit is said by name.
@@ -1069,7 +1081,13 @@ void Database::createCasTables()
     {
         db::Statement versionQuery(connection(), "PRAGMA user_version");
         db::Error error;
-        if (versionQuery.step(&error)) current = int(versionQuery.int64(0));
+        // A FAILED READ NEVER STAMPS THE GENERATION: a library whose version is unknown is not made this build's.
+        if (!versionQuery.step(&error)) {
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                QString("the library's generation could not be read (%1) - it was not stamped").arg(dbqt::describe(error)));
+            return;
+        }
+        current = int(versionQuery.int64(0));
     }
     if (current != CasSchema::kUserVersion) {
         db::Error error;
@@ -1909,9 +1927,13 @@ bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *de
     // any future rebuildCatalog while the row lived on.
     QVector<PendingAssetScrub> scrubs;
     bool reaped = true;
-    for (const QString &orphan : unlistedPins)
-        if (countAssetPins(orphan) == 0)
-            reaped = deleteAssetRow(orphan, /*force*/ true, &scrubs) && reaped;
+    for (const QString &orphan : unlistedPins) {
+        // A FAILED COUNT IS A REFUSED REAP (the audit's finding 3), rolled back like a failed one: never 0 pins.
+        bool read = true;
+        const int pins = countAssetPins(orphan, &read);
+        if (!read) { reaped = false; continue; }
+        if (pins == 0) reaped = deleteAssetRow(orphan, /*force*/ true, &scrubs) && reaped;
+    }
 
     // AND THE PROJECT'S OWN ROWS (ASSETS-SCOPE-1 fix round F2): its materials,
     // companions, make-unique copies, baked maps and scene-node rows were never
@@ -2058,8 +2080,13 @@ bool Database::isAssetListed(const QString &guid)
 QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid, bool *readOk)
 {
     QVector<AssetPinRecord> pins;
-    if (guid.isEmpty() || !db.isOpen()) return pins;
-    if (!checkIfTableExists("project_assets")) return pins;
+    if (guid.isEmpty()) return pins;
+    // A CLOSED LIBRARY OR A FAILED PROBE IS NO ANSWER, never "no pins" (the audit's finding 2).
+    const TableProbe probe = db.isOpen() ? checkIfTableExists("project_assets") : TableProbe::Failed;
+    if (probe != TableProbe::Exists) {
+        if (readOk && probe == TableProbe::Failed) *readOk = false;
+        return pins;
+    }
 
     // LEFT JOIN: a pin whose project row is gone is still a real row in the
     // catalog — it keeps its object alive against the GC — so it is still
@@ -2073,8 +2100,7 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid, bool *read
     dbqt::bindText(query, 1, guid);
     if (!executeAndCheckQuery(query, "FetchAssetPins")) {
         if (readOk) *readOk = false;
-        if (readOk && query.failed()) *readOk = false;
-    return pins;
+        return pins;
     }
 
     while (query.next()) {
@@ -2086,12 +2112,16 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid, bool *read
         else if (pin.projectName.isEmpty()) pin.projectName = pin.projectGuid;
         pins.push_back(pin);
     }
+    // A step that failed after the first row ends the list SHORT: never a complete one.
+    if (readOk && query.failed()) *readOk = false;
     return pins;
 }
 
 bool Database::unpinAsset(const QString &projectGuid, const QString &assetGuid)
 {
-    if (!checkIfTableExists("project_assets")) return true;
+    const TableProbe probe = checkIfTableExists("project_assets");
+    if (probe == TableProbe::Absent) return true;   // no pins table: nothing to unpin
+    if (probe == TableProbe::Failed) return false;
     DbQuery query(connection(), "DELETE FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
     dbqt::bindText(query, 1, projectGuid);
     dbqt::bindText(query, 2, assetGuid);
@@ -2100,8 +2130,13 @@ bool Database::unpinAsset(const QString &projectGuid, const QString &assetGuid)
 
 int Database::countAssetPins(const QString &guid, bool *readOk)
 {
-    if (guid.isEmpty() || !db.isOpen()) return 0;
-    if (!checkIfTableExists("project_assets")) return 0;
+    if (guid.isEmpty()) return 0;
+    // A CLOSED LIBRARY OR A FAILED PROBE IS A FAILED COUNT, never "no pins" (the audit's finding 2).
+    const TableProbe probe = db.isOpen() ? checkIfTableExists("project_assets") : TableProbe::Failed;
+    if (probe != TableProbe::Exists) {
+        if (readOk && probe == TableProbe::Failed) *readOk = false;
+        return 0;
+    }
     // LIVE projects only (code review 2026-09-10). This number is the VETO:
     // it decides whether a library delete deletes or merely unlists, whether
     // the project panel removes a pin, and what the confirmation dialog says.
@@ -2124,7 +2159,8 @@ int Database::countAssetPins(const QString &guid, bool *readOk)
 bool Database::isAssetPinnedBy(const QString &projectGuid, const QString &assetGuid)
 {
     if (projectGuid.isEmpty() || assetGuid.isEmpty() || !db.isOpen()) return false;
-    if (!checkIfTableExists("project_assets")) return false;
+    // A failed probe answers what this read's own failure answers (false): it has no failure channel.
+    if (checkIfTableExists("project_assets") != TableProbe::Exists) return false;
     DbQuery query(connection(), "SELECT 1 FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
     dbqt::bindText(query, 1, projectGuid);
     dbqt::bindText(query, 2, assetGuid);
@@ -2237,7 +2273,17 @@ bool Database::deleteAssetRow(const QString &guid, bool force,
     // touches nothing else — no asset_files (which is what assets.gc reaps
     // by), no project_assets, no sidecar, no content. `assets.remove(guid,
     // {force: true})` / "Delete everywhere" is the way past it.
-    if (!force && countAssetPins(guid) > 0) return setAssetListed(guid, false);
+    // A FAILED COUNT IS A REFUSAL, never 0 pins (the audit's finding 3): nothing is deleted.
+    if (!force) {
+        bool read = true;
+        const int pins = countAssetPins(guid, &read);
+        if (!read) {
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                QString("DeleteAsset refused for '%1': who pins it could not be read - nothing was deleted.").arg(guid));
+            return false;
+        }
+        if (pins > 0) return setAssetListed(guid, false);
+    }
 
     // Decided BEFORE the rows go: after the delete there is nothing left to
     // prove this store and this catalog belong together (sidecarBelongsHere).

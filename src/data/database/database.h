@@ -891,7 +891,10 @@ public:
     static bool writeExportCatalog(const QString &outDir, const ExportCatalog &catalog,
                                    QString *errorOut);
 
-    bool checkIfTableExists(const QString &tableName);
+    /// THE TABLE PROBE ANSWERS THREE WAYS (NOQT-DATABASE-1 stage 2, the audit's finding 2): a probe whose read
+    /// FAILED is neither "there" nor "not there", and every caller that decides on it reads Failed.
+    enum class TableProbe { Exists, Absent, Failed };
+    TableProbe checkIfTableExists(const QString &tableName);
     bool checkIfColumnExists(const QString &tableName, const QString &columnName);
 
 

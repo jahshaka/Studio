@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "services/memberstamp.h"
 
 #include <QDir>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
@@ -170,12 +171,17 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
     // now, and a member goes only when no depender REMAINS OUTSIDE the set
     // being removed: a texture two pinned models share keeps its pin, and a
     // mesh whose only depender is the model going with it does not.
+    //
+    // A FAILED READ NEVER DECIDES AN UNPIN OR A REAP (NOQT-DATABASE-1 stage 2, the audit's finding 4): who uses each
+    // member and who pins it are read HERE, before the first unpin, and a failure REFUSES the whole remove by name
+    // (remove's refusal). (The closure walk has no failure channel: a short closure only keeps pins.)
+    bool read = true;
     const QStringList members = AssetHelper::fetchAssetAndAllDependencies(guid, db);
     QStringList toUnpin;
     for (const QString &member : members) {
         if (member == guid) { toUnpin.append(member); continue; }
         bool heldFromOutside = false;
-        for (const QString &depender : db->hasMultipleDependers(member)) {
+        for (const QString &depender : db->hasMultipleDependers(member, &read)) {
             if (depender == member || members.contains(depender)) continue;
             heldFromOutside = true;
             break;
@@ -217,9 +223,23 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
         for (const QString &companion : ImageMaterial::companionMaterials(db, guid)) {
             if (toUnpin.contains(companion)) continue;
             if (!db->isAssetPinnedBy(projectGuid, companion)) continue;
-            if (!db->hasMultipleDependers(companion).isEmpty()) continue;  // something rides it
+            if (!db->hasMultipleDependers(companion, &read).isEmpty()) continue;  // something rides it
             toUnpin.append(companion);
         }
+    }
+    // WHO ELSE PINS EACH ONE: the LIVE pins of every other project, read before anything is unpinned (what
+    // countAssetPins answers after this project's pin is gone).
+    QHash<QString, int> pinnedElsewhere;
+    for (const QString &member : toUnpin) {
+        int others = 0;
+        for (const AssetPinRecord &pin : db->fetchAssetPins(member, &read))
+            if (pin.live && pin.projectGuid != projectGuid) ++others;
+        pinnedElsewhere.insert(member, others);
+    }
+    if (!read) {
+        out.error = QStringLiteral("the remove of '%1' from the project was REFUSED: who pins or uses it could not be "
+                                   "read (the log names the read) - nothing was unpinned").arg(guid);
+        return out;
     }
     bool ok = true;
     for (const QString &member : toUnpin) {
@@ -237,7 +257,7 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
         // project that pinned it by guid — a cross-project paste — last).
         const AssetRecord m = member == guid ? record : db->fetchAsset(member);
         if (!m.guid.isEmpty() && (!m.listed || db->isProjectOwned(m))
-            && db->countAssetPins(member) == 0) {
+            && pinnedElsewhere.value(member) == 0) {
             if (db->deleteAsset(member, /*force*/ true)) out.unlisted = true;
             else ok = false;
         }
