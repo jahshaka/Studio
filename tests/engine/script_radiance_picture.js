@@ -22,8 +22,14 @@
 // 45-degree vertical field, so every pixel's view is within 4.2 degrees of the normal (its corner: atan(0.125 x
 // tan 22.5 deg x sqrt 2)): 1 - v <= 2.7e-3, and DA's v-dependence there (its r v / 84 term: ef r (1 - v) / 84 <= 2.2e-5;
 // its b term (1 - v)^5 ~ 1e-13) is 3.2e-5 of DA - the law takes v = 1, 15 times under its bound.
-// THE BOUND: the view keeps its scene radiance in RGBA16F (PostFxDesc::hdrReadback): each value read back is the exact
-// one rounded to a half float, a relative error of at most 2^-11 (half an ulp of an 11-bit significand).
+// THE BOUND, CARD-AGNOSTIC (the lead, 2026-11-23): the view keeps its scene radiance in RGBA16F (PostFxDesc::hdrReadback),
+// and HOW a card rounds a half-precision store is the device's, not a law's - so each channel read back must be ONE OF THE
+// TWO HALF FLOATS THAT BRACKET L: on the half lattice at L's exponent (2^-10 steps in [1, 2)), the one at or below L or the
+// one at or above it. The script computes L in double, the GPU in float: when L lies within 1e-6 (relative) of a lattice
+// point, the neighbour beyond that point is admitted too (the one rule for the arithmetic's difference; at this row's
+// values, fractions .85 / .42 / .20 of a step, it touches no channel). The row prints which neighbour each channel took.
+// MEASURED, NOT A LAW (its first card run, 2026-11-23, Studio ac69cff84, this box's card): every channel took the half
+// BELOW (r 1430/1024 for 1430.85, g 1341/1024 for 1341.42, b 1453/1024 for 1453.20): the render-target write truncated.
 // A IS CHOSEN SO EVERY CHANNEL's L IS ABOVE 1: a display byte clips at 1.0 (255), so the red-once arm (the display
 // bytes answered for "radiance") cannot pass by luck.
 // THE CONTROL: the patch's radiance is above zero in every channel. THE SETTLE: frames 16 and 60 read the same.
@@ -99,9 +105,25 @@ host.check({ok: at60[0] > 0 && at60[1] > 0 && at60[2] > 0,
             what: "THE CONTROL: the patch's radiance is above zero [" + at60.map(v => v.toFixed(6)).join(", ") + "]"});
 host.check({ok: at16[0] === at60[0] && at16[1] === at60[1] && at16[2] === at60[2],
             what: "THE SETTLE: frame 16 reads frame 60's radiance [" + at16.map(v => v.toFixed(6)).join(", ") + "]"});
-for (let c = 0; c < 3; ++c) {
-    const want = WANT[c], got = at60[c];
-    host.check({ok: Math.abs(got - want) <= want * Math.pow(2, -11),
-                what: "channel " + "rgb"[c] + ": albedo x A x DA / pi = " + want.toFixed(6) + ", read " + got.toFixed(6) +
-                      " (ratio " + (got / want).toFixed(6) + "; the half float's bound 2^-11 relative)"});
+// THE TWO HALF FLOATS BRACKETING x (x > 0, a normal half): its lattice step at x's exponent, the point at or below, the
+// point at or above (equal when x is on the lattice); and the admitted set with the 1e-6 rule
+function bracket(x) {
+    const step = Math.pow(2, Math.floor(Math.log2(x)) - 10);
+    const lo = Math.floor(x / step) * step, hi = Math.ceil(x / step) * step;
+    const admitted = [lo, hi];
+    if (x - lo <= 1e-6 * x) admitted.push(lo - step);
+    if (hi - x <= 1e-6 * x) admitted.push(hi + step);
+    return {step, lo, hi, admitted, widened: admitted.length > 2};
 }
+let widened = 0;
+for (let c = 0; c < 3; ++c) {
+    const want = WANT[c], got = at60[c], b = bracket(want);
+    widened += b.widened ? 1 : 0;
+    const took = got === b.lo && got === b.hi ? "on the lattice" : got === b.lo ? "below" : got === b.hi ? "above"
+               : b.admitted.includes(got) ? "the neighbour beyond (the 1e-6 rule)" : "neither";
+    host.check({ok: b.admitted.includes(got),
+                what: "channel " + "rgb"[c] + ": albedo x A x DA / pi = " + want.toFixed(6) + " (" + (want / b.step).toFixed(2) +
+                      " steps of 2^" + Math.log2(b.step) + "), read " + got.toFixed(6) + " = the half " + took +
+                      " (bracket " + b.lo.toFixed(6) + " / " + b.hi.toFixed(6) + ")"});
+}
+console.log("the 1e-6 rule widened " + widened + " of 3 channels' brackets");
