@@ -813,7 +813,7 @@ QStringList takeRefused(const QVector<iris::PrewarmItem> &plan, iris::MeshPrewar
     return refused;
 }
 
-QVector<BakeJob> staleJobsFor(db::Connection &conn, const QString &root, const QStringList &paths)
+QVector<BakeJob> staleJobsFor(db::Connection &conn, const QString &root, const QStringList &paths, QStringList *unjudged)
 {
     QVector<BakeJob> jobs;
     const PinGeneration pinned;   // the lookups run inside `rows`' pinned snapshot (I7)
@@ -844,6 +844,14 @@ QVector<BakeJob> staleJobsFor(db::Connection &conn, const QString &root, const Q
             if (!planFor(conn, root, path, guid).bakePath.isEmpty()) continue;   // fresh
             BakeJob job = prepareBake(conn, root, { path, guid });
             if (!job.path.isEmpty()) jobs.append(job);
+        }
+        // THE ROWS UNREAD (the final read's note 2): on the opens' read-only connection no write follows for the guard
+        // to refuse, so a failed read here planned FEWER re-bakes in silence. It is a named miss: never "fresh".
+        if (e) {
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                          QStringLiteral("mesh bake: %1: the bake could not be judged (its library rows could not be read: "
+                                         "%2) - not re-baked; the model may show missing").arg(path, dbqt::describe(e)));
+            if (unjudged) unjudged->append(path);
         }
     }
     return jobs;

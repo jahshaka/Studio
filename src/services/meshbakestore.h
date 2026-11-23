@@ -200,8 +200,10 @@ bool commitBake(db::Connection &conn, const QString &root, BakeResult &result, Q
 
 /// The rebuild jobs for these model files: every (content, settings) variant
 /// named by a library row whose bake is stale or absent and whose source object
-/// is on disk. Database thread.
-QVector<BakeJob> staleJobsFor(db::Connection &conn, const QString &root, const QStringList &paths);
+/// is on disk. Database thread. A model whose library rows could not be read is NOT judged fresh: it is named in the
+/// log ("the bake could not be judged") and appended to `unjudged` when given.
+QVector<BakeJob> staleJobsFor(db::Connection &conn, const QString &root, const QStringList &paths,
+                              QStringList *unjudged = nullptr);
 
 /// AFTER AN OPEN's BAKE READ (N3): the models whose bake the READ refused though its header matched the plan - a
 /// corrupt payload (its checksum). Each bake object is marked corrupt (AssetCas::markCorrupt: staleJobsFor now

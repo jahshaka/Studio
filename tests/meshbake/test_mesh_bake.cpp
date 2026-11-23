@@ -106,6 +106,7 @@
 #include "irisgl/import/scenesource.h"
 #include "irisgl/import/clipfileinfo.h"
 #include "../support/timingbars.h"
+#include "../db/dbseam.h"
 #include "cutcurve_stock.h"
 
 // The bake's payload checksum's hash, for bake.round_trip's COST line only (the bake itself inlines it in meshbake.cpp).
@@ -3306,8 +3307,18 @@ static void refusedBakeRequeued()
     const QStringList refused = MeshBakeStore::takeRefused({ plan }, prewarm);
     CHECK_LOUD(refused == QStringList{ sourcePath }, "takeRefused names the model the read refused");
     CHECK_LOUD(!MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath), "after the refusal the bake is not fresh");
-    const QVector<MeshBakeStore::BakeJob> jobs = MeshBakeStore::staleJobsFor(conn, storeRoot.path(), refused);
-    CHECK_LOUD(jobs.size() == 1, "THE STALE PATH RE-QUEUES IT from its source (one job)");
+    // THE ROWS UNREAD ARE NO "FRESH" (the final read's note 2): the same stale model, its library rows' read denied at
+    // prepare (the test-side seam) - no job, and the model is NAMED as not judged. CONTROL: read, the next call has its
+    // one job and names nothing.
+    QStringList unjudged, none;
+    dbseam::denyReadsOf(conn, "asset_files");
+    const QVector<MeshBakeStore::BakeJob> unread = MeshBakeStore::staleJobsFor(conn, storeRoot.path(), refused, &unjudged);
+    dbseam::clear(conn);
+    CHECK_LOUD(unread.isEmpty() && unjudged == refused,
+               qUtf8Printable(QStringLiteral("a stale model whose rows could not be read is NAMED, never judged fresh "
+                                             "(jobs %1, unjudged %2)").arg(unread.size()).arg(unjudged.size())));
+    const QVector<MeshBakeStore::BakeJob> jobs = MeshBakeStore::staleJobsFor(conn, storeRoot.path(), refused, &none);
+    CHECK_LOUD(jobs.size() == 1 && none.isEmpty(), "THE STALE PATH RE-QUEUES IT from its source (one job; nothing unjudged)");
     MeshBakeStore::rebuildPumped(conn, jobs, std::function<void(int, int)>());
     CHECK_LOUD(MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath), "the re-bake landed: fresh again");
     prewarm.parse(MeshBakeStore::planFor(conn, storeRoot.path(), sourcePath));

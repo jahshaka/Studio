@@ -27,7 +27,7 @@ import re
 import sys
 
 DECIDES = re.compile(r"return|readOk|\*ok|= false|=false|refus|failed\(|out\.|result\.|error =|break|continue|throw|"
-                     r"fail\(|\+\+|\*\w+ = ")
+                     r"fail\(|\+\+|\*\w+ = |->append\(")
 LOGS = re.compile(r"JahLog|qWarning|qInfo|fprintf|qDebug|sayFailed")
 DECL = re.compile(r"db::Error\s+(\w+)\s*[;{=(]")
 
