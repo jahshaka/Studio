@@ -291,7 +291,6 @@ void casesMaterial(Fixture &f)
     Scene *first = f.engine->createScene("q-reverse");
     const MaterialId ownerMat2 = first->createPbrMaterial(PbrParams());
     TextureId scriptTex = 0, ownerTex = 0, ownerDecal = 0, scriptDecal = 0;
-    std::string unbound, bound;   // the owner's material as its live datablock holds it (Scene::dumpMaterial), compared whole
     {
         Host run;
         run.setConsole([](const std::string &) {});
@@ -303,11 +302,8 @@ void casesMaterial(Fixture &f)
         scriptDecal = d.value.isNull() ? 0 : Call::idOf(d.value);
         ownerTex = first->loadTexture(tga, true);
         ownerDecal = first->loadDecalTexture(tga, DecalMap::Diffuse);
-        unbound = first->dumpMaterial(ownerMat2);
         first->setPbrTexture(ownerMat2, PbrTextureSlot::Albedo, ownerTex);
-        bound = first->dumpMaterial(ownerMat2);
     }
-    const std::string afterHost = first->dumpMaterial(ownerMat2);
     std::printf("Q: THE REVERSE ALIAS: the script's texture %u, the owner's %u (after the host: %s); the script's decal image "
                 "%u, the owner's %u (after the host: %s)\n", scriptTex, ownerTex,
                 first->texturePresence(ownerTex) == Scene::Presence::Present ? "alive" : "GONE", scriptDecal, ownerDecal,
@@ -318,9 +314,9 @@ void casesMaterial(Fixture &f)
           "THE REVERSE ALIAS: a path a script loaded FIRST into a handed-in scene, then its owner, is the owner's own id "
           "(" + std::to_string(ownerTex) + ", the script's " + std::to_string(scriptTex) + ") and outlives the host's end "
           "- the texture and the decal image");
-    check(!bound.empty() && bound != unbound && afterHost == bound,
-          "THE REVERSE ALIAS's MATERIAL: the owner's material still holds its texture after the host's end (its live "
-          "datablock unchanged; THE CONTROL: binding the texture changed it)");
+    // (THE MATERIAL's BINDING has no CPU read that sees the unbind - the live datablock's dump does not change on the
+    // headless engine: the confirm's C1, the twin deleted - so the texture's PRESENCE above is the law: a destroyed
+    // texture is unbound from every material first, OgreMaterials.cpp destroyTexture)
     f.engine->destroyScene(first);
     std::remove(tga);
 }

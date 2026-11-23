@@ -252,6 +252,17 @@ int main()
     const bool keptOne = s->decalTexturePresence(redTex) == Scene::Presence::Present;
     CHECK(redTex2 != 0 && redTex2 != redTex && usedTwice == 1 && dropOne && usedOne == 1 && keptOne,
           "the same path loaded twice is two ids of ONE slice (used 1), and destroying one id keeps the slice");
+    // ...and destroying BOTH frees it (a path of its own: decal_red's slice serves the cases below)
+    if (!writeSolidTga("decal_pair.tga", 0, 0, 255)) { std::printf("FAIL: write decal_pair.tga\n"); return 1; }
+    const TextureId pairA = s->loadDecalTexture("decal_pair.tga", DecalMap::Diffuse);
+    const TextureId pairB = s->loadDecalTexture("decal_pair.tga", DecalMap::Diffuse);
+    enginetest::frames(engine, 1);
+    const unsigned usedPair = s->published().decalAtlasUsed[int(DecalMap::Diffuse)];
+    const bool dropBoth = s->destroyTexture(pairA) && s->destroyTexture(pairB);
+    enginetest::frames(engine, 1);
+    CHECK(pairA && pairB && pairA != pairB && usedPair == 2 && dropBoth &&
+              s->published().decalAtlasUsed[int(DecalMap::Diffuse)] == 1,
+          "destroying BOTH ids of one slice frees it (used 2 with the pair, back to 1: decal_red's alone)");
 
     // ---- the decal projects ---------------------------------------------
     NodeId decal = s->createNode();
