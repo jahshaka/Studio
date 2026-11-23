@@ -51,6 +51,8 @@
 #include "irisgl/core/guid.h"
 #include "services/assettags.h"
 #include "services/materialbundle.h"
+#include "services/materialmembers.h"
+#include "services/assetdelete.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -554,6 +556,80 @@ int main(int argc, char **argv)
               "12: and the preset itself cannot be renamed");
         CHECK(db.fetchAsset(goldGuid).name == QLatin1String("Gold PBR"),
               "12: ...one guid, one name");
+    }
+
+    // =======================================================================
+    // 13. A FAILED READ NEVER DECIDES A DELETE (NOQT-DATABASE-1 stage 2, the spec's law): where "who uses it"
+    //     (Database::hasMultipleDependers) or "who pins it" (assetdelete::livePins / countAssetPins) decides a
+    //     delete, a read that FAILS is never "nobody": the member SURVIVES and the delete is refused by name.
+    //     The failure is injected by a TEMP VIEW that shadows the table on the library's connection (SQLite
+    //     resolves an unqualified name to the temp schema first) and raises "integer overflow" on its rows.
+    // =======================================================================
+    {
+        const auto row = [&db](const QString &guid, ModelTypes type, const QString &parent) {
+            db.createAssetEntry(guid, guid, static_cast<int>(type), parent, assethome::materials(),
+                                assethome::Origin::Create, QString(), QString(), QByteArray(), QByteArray(),
+                                QByteArray(), QByteArray());
+        };
+        const auto alive = [&db](const QString &guid) { return !db.fetchAsset(guid).guid.isEmpty(); };
+        const auto listedUnused = [&db](const QString &guid) {
+            for (const materialmembers::Unused &u : materialmembers::unused(&db, nullptr, QStringLiteral("gone-material")))
+                if (u.guid == guid) return true;
+            return false;
+        };
+        const auto shadow = [&conn](const char *table) {
+            db::Error e;
+            conn.exec(std::string("CREATE TEMP VIEW ") + table + " AS SELECT * FROM main." + table
+                          + " WHERE abs(-9223372036854775807 - 1) IS NOT NULL", &e);
+            return !e;
+        };
+        const auto unshadow = [&conn](const char *table) {
+            db::Error e;
+            conn.exec(std::string("DROP VIEW temp.") + table, &e);
+        };
+        row(QStringLiteral("gone-material"), ModelTypes::Material, QString());
+
+        // CONTROL: a baked map of the material that nothing uses or pins IS removed (the clean deletes).
+        row(QStringLiteral("gone-orphan"), ModelTypes::Texture, QStringLiteral("gone-material"));
+        QString err;
+        const QVector<materialmembers::Unused> cleaned = materialmembers::cleanUnused(&db, nullptr, QStringLiteral("gone-material"), &err);
+        CHECK(cleaned.size() == 1 && !alive(QStringLiteral("gone-orphan")),
+              QStringLiteral("13: CONTROL: an unused baked map is removed (%1 removed)").arg(cleaned.size()).toUtf8().constData());
+
+        // (a) WHO USES IT, unread: a map another material uses, its dependencies read failing.
+        row(QStringLiteral("gone-used"), ModelTypes::Texture, QStringLiteral("gone-material"));
+        row(QStringLiteral("gone-user"), ModelTypes::Material, QString());
+        db.createDependency(static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture),
+                            QStringLiteral("gone-user"), QStringLiteral("gone-used"));
+        CHECK(shadow("dependencies"), "13a: the dependencies read is made to fail");
+        CHECK(!listedUnused(QStringLiteral("gone-used")),
+              "13a: a map whose users could not be read is NOT listed unused (the DECISION, not an accident of the write)");
+        materialmembers::cleanUnused(&db, nullptr, QStringLiteral("gone-material"), &err);
+        unshadow("dependencies");
+        CHECK(alive(QStringLiteral("gone-used")),
+              "13a: a map whose users could not be read SURVIVES the clean (never 'nobody uses it')");
+
+        // (b) WHO PINS IT, unread: a map a live project pins, its pins read failing.
+        row(QStringLiteral("gone-pinned"), ModelTypes::Texture, QStringLiteral("gone-material"));
+        db.createProject(QStringLiteral("gone-project"), QStringLiteral("Gone Project"));
+        AssetCas::writePin(conn, QStringLiteral("gone-project"), QStringLiteral("gone-pinned"), QString());
+        db.removeDependenciesByType(QStringLiteral("gone-user"), ModelTypes::Texture);   // (a)'s user lets go
+        CHECK(shadow("project_assets"), "13b: the pins read is made to fail");
+        CHECK(!listedUnused(QStringLiteral("gone-pinned")),
+              "13b: a map whose pins could not be read is NOT listed unused (the DECISION, not an accident of the write)");
+        materialmembers::cleanUnused(&db, nullptr, QStringLiteral("gone-material"), &err);
+        unshadow("project_assets");
+        CHECK(alive(QStringLiteral("gone-pinned")),
+              "13b: a map whose pins could not be read SURVIVES the clean (never 'no project holds it')");
+        const assetdelete::Outcome direct = [&]() {
+            shadow("project_assets");
+            const assetdelete::Outcome out = assetdelete::remove(&db, QStringLiteral("gone-pinned"));
+            unshadow("project_assets");
+            return out;
+        }();
+        CHECK(alive(QStringLiteral("gone-pinned")) && !direct.ok && direct.error.contains(QStringLiteral("could not be read")),
+              QStringLiteral("13b: assetdelete::remove with its pin count unread is REFUSED by name: '%1'")
+                  .arg(direct.error).toUtf8().constData());
     }
 
     printf(failures ? "\n%d FAILURES\n" : "\nall material bundle assertions passed\n", failures);

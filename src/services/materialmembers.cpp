@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/materialbundle.h"
 #include "services/memberstamp.h"
+#include "services/jahlog.h"
 
 namespace {
 
@@ -156,6 +157,18 @@ QVector<Unused> unused(Database *db, Project *project, const QString &materialGu
         return entry;
     };
 
+    // A FAILED READ NEVER LISTS A ROW AS UNUSED (NOQT-DATABASE-1 stage 2): the list is what cleanUnused
+    // deletes, so a row whose users or pins could not be read is kept and said by name.
+    const auto heldOrUnread = [db](const QString &guid) {
+        bool read = true;
+        const bool held = !db->hasMultipleDependers(guid, &read).isEmpty()
+                          || !assetdelete::livePins(db, guid, &read).isEmpty();
+        if (!read)
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                QStringLiteral("members: '%1' is kept - who uses or pins it could not be read").arg(guid));
+        return held || !read;
+    };
+
     if (!materialGuid.isEmpty()) {
         // LIBRARY SCOPE: the rows that came in through THIS bundle and are
         // referenced by nothing. The origin stamp is the only link left once
@@ -172,8 +185,7 @@ QVector<Unused> unused(Database *db, Project *project, const QString &materialGu
             if (row.type != static_cast<int>(ModelTypes::Texture)) continue;
             if (!memberstamp::isStamped(row.properties)) continue;
             if (memberstamp::originOf(row.properties) != materialGuid) continue;
-            if (!db->hasMultipleDependers(row.guid).isEmpty()) continue;   // somebody uses it
-            if (!assetdelete::livePins(db, row.guid).isEmpty()) continue;  // a project holds it
+            if (heldOrUnread(row.guid)) continue;   // somebody uses it, a project holds it, or neither is known
             out.append(describeRow(row, QStringLiteral("library")));
         }
         // AND THE BAKED MAPS THE DEFINITION NO LONGER NAMES (BUNDLE-P4, the
@@ -202,8 +214,7 @@ QVector<Unused> unused(Database *db, Project *project, const QString &materialGu
         }
         for (const QString &child : children) {
             if (named.contains(child)) continue;                            // still a member
-            if (!db->hasMultipleDependers(child).isEmpty()) continue;       // somebody uses it
-            if (!assetdelete::livePins(db, child).isEmpty()) continue;      // a project holds it
+            if (heldOrUnread(child)) continue;   // somebody uses it, a project holds it, or neither is known
             const AssetRecord row = db->fetchAsset(child);
             if (row.guid.isEmpty()) continue;
             out.append(describeRow(row, QStringLiteral("library")));
@@ -219,7 +230,13 @@ QVector<Unused> unused(Database *db, Project *project, const QString &materialGu
     for (const auto &row : db->fetchProjectPinnedAssets(projectGuid)) {
         if (row.type != static_cast<int>(ModelTypes::Texture)) continue;
         if (!memberstamp::isStamped(row.properties)) continue;
-        if (!db->hasMultipleDependers(row.guid).isEmpty()) continue;
+        bool read = true;
+        const bool used = !db->hasMultipleDependers(row.guid, &read).isEmpty();
+        if (used || !read) {
+            if (!read) JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                QStringLiteral("members: '%1' is kept - who uses it could not be read").arg(row.guid));
+            continue;
+        }
         out.append(describeRow(row, QStringLiteral("project")));
     }
     return out;

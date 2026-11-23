@@ -44,12 +44,13 @@ namespace assetdelete
 /// Which projects pin this asset (guid + display name), INCLUDING dead pins
 /// (`live == false`: a project_assets row whose project no longer exists —
 /// still a catalog reference, still holding content alive, but nobody's).
-QVector<AssetPinRecord> pins(Database *db, const QString &guid);
+QVector<AssetPinRecord> pins(Database *db, const QString &guid, bool *readOk = nullptr);
 
 /// The pins that represent a living project — what the delete law actually
 /// weighs (it agrees with Database::countAssetPins by construction). Empty
 /// means a delete really deletes, however many dead rows survive.
-QVector<AssetPinRecord> livePins(Database *db, const QString &guid);
+/// `readOk` (optional) is CLEARED when the pins could not be read (an empty answer is then no answer).
+QVector<AssetPinRecord> livePins(Database *db, const QString &guid, bool *readOk = nullptr);
 
 struct Outcome
 {

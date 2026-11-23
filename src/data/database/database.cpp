@@ -2055,7 +2055,7 @@ bool Database::isAssetListed(const QString &guid)
     return int(query.int64(0)) != 0;
 }
 
-QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
+QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid, bool *readOk)
 {
     QVector<AssetPinRecord> pins;
     if (guid.isEmpty() || !db.isOpen()) return pins;
@@ -2071,7 +2071,11 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
                   "LEFT JOIN projects P ON P.guid = PA.project_guid "
                   "WHERE PA.asset_guid = ? ORDER BY P.name");
     dbqt::bindText(query, 1, guid);
-    if (!executeAndCheckQuery(query, "FetchAssetPins")) return pins;
+    if (!executeAndCheckQuery(query, "FetchAssetPins")) {
+        if (readOk) *readOk = false;
+        if (readOk && query.failed()) *readOk = false;
+    return pins;
+    }
 
     while (query.next()) {
         AssetPinRecord pin;
@@ -4043,7 +4047,7 @@ QString Database::fetchObjectMesh(const QString &guid, const int ertype, const i
 	return QString();
 }
 
-QStringList Database::hasMultipleDependers(const QString &guid)
+QStringList Database::hasMultipleDependers(const QString &guid, bool *readOk)
 {
     // DISTINCT, because the question is "WHO uses this", not "how many edge
     // rows name it" (fix round F3). One user can hold more than one edge to
@@ -4056,12 +4060,13 @@ QStringList Database::hasMultipleDependers(const QString &guid)
     // lit up inviting a duplicate nobody needs.
     DbQuery query(connection(), "SELECT DISTINCT depender FROM dependencies WHERE dependee = ?");
     dbqt::bindText(query, 1, guid);
-    executeAndCheckQuery(query, "HasMultipleDependers");
+    const bool ran = executeAndCheckQuery(query, "HasMultipleDependers");
 
     QStringList dependers;
     while (query.next()) {
         dependers.append(dbqt::text(query, 0));
     }
+    if (readOk && (!ran || query.failed())) *readOk = false;
     return dependers;
 }
 

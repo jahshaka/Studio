@@ -701,7 +701,8 @@ public:
     /// by the projects table; a pin whose project row is gone reports the guid
     /// as its name). This is what `assets.pins` answers and what the Assets
     /// page's delete confirmation counts.
-    QVector<AssetPinRecord> fetchAssetPins(const QString &guid);
+    /// `readOk` (optional) is CLEARED when the pins could not be read: an empty answer is then no answer.
+    QVector<AssetPinRecord> fetchAssetPins(const QString &guid, bool *readOk = nullptr);
     /// How many projects pin this asset — the count without the names. `readOk` is CLEARED when the count could
     /// not be read (0 is then no answer: the delete paths treat it as pinned); left as it is otherwise.
     int countAssetPins(const QString &guid, bool *readOk = nullptr);
@@ -853,7 +854,9 @@ public:
     /// favourite its `handle` listed (populateFavorites returns nothing with no handle).
     QString fetchObjectMesh(const QString &guid, const int ertype, const int eetype);
 
-    QStringList hasMultipleDependers(const QString &guid);
+    /// `readOk` (optional) is CLEARED when its users could not be read: an empty answer is then no answer
+    /// (a delete that depends on it is refused - never "nobody uses it").
+    QStringList hasMultipleDependers(const QString &guid, bool *readOk = nullptr);
     bool hasDependencies(const QString &guid);
 
     // IMPORT ===============================================================================

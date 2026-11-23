@@ -27,16 +27,16 @@ For more information see the LICENSE file
 namespace assetdelete
 {
 
-QVector<AssetPinRecord> pins(Database *db, const QString &guid)
+QVector<AssetPinRecord> pins(Database *db, const QString &guid, bool *readOk)
 {
     if (!db) return {};
-    return db->fetchAssetPins(guid);
+    return db->fetchAssetPins(guid, readOk);
 }
 
-QVector<AssetPinRecord> livePins(Database *db, const QString &guid)
+QVector<AssetPinRecord> livePins(Database *db, const QString &guid, bool *readOk)
 {
     QVector<AssetPinRecord> live;
-    for (const AssetPinRecord &pin : pins(db, guid))
+    for (const AssetPinRecord &pin : pins(db, guid, readOk))
         if (pin.live) live.push_back(pin);
     return live;
 }
@@ -53,7 +53,17 @@ Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
         return out;
     }
 
-    out.pinCount = db->countAssetPins(guid);
+    // A FAILED READ NEVER DECIDES A DELETE (NOQT-DATABASE-1 stage 2): every read below that decides what goes
+    // (who pins it, its closure, who uses each member) reports a failure here, and the delete is then REFUSED by
+    // name before anything is written - never "no pins", "no members" or "nobody uses it".
+    bool read = true;
+    const auto refusedOnRead = [&out, &guid]() {
+        out.error = QStringLiteral("the delete of '%1' was REFUSED: who pins or uses it could not be read "
+                                   "(the log names the read) - nothing was deleted").arg(guid);
+        return out;
+    };
+    out.pinCount = db->countAssetPins(guid, &read);
+    if (!read) return refusedOnRead();
 
     // ---- the pinned case: unlist, and touch NOTHING else ------------------
     if (!force && out.pinCount > 0) {
@@ -70,9 +80,11 @@ Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
     if (keepShared) {
         // Conservative: only the asset row and its dependency links go;
         // dependee assets (possibly shared) stay.
+        const QStringList edges = db->fetchAssetGUIDAndDependencies(guid, false, &read);
+        if (!read) return refusedOnRead();
         ok = db->deleteAsset(guid, force) && ok;
         ok = db->deleteDependency(guid) && ok;
-        for (const auto &dep : db->fetchAssetGUIDAndDependencies(guid, false))
+        for (const auto &dep : edges)
             ok = db->deleteDependency(guid, dep) && ok;
     } else {
         // THE LIBRARY DELETE TAKES ONLY BORN-INSIDE MEMBERS, NEVER A USER-IMPORTED
@@ -86,7 +98,7 @@ Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
         // material — (b) no depender remains OUTSIDE the set, and (c) no living
         // project pins it. Every other row of the closure keeps its row and
         // loses only the edge from the dying asset.
-        const QStringList closure = db->fetchAssetGUIDAndDependencies(guid, /*appendSelf*/ true);
+        const QStringList closure = db->fetchAssetGUIDAndDependencies(guid, /*appendSelf*/ true, &read);
         const QSet<QString> set(closure.begin(), closure.end());
         QStringList dying;
         dying.append(guid);
@@ -106,9 +118,9 @@ Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
                     bornInside = true;
             }
             if (!bornInside) continue;
-            if (!force && db->countAssetPins(member) > 0) continue;   // a project holds it
+            if (!force && db->countAssetPins(member, &read) > 0) continue;   // a project holds it
             bool heldFromOutside = false;
-            for (const QString &depender : db->hasMultipleDependers(member)) {
+            for (const QString &depender : db->hasMultipleDependers(member, &read)) {
                 if (depender == member || set.contains(depender)) continue;
                 heldFromOutside = true;
                 break;
@@ -116,6 +128,7 @@ Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
             if (heldFromOutside) continue;
             dying.append(member);
         }
+        if (!read) return refusedOnRead();
         DbTransaction tx(db->connection());
         for (const QString &g : dying) {
             ok = db->deleteAsset(g, force) && ok;
