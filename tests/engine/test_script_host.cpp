@@ -2106,6 +2106,23 @@ int main()
         ur.call("engine.node.destroy", {sh, n1});
         const bool goneWithNode = !k.kept<LightDesc>(s, KeptKind::Light, Call::idOf(n1)) &&
                                   k.kept<LightDesc>(s, KeptKind::Light, Call::idOf(n2));
+        // (f) THE KEPT RECORD ERASED with its node kept (engine.light.remove's door: Commands::unkeep): gone for that node
+        // only; and a record whose serial is not the live scene's (a dead scene's, left at this address) is not erased
+        const std::uint32_t n3 = Call::idOf(ur.call("engine.node.create", {sh}).value);
+        const std::uint64_t key3 = std::uint64_t(KeptKind::Light) << 32 | n3;
+        k.keep(s, KeptKind::Light, n3, lamp);
+        const bool keptThree = k.kept<LightDesc>(s, KeptKind::Light, n3) != nullptr;
+        k.unkeep(s, KeptKind::Light, n3);
+        const bool unkept = !k.kept<LightDesc>(s, KeptKind::Light, n3) && k.kept<LightDesc>(s, KeptKind::Light, Call::idOf(n2));
+        k.keep(s, KeptKind::Light, n3, lamp);
+        const unsigned long long ownSerial = k.st->scenes[s].serial;
+        k.st->scenes[s].serial = ownSerial + 1000;   // (as a dead scene's record at this address reads)
+        k.unkeep(s, KeptKind::Light, n3);
+        const bool foreignKept = k.st->scenes[s].kept.count(key3) == 1;
+        k.st->scenes[s].serial = ownSerial;
+        check(keptThree && unkept && foreignKept,
+              "(f) THE KEPT RECORD ERASED, ITS NODE KEPT (Commands::unkeep): kept reads none after it, the other node's "
+              "record stays (THE CONTROL: it was kept); a record under another scene's serial is not erased");
         const bool recorded = k.st->scenes.count(s) == 1;
         ur.call("engine.scene.destroy", {sh});
         check(keptWhileLived && goneWithNode && recorded && k.st->scenes.count(s) == 0,
