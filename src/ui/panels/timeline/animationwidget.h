@@ -111,9 +111,6 @@ public:
     /// underneath is the same animedits:: call.
     void setServices(StudioServices *s) { services = s; }
 
-signals:
-    void animationChanged(iris::SceneNodePtr ptr, iris::AnimationPtr anim);
-
 public slots:
     void setLooping(bool loop);
     void addAnimation();

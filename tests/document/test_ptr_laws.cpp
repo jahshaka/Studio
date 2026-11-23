@@ -4,11 +4,13 @@
 // `weak_from_this().lock()`: a node no shared_ptr owns yet answers NULL, never a throw. The other
 // spelling, `shared_from_this()`, THROWS std::bad_weak_ptr for an unowned object, and a SceneNode can
 // be unowned: its constructor is public (scenenode.h), so SceneNode is the one type this row exercises.
-// NOT EXERCISED, and why: Scene and Bone cannot exist unowned — their constructors are private
-// (scene.h `Scene();` under `private`, skeleton.h `Bone(){}` before `public:`) and their factories
-// wrap at once (Scene::create, Bone::create); a change that makes either constructible unowned
-// owes this row a case. (Scene takes no self-handle at all.) The laws of ownership itself — a subtree
-// dies with its last handle, the back-links are weak — are services.memory's, section 3.
+// NOT EXERCISED, and why: Scene's constructor is public, but a Scene has NO self-handle (its
+// enable_shared_from_this base was deleted as unused, NOQT-DOCUMENT-1 stage 2) — a lane that gives
+// Scene a self-handle again owes this row a Scene case. Bone has a self-handle (Bone::addChild) but
+// cannot exist unowned: `Bone(){}` is private (skeleton.h, before `public:`) and Bone::create wraps
+// it at once — a change that makes a Bone constructible unowned owes this row a Bone case.
+// The laws of ownership itself — a subtree dies with its last handle, the back-links are weak — are
+// services.memory's, section 3.
 //
 // No engine, no display: the document's own store (nodegraph.h) needs neither.
 #include <cstdio>
