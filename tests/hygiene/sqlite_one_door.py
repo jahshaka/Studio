@@ -7,7 +7,8 @@ THE LAWS:
   2. `QSql` appears in no C/C++ file under src/ or tests/;
   3. no link line of the configured build (build.ninja) carries Qt6Sql;
   4. (the reader's point) no `#include` under src/ names a `tests/` path, and `data/db/state.h` (the layer's private
-     half) is included only under src/data/db/ and tests/db/ (dbseam.h is test-only by its include path).
+     half) is included only under src/data/db/ and tests/db/ (dbseam.h is test-only by its include path); an
+     include's path is RESOLVED before it is judged (beside the including file and from src/: `../db/state.h` too).
 THE CONTROLS (each must read above zero, else the row reads nothing and is red): the `sqlite3_` sites in src/data/db;
 SQLite on the app's own link line (bin/Jahshaka: through jahshaka_db).
 Prints `ok:`/`FAIL:` lines; the last line is the verdict. argv[1] = the source root, argv[2] = the build directory.
@@ -43,10 +44,16 @@ def main():
                         failures.append(f"{rel}:{i}: sqlite3_ outside the door: {line.strip()[:100]}")
                 if re.search(r'\bQSql', line):
                     failures.append(f"{rel}:{i}: QtSql: {line.strip()[:100]}")
-                if re.match(r'\s*#\s*include\s*[<"]', line):
-                    if rel.startswith('src/') and re.search(r'[<"/]tests/', line):
+                inc = re.match(r'\s*#\s*include\s*[<"]([^>"]+)[>"]', line)
+                if inc:
+                    # The include's path RESOLVED (the reader's point): beside the including file, and from src/
+                    # (the tree's include root), so `../db/state.h` is judged as what it names.
+                    named = {os.path.normpath(os.path.join(os.path.dirname(rel), inc.group(1))).replace(os.sep, '/'),
+                             os.path.normpath(os.path.join('src', inc.group(1))).replace(os.sep, '/')}
+                    if rel.startswith('src/') and (re.search(r'(^|/)tests/', inc.group(1))
+                                                   or any(n.startswith('tests/') for n in named)):
                         failures.append(f"{rel}:{i}: a src/ file includes a tests/ path: {line.strip()[:100]}")
-                    if 'data/db/state.h' in line and not in_door:
+                    if 'src/data/db/state.h' in named and not in_door:
                         failures.append(f"{rel}:{i}: the layer's private half included outside the door: {line.strip()[:100]}")
     app_sqlite = False
     ninja = os.path.join(build, 'build.ninja')
