@@ -328,25 +328,15 @@ set_tests_properties(gi.sun_contact_acne PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(gi.sun_contact_acne PROPERTIES JAHSHAKA_TEST_FRAMES 65)
 
-# gi.probe_court — A PROBE THAT PHOTOGRAPHED A FLOOR AND A WALL IS KEPT (PHOTON-5 stage 1):
-# an open court keeps >= 1 probe at Medium, a bare floor printed, a sealed room its whole grid.
-add_executable(test_gi_probe_court test_gi_probe_court.cpp)
-set_target_properties(test_gi_probe_court PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_probe_court PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_probe_court PRIVATE JahshakaEngine)
-add_dependencies(test_gi_probe_court JahshakaEngineMedia)
-jah_gpu_row(gi.probe_court CLASS engine COMMAND test_gi_probe_court
+# gi.probe_court — A PROBE THAT PHOTOGRAPHED A FLOOR AND A WALL IS KEPT (PHOTON-5 stage 1; an ENGINE SCRIPT since
+# SCRIPT-IN-ENGINE-1 2f): an open court keeps >= 1 probe at Medium, a bare floor printed, a sealed room its whole grid.
+# probe_court.js run by jahengine (the engine's own script host: no C++ fixture, no Qt; --name: its verdict line names
+# the row); its route declared through engine.view.declareRoutes and judged by every frame; proved equal to the C++ row
+# it replaced, picture by picture and count by count (spikes/script-in-engine-1/train/equality/). 30 frames.
+jah_gpu_row(gi.probe_court CLASS engine FRAMES 30
+         COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/probe_court.js" --name gi.probe_court
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.probe_court PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.probe_court PROPERTIES JAHSHAKA_TEST_FRAMES 30)
+set_tests_properties(gi.probe_court PROPERTIES TIMEOUT 60 LABELS "engine")
 
 # gi.directional_seam (PHOTON-7 stage 1, AB A11; stage 1's read F2) — THE PACKED HALVES OF A DIRECTIONAL VOLUME DO NOT
 # BLEED INTO EACH OTHER, AT ANY LEVEL: the hit read at either x face of every cascade, the first half's +x face at levels
