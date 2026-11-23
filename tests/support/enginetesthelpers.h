@@ -220,7 +220,7 @@ inline EngineConfig testEngineConfig(std::string logFile, const EngineOverrides 
 /// right after it creates the view. The FIRST frame rendered through enginetest::frames() after it asserts the
 /// declaration against the frame's own record: the view's chain as built (inspect::ViewEcho::routes(): the gather, the
 /// screen integrate, the ray reflection - each must match EXACTLY, a route the view runs and the row did not declare
-/// is a mismatch too) and the pause (inspect::SceneEcho::giUpdateBudget() == 0 must equal paused()): a mismatch FAILS
+/// is a mismatch too) and the pause (the published GiStatus::updateBudget == 0 must equal paused()): a mismatch FAILS
 /// AT ONCE (exit 1), before any law, naming the declared and the actual routes. The scene's products (GiStatus: the
 /// field ifdBound, the cards' atlas built, the store's cascades) are built by the frames themselves, so each one
 /// declared must be live by the kRouteProductFrames-th frame after the declaration, else the same failure; the match
@@ -259,7 +259,7 @@ inline Routes actualRoutes(View *v, Scene *s)
     a.f = gs.ifdBound;
     a.c = gs.cards.built;
     a.s = !gs.cascades.empty();
-    if (const inspect::SceneEcho *se = inspect::scene(s)) a.p = se->giUpdateBudget() == 0;
+    a.p = gs.updateBudget == 0;   // the published pause (GiStatus::updateBudget), the scripts' door too
     return a;
 }
 /// The frames a declared product (field, cards, store) has to come live in after its declaration: the test surface's
