@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/qt/colour.h"
 #include "app/qtstd.h"
+#include "irisgl/core/text.h"
 #include "app/qtstdgui.h"
 #include "scripting/modules/worldapi.h"
 #include "jahshaka/engine/Stillness.h"
@@ -70,6 +71,7 @@ For more information see the LICENSE file
 #include "services/jahlog.h"
 #include "services/shippedassets.h"
 #include "irisgl/document/mapvalue.h"
+#include "irisgl/core/text.h"
 
 using namespace scriptmod;
 
@@ -220,7 +222,7 @@ const QStringList &fogKeys()
     static const QStringList keys = [] {
         QStringList k = { QStringLiteral("fogEnabled"), QStringLiteral("fogColor") };
         for (const worldmodes::ParamRow &p : worldmodes::fogParams())
-            k << worldmodes::fogParamSceneKey(p);
+            k << QString::fromStdString(worldmodes::fogParamSceneKey(p));
         return k;
     }();
     return keys;
@@ -790,7 +792,7 @@ bool WorldApi::fog(const QVariantMap &params)
     // rows, then every continuous row the World > Fog section shows.
     static const QStringList known = [] {
         QStringList k = { QStringLiteral("enabled"), QStringLiteral("color") };
-        for (const worldmodes::ParamRow &p : worldmodes::fogParams()) k << p.id;
+        for (const worldmodes::ParamRow &p : worldmodes::fogParams()) k << QString::fromStdString(p.id);
         return k;
     }();
     const QString refusal = refuseUnknownKeys(QStringLiteral("world.fog"), params, known);
@@ -808,7 +810,7 @@ bool WorldApi::fog(const QVariantMap &params)
     // fields are deleted, CRUD law. A script that wants the fog those two
     // described computes the density: 2/(start+end).)
     for (const worldmodes::ParamRow &p : worldmodes::fogParams())
-        if (params.contains(p.id)) p.set(scene, params.value(p.id).toDouble());
+        if (params.contains(QString::fromStdString(p.id))) p.set(scene, params.value(QString::fromStdString(p.id)).toDouble());
     edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World Fog"));
     return true;
 }
@@ -841,7 +843,7 @@ bool WorldApi::shadows(const QVariantMap &params)
                                            "(got %1)").arg(budget));
         }
         scene->shadowMapBudget = budget;
-        worldmodes::pinRowValue(scene, QStringLiteral("shadowMapBudget"), budget);
+        worldmodes::pinRowValue(scene, (QStringLiteral("shadowMapBudget")).toStdString(), budget);
     }
     return true;
 }
@@ -924,12 +926,12 @@ bool WorldApi::gi(const QVariantMap &params)
     if (params.contains("tier")) {
         bool ok = false;
         const QString t = params.value("tier").toString();
-        const worldmodes::PhotonTier tier = worldmodes::photonTierFromName(t, &ok);
+        const worldmodes::PhotonTier tier = worldmodes::photonTierFromName(t.toStdString(), &ok);
         if (!ok)
             return fail(QStringLiteral("world.gi: unknown tier '%1' (%2) — Photon's quality dial, "
                                        "which picks the technique, the voxel/probe quality and the "
                                        "irradiance field together")
-                            .arg(t, worldmodes::photonTierNames().join(QStringLiteral(", "))));
+                            .arg(t, QString::fromStdString(iris::text::join(worldmodes::photonTierNames(), ", "))));
         // The tier's write only — the step is this call's one step (applyPhoton
         // would push a second one).
         worldmodes::setPhoton(scene, worldmodes::photonEnabled(scene), tier);
@@ -948,7 +950,7 @@ bool WorldApi::gi(const QVariantMap &params)
                 "world.gi: 'instant_radiosity' was deleted — Photon's Low tier is two "
                 "camera-centred voxel cascades with the irradiance field on. Use 'vct'."));
         else return fail(QStringLiteral("world.gi: unknown mode '%1' (off, vct, vct_pcc_hybrid)").arg(m));
-        worldmodes::pinRowValue(scene, QStringLiteral("giMode"), int(scene->giMode));
+        worldmodes::pinRowValue(scene, (QStringLiteral("giMode")).toStdString(), int(scene->giMode));
     }
     if (params.contains("quality")) {
         const QString q = params.value("quality").toString().trimmed().toLower();
@@ -957,7 +959,7 @@ bool WorldApi::gi(const QVariantMap &params)
         else if (q == "high")   scene->giQuality = iris::GiQuality::HIGH;
         else if (q == "epic")   scene->giQuality = iris::GiQuality::EPIC;
         else return fail(QStringLiteral("world.gi: unknown quality '%1' (low, medium, high, epic)").arg(q));
-        worldmodes::pinRowValue(scene, QStringLiteral("giQuality"), int(scene->giQuality));
+        worldmodes::pinRowValue(scene, (QStringLiteral("giQuality")).toStdString(), int(scene->giQuality));
     }
     // THE PROBE GRID'S OWN KEYS AT A RAY TIER (PHOTON-F12-PCC). At High and
     // Epic, wherever the scene traces on this machine, no probe grid is built,
@@ -1087,7 +1089,7 @@ bool WorldApi::gi(const QVariantMap &params)
                 "world.giStatus().probeCaptureSize reports what the renderer resolved.")
                             .arg(raw.toString()));
         scene->giProbeCaptureSize = v;
-        worldmodes::pinRowValue(scene, QStringLiteral("giProbeSize"), v);
+        worldmodes::pinRowValue(scene, (QStringLiteral("giProbeSize")).toStdString(), v);
     }
     // Bounces and dynamic probes are Photon tier rows (Epic's two columns): an
     // explicit value PINS, exactly like mode and quality above.
@@ -1112,7 +1114,7 @@ bool WorldApi::gi(const QVariantMap &params)
                 "world.gi: bounces must be 0 or 1 (0 = the direct store alone; 1, every tier's column, the bounces "
                 "converged by feedback)"));
         scene->giBounces = b != 0;
-        worldmodes::pinRowValue(scene, QStringLiteral("giBounces"), b);
+        worldmodes::pinRowValue(scene, (QStringLiteral("giBounces")).toStdString(), b);
     }
     if (params.contains("light"))
         // The Instant Radiosity driving light. Refused by name, like the bounds
@@ -1200,10 +1202,10 @@ bool WorldApi::gi(const QVariantMap &params)
         e = readToggle("ddgi", wanted);
         if (!e.isEmpty()) return fail(e);
         if (wanted < 0) {
-            worldmodes::clearOverride(scene, QStringLiteral("giDdgi"));
+            worldmodes::clearOverride(scene, (QStringLiteral("giDdgi")).toStdString());
         } else {
             scene->giDdgi = wanted;
-            worldmodes::pinRowValue(scene, QStringLiteral("giDdgi"), wanted);
+            worldmodes::pinRowValue(scene, (QStringLiteral("giDdgi")).toStdString(), wanted);
         }
     }
     edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World GI"));
@@ -1220,7 +1222,7 @@ QVariantMap WorldApi::photonRow(worldmodes::PhotonTier tier)
 {
     static const char *qualityNames[] = { "low", "medium", "high", "epic" };
     return QVariantMap{
-        { QStringLiteral("tier"), worldmodes::photonTierName(tier) },
+        { QStringLiteral("tier"), QString::fromStdString(worldmodes::photonTierName(tier)) },
         { QStringLiteral("technique"),
           QString::fromLatin1(kGiModeNames[qBound(0, worldmodes::photonTechnique(tier), 2)]) },
         { QStringLiteral("quality"),
@@ -1236,10 +1238,10 @@ QVariantMap WorldApi::photonState(const iris::ScenePtr &scene)
     if (!scene) return QVariantMap();
     const bool on = worldmodes::photonEnabled(scene);
     QVariantList deviations;
-    for (const QString &d : worldmodes::photonDeviations(scene)) deviations.append(d);
+    for (const std::string &d : worldmodes::photonDeviations(scene)) deviations.append(QString::fromStdString(d));
     return QVariantMap{
         { QStringLiteral("enabled"), on },
-        { QStringLiteral("tier"), worldmodes::photonTierName(worldmodes::photonTier(scene)) },
+        { QStringLiteral("tier"), QString::fromStdString(worldmodes::photonTierName(worldmodes::photonTier(scene))) },
         { QStringLiteral("custom"), !deviations.isEmpty() },
         { QStringLiteral("deviations"), deviations },
         { QStringLiteral("technique"),
@@ -1283,10 +1285,10 @@ QVariantMap WorldApi::photon(const QVariantMap &params)
     if (params.contains(QStringLiteral("tier"))) {
         bool ok = false;
         const QString t = params.value(QStringLiteral("tier")).toString();
-        tier = worldmodes::photonTierFromName(t, &ok);
+        tier = worldmodes::photonTierFromName(t.toStdString(), &ok);
         if (!ok) {
             fail(QStringLiteral("world.photon: unknown tier '%1' (%2)")
-                     .arg(t, worldmodes::photonTierNames().join(QStringLiteral(", "))));
+                     .arg(t, QString::fromStdString(iris::text::join(worldmodes::photonTierNames(), ", "))));
             return QVariantMap();
         }
         write = true;
@@ -3481,7 +3483,7 @@ int WorldApi::setAntiAliasing(int samples)
                 QStringLiteral("msaa: %1x -> %2x requested").arg(was).arg(samples));
     // A direct edit of a backing field is a PIN (POST_CHAIN_SPEC §9.1): without
     // this the next world.mode() switch would silently undo it.
-    worldmodes::pinRowValue(scene, QStringLiteral("msaa"), samples);
+    worldmodes::pinRowValue(scene, (QStringLiteral("msaa")).toStdString(), samples);
     // NO FRAMES HERE (ENGINE-UPGRADE-U3 stage 2: the post-edit renders are deleted): the mirror pushes the value at
     // its next sync and the target rebuild lands in the frames after it; the ACHIEVED count is world.antiAliasing()'s once
     // the script has stepped them (editor.frame). This answers the request.
@@ -3532,7 +3534,7 @@ int WorldApi::setShadowResolution(int pixels)
         scene->shadowResolution = qBound(256, pixels, 8192);
 #endif
     }
-    worldmodes::pinRowValue(scene, QStringLiteral("shadowResolution"), scene->shadowResolution);
+    worldmodes::pinRowValue(scene, (QStringLiteral("shadowResolution")).toStdString(), scene->shadowResolution);
     if (!WorldModeCommand::same(registryBefore, WorldModeCommand::capture(scene)))
         sceneprops::notifyExternal(scene, QStringLiteral("worldModes"));
     // NO FRAMES HERE (ENGINE-UPGRADE-U3 stage 2): the mirror pushes the value at its next sync and the atlas rebuild
@@ -3573,7 +3575,7 @@ QVariantMap WorldApi::planarReflections()
 {
     auto scene = sceneOrFail(QStringLiteral("world.planarReflections"));
     if (!scene) return QVariantMap();
-    const worldmodes::Row *row = worldmodes::row(QStringLiteral("planarBudget"));
+    const worldmodes::Row *row = worldmodes::row((QStringLiteral("planarBudget")).toStdString());
     const int budget = row ? worldmodes::resolved(scene, *row) : 0;
     const int resolution = scene->planarReflectionResolution > 0
                                ? scene->planarReflectionResolution
@@ -3600,7 +3602,7 @@ QVariantMap WorldApi::setPlanarReflections(const QVariantMap &params)
             // "Follow the mode" = drop the pin and let the tier write through.
             // In Custom mode there is no tier to fall back to, so the sentinel
             // goes back into the field itself.
-            worldmodes::clearOverride(scene, QStringLiteral("planarBudget"));
+            worldmodes::clearOverride(scene, (QStringLiteral("planarBudget")).toStdString());
             if (worldmodes::pickedMode(scene) == worldmodes::Mode::Custom)
                 scene->planarReflectionBudget = -1;
         } else {
@@ -3612,14 +3614,14 @@ QVariantMap WorldApi::setPlanarReflections(const QVariantMap &params)
                 return QVariantMap();
             }
             if (b < 0) {
-                worldmodes::clearOverride(scene, QStringLiteral("planarBudget"));
+                worldmodes::clearOverride(scene, (QStringLiteral("planarBudget")).toStdString());
                 if (worldmodes::pickedMode(scene) == worldmodes::Mode::Custom)
                     scene->planarReflectionBudget = -1;
             } else {
                 // setRowValue writes the field AND records the pin, so the value
                 // survives a later mode switch — the same contract world.override
                 // gives every other row.
-                worldmodes::setRowValue(scene, QStringLiteral("planarBudget"), b);
+                worldmodes::setRowValue(scene, (QStringLiteral("planarBudget")).toStdString(), b);
             }
         }
     }
@@ -3894,7 +3896,7 @@ QVariantMap WorldApi::get()
     out["planarReflections"] = planarReflections();
     // World Mode (POST_CHAIN_SPEC §9.6): the tier plus every resolved row, so a
     // script reads the whole quality picture from one call.
-    out["mode"] = worldmodes::modeName(worldmodes::mode(scene));
+    out["mode"] = QString::fromStdString(worldmodes::modeName(worldmodes::mode(scene)));
     out["settings"] = settings();
     out["postFx"] = postFx();
     // The looks stack rides world.get() beside the rest of the post chain: a
@@ -3909,7 +3911,7 @@ QVariantMap WorldApi::get()
                          { "color", colorToJs(iris::toQColor(scene->fogColor)) },
                          { "colorFrom", worldmodes::fogColourAuthored(scene)
                                             ? QStringLiteral("authored") : QStringLiteral("sky") } };
-        for (const worldmodes::ParamRow &p : worldmodes::fogParams()) fog[p.id] = p.get(scene);
+        for (const worldmodes::ParamRow &p : worldmodes::fogParams()) fog[QString::fromStdString(p.id)] = p.get(scene);
         out["fog"] = fog;
     }
     static const char *giQualityNames[] = { "low", "medium", "high", "epic" };
@@ -3944,7 +3946,7 @@ QVariantMap WorldApi::get()
                              { "cardBudget", scene->giCardBudgetTexels },
                              // PHOTON's quality tier (GI_UNIFIED_SPEC §2): the
                              // dial the three fields above resolve through.
-                             { "tier", worldmodes::photonTierName(worldmodes::photonTier(scene)) } };
+                             { "tier", QString::fromStdString(worldmodes::photonTierName(worldmodes::photonTier(scene))) } };
     out["photon"] = photonState(scene);
     QVariantMap sky;
     const int typeIndex = qBound(0, int(scene->skyType), int(scene->skyTypeToStr.size()) - 1);
@@ -3971,9 +3973,9 @@ QVariantMap WorldApi::rowState(const iris::ScenePtr &scene, const worldmodes::Ro
     const worldmodes::Mode m = worldmodes::pickedMode(scene);
     return QVariantMap{
         { "value", value },
-        { "valueId", worldmodes::valueId(r, value) },
-        { "label", worldmodes::valueLabel(r, value) },
-        { "source", worldmodes::source(scene, r) },
+        { "valueId", QString::fromStdString(worldmodes::valueId(r, value)) },
+        { "label", QString::fromStdString(worldmodes::valueLabel(r, value)) },
+        { "source", QString::fromStdString(worldmodes::source(scene, r)) },
         { "tierValue", worldmodes::tierValue(r, m, scene) },
         { "available", r.available },
     };
@@ -3996,10 +3998,10 @@ QString WorldApi::mode(const QVariantMap &params)
     if (params.contains("mode")) {
         bool ok = false;
         const QString requested = params.value("mode").toString();
-        const worldmodes::Mode m = worldmodes::modeFromName(requested, &ok);
+        const worldmodes::Mode m = worldmodes::modeFromName(requested.toStdString(), &ok);
         if (!ok) {
             fail(QStringLiteral("world.mode: unknown mode '%1' (%2, custom)")
-                     .arg(requested, worldmodes::modeNames().join(QStringLiteral(", "))));
+                     .arg(requested, QString::fromStdString(iris::text::join(worldmodes::modeNames(), ", "))));
             return QString();
         }
         // A tier switch rewrites thirteen backing fields at once. It was not
@@ -4009,7 +4011,7 @@ QString WorldApi::mode(const QVariantMap &params)
         worldmodes::setMode(scene, m);
         pushWorldModeUndo(QStringLiteral("World Mode"), scene, before);
     }
-    return worldmodes::modeName(worldmodes::mode(scene));
+    return QString::fromStdString(worldmodes::modeName(worldmodes::mode(scene)));
 }
 
 QVariantMap WorldApi::settings()
@@ -4018,7 +4020,7 @@ QVariantMap WorldApi::settings()
     auto scene = sceneOrFail(QStringLiteral("world.settings"));
     if (!scene) return out;
     for (const worldmodes::Row &r : worldmodes::rows())
-        out.insert(r.id, rowState(scene, r));
+        out.insert(QString::fromStdString(r.id), rowState(scene, r));
     return out;
 }
 
@@ -4028,7 +4030,7 @@ QVariantMap WorldApi::override(const QVariantMap &params)
     auto scene = sceneOrFail(QStringLiteral("world.override"));
     if (!scene) return out;
     const QString id = params.value("id").toString();
-    const worldmodes::Row *r = worldmodes::row(id);
+    const worldmodes::Row *r = worldmodes::row(id.toStdString());
     if (!r) {
         fail(QStringLiteral("world.override: unknown row '%1' — world.modeTable() lists them").arg(id));
         return out;
@@ -4064,14 +4066,14 @@ QVariantMap WorldApi::override(const QVariantMap &params)
         value = raw.toBool() ? 1 : 0;
         resolvedValue = true;
     } else if (raw.typeId() == QMetaType::QString) {
-        resolvedValue = worldmodes::valueFromId(*r, raw.toString(), value);
+        resolvedValue = worldmodes::valueFromId(*r, raw.toString().toStdString(), value);
     } else {
         bool ok = false;
         value = raw.toInt(&ok);
         resolvedValue = ok;
     }
     const auto before = WorldModeCommand::capture(scene);
-    if (!resolvedValue || !worldmodes::setRowValue(scene, id, value)) {
+    if (!resolvedValue || !worldmodes::setRowValue(scene, id.toStdString(), value)) {
         fail(QStringLiteral("world.override: '%1' is not a valid value for row '%2'")
                  .arg(raw.toString(), id));
         return out;
@@ -4086,13 +4088,13 @@ QVariantMap WorldApi::clearOverride(const QVariantMap &params)
     auto scene = sceneOrFail(QStringLiteral("world.clearOverride"));
     if (!scene) return out;
     const QString id = params.value("id").toString();
-    const worldmodes::Row *r = worldmodes::row(id);
+    const worldmodes::Row *r = worldmodes::row(id.toStdString());
     if (!r) {
         fail(QStringLiteral("world.clearOverride: unknown row '%1'").arg(id));
         return out;
     }
     const auto before = WorldModeCommand::capture(scene);
-    worldmodes::clearOverride(scene, id);
+    worldmodes::clearOverride(scene, id.toStdString());
     pushWorldModeUndo(QStringLiteral("Unpin Quality Row"), scene, before);
     return rowState(scene, *r);
 }
@@ -4136,9 +4138,9 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
                 "for whether it is a number or a measurement."));
             return QVariantMap();
         }
-        if (!worldmodes::postFxParam(it.key())) {
+        if (!worldmodes::postFxParam(it.key().toStdString())) {
             QStringList known;
-            for (const auto &p : worldmodes::postFxParams()) known << p.id;
+            for (const auto &p : worldmodes::postFxParams()) known << QString::fromStdString(p.id);
             fail(QStringLiteral("world.postFx: unknown parameter '%1' (known: %2)")
                      .arg(it.key(), known.join(QStringLiteral(", "))));
             return QVariantMap();
@@ -4148,11 +4150,11 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
     // World panel's rows push, through the recorder every world verb uses.
     QStringList keys;
     for (const worldmodes::ParamRow &p : worldmodes::postFxParams())
-        keys << QStringLiteral("postFx.") + p.id;
+        keys << QStringLiteral("postFx.") + QString::fromStdString(p.id);
     WorldEdit edit(scene, keys);
     for (const worldmodes::ParamRow &p : worldmodes::postFxParams()) {
-        if (params.contains(p.id))
-            p.set(scene, qBound(p.minValue, params.value(p.id).toDouble(), p.maxValue));
+        if (params.contains(QString::fromStdString(p.id)))
+            p.set(scene, qBound(p.minValue, params.value(QString::fromStdString(p.id)).toDouble(), p.maxValue));
     }
     // The one CROSS-parameter rule the table cannot express: the auto-exposure
     // window has to be ordered, whichever order the caller wrote it in.
@@ -4166,7 +4168,7 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
     // The section re-reads what moved (SMALL-FIXES-3) — the recorder does it.
     edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World Camera"));
     for (const worldmodes::ParamRow &p : worldmodes::postFxParams())
-        out[p.id] = p.get(scene);
+        out[QString::fromStdString(p.id)] = p.get(scene);
     // THE READING (RENDER AUDIT A11/A14: the monitor and this verb could see
     // every pass and not the one number that decides how bright the picture
     // is). Where the automatic exposure actually SETTLED, reported in the same
@@ -4294,7 +4296,7 @@ QVariantMap WorldApi::addLook(const QString &id, const QVariantMap &params, int 
     QVariantMap out;
     auto scene = sceneOrFail(QStringLiteral("world.addLook"));
     if (!scene) return out;
-    const iris::LookDef *def = iris::lookDef(id);
+    const iris::LookDef *def = iris::lookDef(id.toStdString());
     if (!def) {
         QStringList known;
         int count = 0;
@@ -4377,7 +4379,7 @@ QVariantMap WorldApi::setLook(const QString &id, const QVariantMap &params)
     QVariantMap out;
     auto scene = sceneOrFail(QStringLiteral("world.setLook"));
     if (!scene) return out;
-    const iris::LookDef *def = iris::lookDef(id);
+    const iris::LookDef *def = iris::lookDef(id.toStdString());
     QJsonArray stack = qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks)).toArray();
     const int at = def ? lookIndexOf(stack, id) : -1;
     if (at < 0) {
@@ -4425,13 +4427,13 @@ QVariantMap WorldApi::modeTable()
                                                     : iris::ScenePtr();
     for (const worldmodes::Row &r : worldmodes::rows()) {
         QVariantMap row;
-        row["id"] = r.id;
-        row["label"] = r.label;
-        row["group"] = r.group;
+        row["id"] = QString::fromStdString(r.id);
+        row["label"] = QString::fromStdString(r.label);
+        row["group"] = QString::fromStdString(r.group);
         row["type"] = r.type == worldmodes::RowType::Bool ? QStringLiteral("bool")
                     : r.type == worldmodes::RowType::Enum ? QStringLiteral("enum")
                                                           : QStringLiteral("int");
-        row["cost"] = worldmodes::rowCost(r, rays);
+        row["cost"] = QString::fromStdString(worldmodes::rowCost(r, rays));
         row["available"] = r.available;
         // WHICH DIAL OWNS THIS ROW (GI_UNIFIED_SPEC §2). "world" rows resolve
         // through world.mode's tier; "photon" rows resolve through the Photon
@@ -4453,7 +4455,7 @@ QVariantMap WorldApi::modeTable()
         // disabled "traced" — the same two states the World panels show.
         QVariantList options;
         for (const worldmodes::ComboItem &o : worldmodes::comboItems(r, openScene, rays)) {
-            QVariantMap m{ { "id", o.id }, { "label", o.label }, { "value", o.value } };
+            QVariantMap m{ { "id", QString::fromStdString(o.id) }, { "label", QString::fromStdString(o.label) }, { "value", o.value } };
             if (o.followsTier) m["followsTier"] = true;
             options.append(m);
         }
@@ -4466,17 +4468,17 @@ QVariantMap WorldApi::modeTable()
             // A Photon row's four columns are the PHOTON tiers; they happen to
             // carry the same four names, which is exactly why `tierSpace` above
             // says which set of four these are.
-            const QStringList names = r.tierSpace == worldmodes::TierSpace::Photon
-                                          ? worldmodes::photonTierNames()
-                                          : worldmodes::modeNames();
+            const QStringList names = qtstd::toQStringList(r.tierSpace == worldmodes::TierSpace::Photon
+                                                               ? worldmodes::photonTierNames()
+                                                               : worldmodes::modeNames());
             for (int i = 0; i < names.size(); ++i)
                 tiers.insert(names[i], QVariantMap{ { "value", r.tier[i] },
-                                                    { "valueId", worldmodes::valueId(r, r.tier[i]) } });
+                                                    { "valueId", QString::fromStdString(worldmodes::valueId(r, r.tier[i])) } });
             row["tiers"] = tiers;
         }
         rowList.append(row);
     }
-    out["modes"] = worldmodes::modeNames();
+    out["modes"] = qtstd::toQStringList(worldmodes::modeNames());
     out["rows"] = rowList;
     return out;
 }
@@ -4494,9 +4496,9 @@ QVariantMap WorldApi::tierTable()
     static const char *kQualityNames[]   = { "low", "medium", "high", "epic" };
 
     QVariantList photonList;
-    for (const QString &name : worldmodes::photonTierNames()) {
+    for (const QString &name : qtstd::toQStringList(worldmodes::photonTierNames())) {
         bool ok = false;
-        const worldmodes::PhotonTier t = worldmodes::photonTierFromName(name, &ok);
+        const worldmodes::PhotonTier t = worldmodes::photonTierFromName(name.toStdString(), &ok);
         if (!ok) continue;
         const int quality = qBound(0, worldmodes::photonQuality(t), 3);
         const jahshaka::engine::GiQualityFacts facts =
@@ -4563,7 +4565,7 @@ QVariantMap WorldApi::tierTable()
             // Epic tier), and its VR column (worldmodes::photonVrGather, PHOTON-GA-VR).
             { QStringLiteral("gather"), gatherOf(worldmodes::photonGather(t)) },
             { QStringLiteral("vrGather"), gatherOf(worldmodes::photonVrGather(t)) },
-            { QStringLiteral("description"), worldmodes::photonTierSentence(t) } });
+            { QStringLiteral("description"), QString::fromStdString(worldmodes::photonTierSentence(t)) } });
     }
 
     // Which Photon tier each WORLD mode selects — the `photon` row's own four
@@ -4571,16 +4573,16 @@ QVariantMap WorldApi::tierTable()
     QVariantList worldList;
     // ...and its PIXEL-ERROR THRESHOLD (ATOM-3 stage 1): the World Mode row's own column.
     const worldmodes::Row *photonRow = worldmodes::row(worldmodes::photonRowId());
-    const worldmodes::Row *pixelRow = worldmodes::row(QStringLiteral("atomPixelError"));
-    const QStringList modeNames = worldmodes::modeNames();
+    const worldmodes::Row *pixelRow = worldmodes::row((QStringLiteral("atomPixelError")).toStdString());
+    const QStringList modeNames = qtstd::toQStringList(worldmodes::modeNames());
     for (int i = 0; i < modeNames.size(); ++i) {
         const int column = photonRow ? photonRow->tier[i] : 0;
         worldList.append(QVariantMap{
             { QStringLiteral("mode"), modeNames[i] },
             { QStringLiteral("photon"),
               column <= 0 ? QStringLiteral("off")
-                          : worldmodes::photonTierName(
-                                worldmodes::PhotonTier(qBound(0, column - 1, 3))) },
+                          : QString::fromStdString(worldmodes::photonTierName(
+                                worldmodes::PhotonTier(qBound(0, column - 1, 3)))) },
             { QStringLiteral("atomPixelError"), pixelRow && i < 4 ? pixelRow->tier[i] : 0 } });
     }
 
@@ -4588,9 +4590,9 @@ QVariantMap WorldApi::tierTable()
     // renders away from the viewport renders — the tier's, or a declared lower one.
     QVariantList offscreenList;
     for (const worldmodes::OffscreenPicture &k : worldmodes::offscreenPictures())
-        offscreenList.append(QVariantMap{ { QStringLiteral("kind"), k.kind },
+        offscreenList.append(QVariantMap{ { QStringLiteral("kind"), QString::fromStdString(k.kind) },
                                           { QStringLiteral("tierPicture"), k.tierPicture },
-                                          { QStringLiteral("renders"), k.renders } });
+                                          { QStringLiteral("renders"), QString::fromStdString(k.renders) } });
 
     return QVariantMap{ { QStringLiteral("photon"), photonList },
                         { QStringLiteral("world"), worldList },

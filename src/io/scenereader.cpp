@@ -550,7 +550,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // fields above, below, once the World Mode is known.
         if (sceneObj.contains("giTier")) {
             bool ok = false;
-            const auto t = worldmodes::photonTierFromName(sceneObj.value("giTier").toString(), &ok);
+            const auto t = worldmodes::photonTierFromName((sceneObj.value("giTier").toString()).toStdString(), &ok);
             scene->giTier = ok ? int(t) : scene->giTier;
         }
     }
@@ -710,10 +710,10 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     {
         scene->worldOverrides = qtstd::fromQJsonObject(sceneObj.value("worldOverrides").toObject());
         // The Photon row is never pinned (WORLD-MODE-1): a `photon` pin is deleted on read.
-        scene->worldOverrides.erase(worldmodes::photonRowId().toStdString());
+        scene->worldOverrides.erase(worldmodes::photonRowId());
         const QString m = sceneObj.value("worldMode").toString().trimmed().toLower();
         bool ok = false;
-        const auto mode = worldmodes::modeFromName(m, &ok);
+        const auto mode = worldmodes::modeFromName(m.toStdString(), &ok);
         if (ok) scene->worldMode = int(mode);
     }
 	scene->setWorldGravity(sceneObj.value("gravity").toDouble(scene->gravity));

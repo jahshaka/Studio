@@ -75,6 +75,7 @@ For more information see the LICENSE file
 #include "services/sessionheader.h"
 #include "jahshaka/engine/Published.h"
 #include "jahshaka/engine/Shaders.h"
+#include "irisgl/core/text.h"
 
 
 // Hints that a dedicated GPU should be used whenever possible
@@ -173,14 +174,14 @@ int main(int argc, char *argv[])
             : QString::fromLocal8Bit(qgetenv(testtier::kEnvVar)).trimmed();
         if (!tier.isEmpty()) {
             bool ok = false;
-            const worldmodes::Mode m = worldmodes::modeFromName(tier, &ok);
+            const worldmodes::Mode m = worldmodes::modeFromName(tier.toStdString(), &ok);
             if (!ok || m == worldmodes::Mode::Custom) {
                 std::fprintf(stderr, "Jahshaka: --test-tier/%s: '%s' is not a World Mode (%s)\n",
                              testtier::kEnvVar, qPrintable(tier),
-                             qPrintable(worldmodes::modeNames().join(QStringLiteral(", "))));
+                             iris::text::join(worldmodes::modeNames(), ", ").c_str());
                 return 2;
             }
-            testtier::set(worldmodes::modeName(m));
+            testtier::set(QString::fromStdString(worldmodes::modeName(m)));
         }
         // ...AND WHAT IT NEEDS (TEST-NEEDS-1): JAHSHAKA_TEST_NEEDS names the switchable
         // features the process keeps (testtier::switchable(); `none` = none of them). A list

@@ -275,7 +275,7 @@ bool Session::loadEnv(const std::string &name, std::string &error)
     std::fflush(stdout);
     if (!mOpt.tier.isEmpty()) {
         bool ok = false;
-        const worldmodes::Mode m = worldmodes::modeFromName(mOpt.tier, &ok);
+        const worldmodes::Mode m = worldmodes::modeFromName(mOpt.tier.toStdString(), &ok);
         if (!ok || m == worldmodes::Mode::Custom) { error = "unknown tier '" + mOpt.tier.toStdString() + "'"; return false; }
         mTier = int(m);
         worldmodes::setMode(mDoc, m);
@@ -378,7 +378,7 @@ bool Session::load(std::string &error)
             mJlab.overlay = saved.overlay;
             if (mJlab.hasCamera) mCamera.set(mJlab.camPos, mJlab.camTarget);
             bool ok = false;
-            const worldmodes::Mode m = worldmodes::modeFromName(mOpt.tier.isEmpty() ? mJlab.tier : mOpt.tier, &ok);
+            const worldmodes::Mode m = worldmodes::modeFromName((mOpt.tier.isEmpty() ? mJlab.tier : mOpt.tier).toStdString(), &ok);
             if (ok && m != worldmodes::Mode::Custom) { mTier = int(m); worldmodes::setMode(mDoc, m); }
             return true;
         }
@@ -423,7 +423,7 @@ bool Session::load(std::string &error)
     bool ok = false;
     QString tier = mOpt.tier;
     if (tier.isEmpty()) tier = mJlab.tier;
-    const worldmodes::Mode m = worldmodes::modeFromName(tier, &ok);
+    const worldmodes::Mode m = worldmodes::modeFromName(tier.toStdString(), &ok);
     if (!ok || m == worldmodes::Mode::Custom) { error = "unknown tier '" + tier.toStdString() + "'"; return false; }
     mTier = int(m);
     worldmodes::setMode(mDoc, m);
@@ -1405,7 +1405,7 @@ bool Session::exec(const Command &c)
         else std::printf("LAB ARM %s = %s\n", c.args[0].c_str(), c.args[1].c_str());
     } else if (c.verb == "row") {
         // A WORLD ROW, through the panel's own setter (PHOTON-7 stage 7, 7-3's reference: the reflection's cutoff)
-        const worldmodes::Row *r = worldmodes::row(QString::fromStdString(c.args[0]));
+        const worldmodes::Row *r = worldmodes::row(c.args[0]);
         if (!r || !r->set) {
             ok = false;
             labFail("LAB REFUSED row: no settable world row '%s'\n", c.args[0].c_str());

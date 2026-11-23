@@ -52,7 +52,7 @@ void build(AccordianBladeWidget *blade, const QJsonArray &raw,
     for (int i = 0; i < stack.size(); ++i) {
         const QJsonObject entry = stack.at(i).toObject();
         const QString id = entry.value(QStringLiteral("id")).toString();
-        const iris::LookDef *def = iris::lookDef(id);
+        const iris::LookDef *def = iris::lookDef(id.toStdString());
         const looks::LookUi *ui = looks::lookUi(id);
         if (!def || !ui) continue;
 
@@ -176,7 +176,7 @@ void build(AccordianBladeWidget *blade, const QJsonArray &raw,
                      [stack, combo, write](int row) {
                          if (row <= 0) return;
                          const QString id = combo->getItemData(row).toString();
-                         const iris::LookDef *def = iris::lookDef(id);
+                         const iris::LookDef *def = iris::lookDef(id.toStdString());
                          if (!def) return;
                          QJsonArray next = stack;
                          next.append(qtstd::toQJsonValue(iris::makeLookEntry(*def)));

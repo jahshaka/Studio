@@ -68,7 +68,7 @@ void WorldPostFxPropertyWidget::setSceneView(IEditorViewport *sceneView)
 void WorldPostFxPropertyWidget::identifyRow(QWidget *row, const worldmodes::Row &r)
 {
     if (!row) return;
-    QStringList keywords{ r.group };
+    QStringList keywords{ QString::fromStdString(r.group) };
     // CURATED SYNONYMS (PROPERTY_FILTER_SPEC D5), beside the row, deleted with
     // it: the short names people actually type for rows whose label spells the
     // thing out in full.
@@ -90,7 +90,7 @@ void WorldPostFxPropertyWidget::identifyRow(QWidget *row, const worldmodes::Row 
                  << QStringLiteral("center weighted");
     else if (r.id == QLatin1String("photon"))
         keywords << QStringLiteral("gi") << QStringLiteral("global illumination");
-    PropertyRows::identify(row, QStringLiteral("world.override:") + r.id, keywords);
+    PropertyRows::identify(row, QStringLiteral("world.override:") + QString::fromStdString(r.id), keywords);
 }
 
 void WorldPostFxPropertyWidget::build()
@@ -98,40 +98,41 @@ void WorldPostFxPropertyWidget::build()
     if (!effectRows.isEmpty() || !scene) return;
 
     const bool rays = sceneTracesRays();
-    for (const QString &rowId : worldmodes::postFxRowIds()) {
-        const worldmodes::Row *r = worldmodes::row(rowId);
+    for (const std::string &rowIdStd : worldmodes::postFxRowIds()) {
+        const QString rowId = QString::fromStdString(rowIdStd);
+        const worldmodes::Row *r = worldmodes::row(rowIdStd);
         if (!r) continue;                       // a table entry was renamed; say nothing
 
         EffectRow row;
-        row.id = r->id;
+        row.id = QString::fromStdString(r->id);
 
         if (!r->available) {
             // Declared, not served (POST_CHAIN_SPEC §9.2 — SSR today). Shown so
             // the section is a complete account of the chain, disabled so it
             // cannot be set to something the renderer would ignore.
-            row.unavailable = this->addLabel(r->label, QStringLiteral("not available yet"));
-            if (row.unavailable) row.unavailable->setToolTip(worldmodes::rowCost(*r, rays));
+            row.unavailable = this->addLabel(QString::fromStdString(r->label), QStringLiteral("not available yet"));
+            if (row.unavailable) row.unavailable->setToolTip(QString::fromStdString(worldmodes::rowCost(*r, rays)));
             identifyRow(row.unavailable, *r);
         } else if (r->type == worldmodes::RowType::Bool) {
-            row.box = this->addCheckBox(r->label, false);
-            row.box->setToolTip(worldmodes::rowCost(*r, rays));
+            row.box = this->addCheckBox(QString::fromStdString(r->label), false);
+            row.box->setToolTip(QString::fromStdString(worldmodes::rowCost(*r, rays)));
             identifyRow(row.box, *r);
-            const QString id = r->id;
-            const QString label = r->label;
+            const QString id = QString::fromStdString(r->id);
+            const QString label = QString::fromStdString(r->label);
             connect(row.box, &CheckBoxWidget::valueChanged, this, [this, id, label](bool on) {
                 if (loading || !scene) return;
                 panelundo::runWorldModeEdit(services, scene, tr("Set %1").arg(label),
-                    [this, id, on]() { worldmodes::setRowValue(scene, id, on ? 1 : 0); },
+                    [this, id, on]() { worldmodes::setRowValue(scene, id.toStdString(), on ? 1 : 0); },
                     [this]() { applied(); emit worldSettingsChanged(); });
             });
         } else {
-            row.combo = this->addComboBox(r->label);
-            const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(*r, scene, rays);
-            for (const worldmodes::ComboItem &item : items) row.combo->addItem(item.label, item.value);
-            row.combo->setToolTip(worldmodes::rowCost(*r, rays));
+            row.combo = this->addComboBox(QString::fromStdString(r->label));
+            const std::vector<worldmodes::ComboItem> items = worldmodes::comboItems(*r, scene, rays);
+            for (const worldmodes::ComboItem &item : items) row.combo->addItem(QString::fromStdString(item.label), item.value);
+            row.combo->setToolTip(QString::fromStdString(worldmodes::rowCost(*r, rays)));
             identifyRow(row.combo, *r);
-            const QString id = r->id;
-            const QString label = r->label;
+            const QString id = QString::fromStdString(r->id);
+            const QString label = QString::fromStdString(r->label);
             ComboBoxWidget *combo = row.combo;
             connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), this,
                     [this, id, label, combo](int index) {
@@ -140,11 +141,11 @@ void WorldPostFxPropertyWidget::build()
                         // so its index is the entry's — through the one path the
                         // verbs take (worldmodes::applyComboItem): the SSR row's
                         // Traced drops its pin rather than writing a value.
-                        const worldmodes::Row *r = worldmodes::row(id);
+                        const worldmodes::Row *r = worldmodes::row(id.toStdString());
                         if (!r) return;
-                        const QVector<worldmodes::ComboItem> items =
+                        const std::vector<worldmodes::ComboItem> items =
                             worldmodes::comboItems(*r, scene, sceneTracesRays());
-                        if (index >= items.size() || items[index].value != combo->getItemData(index).toInt())
+                        if (index >= int(items.size()) || items[index].value != combo->getItemData(index).toInt())
                             return;
                         const worldmodes::ComboItem chosen = items[index];
                         panelundo::runWorldModeEdit(services, scene, tr("Set %1").arg(label),
@@ -160,24 +161,24 @@ void WorldPostFxPropertyWidget::build()
         for (const worldmodes::ParamRow &p : worldmodes::postFxParams()) {
             if (p.ownerRowId != r->id) continue;
             ParamField pf;
-            pf.id = p.id;
-            pf.ownerRowId = p.ownerRowId;
-            pf.field = this->addDragFloat(p.label, p.get ? p.get(scene) : 0.0, p.minValue,
+            pf.id = QString::fromStdString(p.id);
+            pf.ownerRowId = QString::fromStdString(p.ownerRowId);
+            pf.field = this->addDragFloat(QString::fromStdString(p.label), p.get ? p.get(scene) : 0.0, p.minValue,
                                           p.maxValue, p.perPixelStep, p.decimals);
-            pf.field->setToolTip(p.doc);
+            pf.field->setToolTip(QString::fromStdString(p.doc));
             // The parameter's own key, and the effect it belongs to as a
             // synonym: "bloom" finds the Bloom row AND its threshold.
-            PropertyRows::identify(pf.field, QStringLiteral("postFx.") + p.id,
-                                   { r->label, r->id });
+            PropertyRows::identify(pf.field, QStringLiteral("postFx.") + QString::fromStdString(p.id),
+                                   { QString::fromStdString(r->label), QString::fromStdString(r->id) });
 
             // ONE UNDO STEP PER SCRUB: rowundo brackets the gesture (first tick
             // to editingDone) and the write goes through the sceneprops table,
             // which clamps through the registry's own setter — the identical
             // function world.postFx calls.
-            const QString key = QStringLiteral("postFx.") + p.id;
+            const QString key = QStringLiteral("postFx.") + QString::fromStdString(p.id);
             panelundo::SceneRows rows([this]() { return scene; }, [this]() { return services; },
                                       [this]() { refreshRows(); }, [this]() { return !loading; });
-            rowundo::Binding binding = rows(key, p.label);
+            rowundo::Binding binding = rows(key, QString::fromStdString(p.label));
             auto write = binding.write;
             binding.write = [this, write](const QVariant &v) {
                 write(v);
@@ -218,11 +219,11 @@ void WorldPostFxPropertyWidget::refreshRows()
 
     const bool rays = sceneTracesRays();
     for (const EffectRow &row : effectRows) {
-        const worldmodes::Row *r = worldmodes::row(row.id);
+        const worldmodes::Row *r = worldmodes::row(row.id.toStdString());
         if (!r) continue;
         // The texts follow the machine (worldmodes::rowCost): the scene's Ray
         // Tracing row can move after the section was built.
-        const QString tip = worldmodes::rowCost(*r, rays);
+        const QString tip = QString::fromStdString(worldmodes::rowCost(*r, rays));
         if (row.box) row.box->setToolTip(tip);
         if (row.combo) row.combo->setToolTip(tip);
         if (row.unavailable) row.unavailable->setToolTip(tip);
@@ -230,7 +231,7 @@ void WorldPostFxPropertyWidget::refreshRows()
         // The World Mode section marks a pinned row with a star and this section
         // writes through the same setRowValue, so it marks them the same way —
         // two views of one value must not describe it differently.
-        const QString label = pinned ? r->label + QStringLiteral(" *") : r->label;
+        const QString label = QString::fromStdString(pinned ? r->label + " *" : r->label);
         const int value = worldmodes::resolved(scene, *r);
 
         if (row.box) {
@@ -241,9 +242,9 @@ void WorldPostFxPropertyWidget::refreshRows()
             const QSignalBlocker quiet(row.combo->getWidget());
             // Re-listed, not re-labelled: the OFFERED entries follow the scene on
             // this machine (worldmodes::comboItems — the SSR row at a ray tier).
-            const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(*r, scene, rays);
+            const std::vector<worldmodes::ComboItem> items = worldmodes::comboItems(*r, scene, rays);
             row.combo->clear();
-            for (const worldmodes::ComboItem &item : items) row.combo->addItem(item.label, item.value);
+            for (const worldmodes::ComboItem &item : items) row.combo->addItem(QString::fromStdString(item.label), item.value);
             const int index = worldmodes::comboIndexOf(items, value);
             row.combo->setCurrentIndex(index >= 0 ? index : 0);
         }
@@ -260,8 +261,8 @@ void WorldPostFxPropertyWidget::refreshRows()
     }
 
     for (const ParamField &pf : paramFields) {
-        const worldmodes::ParamRow *p = worldmodes::postFxParam(pf.id);
-        const worldmodes::Row *owner = worldmodes::row(pf.ownerRowId);
+        const worldmodes::ParamRow *p = worldmodes::postFxParam(pf.id.toStdString());
+        const worldmodes::Row *owner = worldmodes::row(pf.ownerRowId.toStdString());
         if (!pf.field || !p) continue;
         pf.field->setValue(p->get ? p->get(scene) : 0.0);   // quiet: does not emit
         // A parameter is dead weight while its effect is off; showing it greyed

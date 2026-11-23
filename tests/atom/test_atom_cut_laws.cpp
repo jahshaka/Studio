@@ -659,7 +659,7 @@ static void rowNoPopCorner()
 static void rowNoPopEveryTier()
 {
     measureChecks();
-    const worldmodes::Row *row = worldmodes::row(QStringLiteral("atomPixelError"));
+    const worldmodes::Row *row = worldmodes::row((QStringLiteral("atomPixelError")).toStdString());
     check(row != nullptr, "the tier row atomPixelError exists");
     if (!row) return;
     const char *names[4] = { "Low", "Medium", "High", "Epic" };

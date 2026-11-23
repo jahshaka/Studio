@@ -109,7 +109,7 @@ void WorldAaPropertyWidget::onSamplesChanged(int row)
     // (POST_CHAIN_SPEC §9.1 — a direct edit of a backing field is a pin, and an
     // undo that dropped the value but kept the pin would lie about the tier).
     panelundo::runWorldModeEdit(services, scene, tr("MSAA"),
-        [this, samples]() { worldmodes::setRowValue(scene, QStringLiteral("msaa"), samples); },
+        [this, samples]() { worldmodes::setRowValue(scene, (QStringLiteral("msaa")).toStdString(), samples); },
         [this]() {
             // The achieved count the row reads back is the snapshot's, two frames on (U3 stage 2).
             refreshRows();

@@ -40,6 +40,7 @@
 #include "jahshaka/engine/GiParams.h"
 
 #include "../support/documentgraph.h"
+#include "app/qtstd.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
@@ -75,21 +76,21 @@ static void testEveryCell()
             if (!validCell(r, r.tier[t])) {
                 ++bad;
                 std::printf("   row %s tier %d holds %d, not one of its values\n",
-                            qPrintable(r.id), t, r.tier[t]);
+                            r.id.c_str(), t, r.tier[t]);
             }
         }
     }
     std::printf("   %d rows, %d cells\n", rows, cells);
     CHECK(bad == 0, "every cell of every row is a value the row can hold");
     // The Photon rows are the table's own columns, cell by cell.
-    const QStringList ids = worldmodes::photonRowIds();
+    const QStringList ids = qtstd::toQStringList(worldmodes::photonRowIds());
     CHECK(ids.size() == 5, "five Photon-tiered rows (technique, quality, field, bounces, probe size)");
     for (const QString &id : ids) {
-        const worldmodes::Row *r = worldmodes::row(id);
+        const worldmodes::Row *r = worldmodes::row(id.toStdString());
         CHECK(r && r->tierSpace == worldmodes::TierSpace::Photon,
               qPrintable(QStringLiteral("%1 is a Photon row").arg(id)));
     }
-    CHECK(worldmodes::row(QStringLiteral("giCascades")) == nullptr,
+    CHECK(worldmodes::row((QStringLiteral("giCascades")).toStdString()) == nullptr,
           "no cascade row: the chain always runs (the single volume is deleted)");
 }
 
@@ -98,7 +99,7 @@ static void testSentences()
     std::printf("\n-- 2. the sentence is the table --\n");
     for (PhotonTier t : kTiers) {
         const auto facts = giQualityFacts(GiQuality(worldmodes::photonQuality(t)));
-        const QString text = worldmodes::photonTierSentence(t);
+        const QString text = QString::fromStdString(worldmodes::photonTierSentence(t));
         std::printf("   %s\n", qPrintable(text));
         CHECK(text.contains(QString::number(facts.cascadeCount)) &&
                   text.contains(QString::number(facts.cascades[0].resolution)),
@@ -111,7 +112,7 @@ static void testSentences()
 static void testSsrRow()
 {
     std::printf("\n-- 3. the SSR row at a ray tier --\n");
-    const worldmodes::Row *ssr = worldmodes::row(QStringLiteral("ssr"));
+    const worldmodes::Row *ssr = worldmodes::row((QStringLiteral("ssr")).toStdString());
     CHECK(ssr != nullptr, "the SSR row exists");
     if (!ssr) return;
     for (PhotonTier t : kTiers) {
@@ -195,11 +196,11 @@ static void testSsrRow()
 static void testGatherRow()
 {
     std::printf("\n-- 4. the gather has no row --\n");
-    CHECK(worldmodes::row(QStringLiteral("giGather")) == nullptr,
+    CHECK(worldmodes::row((QStringLiteral("giGather")).toStdString()) == nullptr,
           "no row turns the screen-probe gather off (PHOTON-7 7-5)");
     for (PhotonTier t : kTiers) {
         const auto gf = worldmodes::photonGather(t);
-        const QString text = worldmodes::photonTierSentence(t);
+        const QString text = QString::fromStdString(worldmodes::photonTierSentence(t));
         CHECK(text.contains(QStringLiteral("(%1 rays a probe, a probe per %2x%2 px)")
                                 .arg(gf.octRes * gf.octRes).arg(gf.stride)),
               qPrintable(QStringLiteral("%1's sentence names its gather from the table")
@@ -228,7 +229,7 @@ static void testTriState()
         auto s = iris::Scene::create();
         s->giMode = iris::GiMode::VCT;   // a voxel technique: the field has something to be fed by
         CHECK(s->giDdgi == -1, "a bare document holds -1 (the tier's)");
-        const worldmodes::Row *r = worldmodes::row(QStringLiteral("giDdgi"));
+        const worldmodes::Row *r = worldmodes::row((QStringLiteral("giDdgi")).toStdString());
         CHECK(r && r->get(s) == 1, "...and the row resolves it to the tier's answer, ON, never OFF");
         worldmodes::setPhoton(s, true, t);
         CHECK(s->giDdgi == -1 && r &&
@@ -245,7 +246,7 @@ static void testTriState()
     // everywhere today — fieldDefault is ON at every quality — so this pins the
     // PATH: a per-quality default could not part the two.)
     {
-        const worldmodes::Row *r = worldmodes::row(QStringLiteral("giDdgi"));
+        const worldmodes::Row *r = worldmodes::row((QStringLiteral("giDdgi")).toStdString());
         int checked = 0, agree = 0;
         for (PhotonTier t : kTiers)
             for (int q = 0; q < 4; ++q) {
@@ -323,13 +324,13 @@ static void testProbeBudget()
 static void testOffscreenContract()
 {
     std::printf("\n-- 8. the offscreen picture contract --\n");
-    const QVector<worldmodes::OffscreenPicture> &kinds = worldmodes::offscreenPictures();
+    const std::vector<worldmodes::OffscreenPicture> &kinds = worldmodes::offscreenPictures();
     QStringList names;
     for (const worldmodes::OffscreenPicture &k : kinds) {
-        names << k.kind;
-        std::printf("   %-22s %s%s\n", qPrintable(k.kind), k.tierPicture ? "the tier's picture" : "DECLARED LOWER: ",
-                    k.tierPicture ? "" : qPrintable(k.renders));
-        CHECK(k.tierPicture || !k.renders.isEmpty(),
+        names << QString::fromStdString(k.kind);
+        std::printf("   %-22s %s%s\n", k.kind.c_str(), k.tierPicture ? "the tier's picture" : "DECLARED LOWER: ",
+                    k.tierPicture ? "" : k.renders.c_str());
+        CHECK(k.tierPicture || !k.renders.empty(),
               qPrintable(QStringLiteral("%1: a lower picture says what it renders").arg(k.kind)));
     }
     for (const char *want : { "viewport", "screenshot.scene", "screenshot.viewport", "screenshot.plain",
