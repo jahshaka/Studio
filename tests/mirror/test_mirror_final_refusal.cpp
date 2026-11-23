@@ -10,12 +10,16 @@
 // again: a published refusal, a warning, a node re-walk and the whole setLight each sync, for as long as the file is
 // missing.
 // THE CONTROL: the refusals counted are above zero (the first push is refused), and a CHANGED value is pushed again.
+// AND THE PICTURE STAYS (the lead's ruling C1): the engine's refusal is atomic, so the mirror pushes the lamp once more
+// WITHOUT the profile and the emitter WITHOUT the ramp - the lamp exists and its edits reach it, the emitter is built.
 // NULL render system, offscreen platform: no display, no card.
 #include <QGuiApplication>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
@@ -74,6 +78,44 @@ int main(int argc, char **argv)
         const unsigned long long changed = refused() - beforeChange;
         std::printf("      the path changed, 3 syncs: %llu refusals\n", changed);
         check(changed == 1, "a CHANGED value is pushed again, and refused once (" + std::to_string(changed) + ")");
+
+        // THE LAMP STAYS IN THE PICTURE (the lead's ruling C1): its profile refused, the lamp exists - the scene's light
+        // serial (Scene::published().lightWriteSerial: setLight advances it, a refused setLight does not) moved from 0 -
+        // and an edit of its intensity REACHES it (the serial moves again), the refused path still named, no new refusal
+        const std::uint64_t lit = target->published().lightWriteSerial;
+        lamp->intensity = 5.0f;
+        lamp->markChanged(iris::NodeChange::Params);
+        const unsigned long long beforeEdit = refused();
+        for (int i = 0; i < 2; ++i) {
+            mirror.sync();
+            enginetest::frozenFrames(e, 1);
+        }
+        const std::uint64_t edited = target->published().lightWriteSerial;
+        std::printf("      the lamp's light serial after its refusals: %llu; after an intensity edit: %llu (%llu refusals)\n",
+                    (unsigned long long)lit, (unsigned long long)edited, refused() - beforeEdit);
+        check(lit > 0 && edited > lit && refused() == beforeEdit,
+              "A MISSING .ies DOES NOT TAKE THE LAMP OUT: the lamp exists (light serial " + std::to_string(lit) +
+                  ") and an intensity edit reaches it (" + std::to_string(edited) + "), no refusal said again");
+
+        // ...AND A MISSING RAMP DOES NOT TAKE THE EMITTER DOWN: an emitter naming a ramp image no file holds is built
+        // (Scene::published().particleDefinitionsCreated 0 -> 1), the refusal said once
+        const unsigned defs0 = target->published().particleDefinitionsCreated;
+        auto emitter = iris::ParticleSystemNode::create();
+        emitter->setName("emitter");
+        emitter->colourRampImage = QStringLiteral("/no/such/dir/ramp.png");
+        doc->getRootNode()->addChild(emitter);
+        const unsigned long long beforeEmitter = refused();
+        for (int i = 0; i < 4; ++i) {
+            mirror.sync();
+            enginetest::frozenFrames(e, 1);
+        }
+        const unsigned defs1 = target->published().particleDefinitionsCreated;
+        const unsigned long long rampRefusals = refused() - beforeEmitter;
+        std::printf("      an emitter naming a missing ramp, 4 syncs: definitions %u -> %u, %llu refusals\n", defs0, defs1,
+                    rampRefusals);
+        check(defs1 == defs0 + 1 && rampRefusals == 1,
+              "A MISSING RAMP DOES NOT TAKE THE EMITTER DOWN: its definition built (" + std::to_string(defs0) + " -> " +
+                  std::to_string(defs1) + "), the refusal said once (" + std::to_string(rampRefusals) + ")");
     }
     e->destroyScene(target);
     std::printf("%s\n", gFailures == 0 ? "mirror.final_refusal: PASSED" : ("mirror.final_refusal: FAILED (" +
