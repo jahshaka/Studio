@@ -11,6 +11,9 @@ For more information see the LICENSE file
 #include "pbrgraphevaluator.h"
 #include "irisgl/document/qt/colorjson.h"
 #include "irisgl/document/qt/colour.h"
+#include "app/qtstd.h"
+#include "app/qtstdgui.h"
+#include "irisgl/document/properties/property.h"
 #include <QFileInfo>
 
 #include <QJsonArray>
@@ -54,9 +57,10 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 	for (auto it = values.begin(); it != values.end(); ++it) {
 		const auto& key = it.key();
 		if (colorKeys.contains(key))
-			material->setValue(key, values[key].toObject().isEmpty()
-			                            ? QVariant(QColor())
-			                            : QVariant(iris::toQColor(iris::colorFromJson(values[key].toObject()))));
+			// The colour's Object straight in (its shape is the file's {r,g,b,a}):
+			// an empty object, or a value that is not one, reads as the invalid
+			// colour exactly as before (valueshapes.h's absent).
+			material->setValue(key.toStdString(), qtstd::toValue(QJsonValue(values[key].toObject())));
 		else if (mapKeys.contains(key)) {
 			// A stored map is the texture's ASSET GUID (a baked map is a
 			// member Texture row of the bundle); the resolver turns it into the
@@ -66,15 +70,15 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 			// has no identity to carry.
 			const QString stored = values[key].toString();
 			if (stored.isEmpty() || QFileInfo::exists(stored)) {
-				material->setValue(key, stored);
+				material->setValue(key.toStdString(), iris::Value(stored.toStdString()));
 			} else {
 				const QString path = resolver ? resolver(stored) : QString();
-				material->setValue(key, iris::Material::textureRef(path == stored ? QString() : path,
-				                                                   stored));
+				material->setValue(key.toStdString(), iris::Material::textureRef(
+					path == stored ? std::string() : path.toStdString(), stored.toStdString()));
 			}
 		}
 		else if (key == "alphaMode")
-			material->setValue(key, values[key].toInt());
+			material->setValue("alphaMode", iris::Value(values[key].toInt()));
 		// THE FOLDED UV TRANSFORM (MATERIAL_UV_NODES_SPEC 3.2). `textureScale`
 		// is a two-element array when the axes differ and a plain number when
 		// they do not — and every material written before per-axis tiling
@@ -83,8 +87,8 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 		// array in UV units per second of the shader clock.
 		else if (key == "textureVelocity") {
 			const auto arr = values[key].toArray();
-			material->setValue(QStringLiteral("textureVelocityU"), arr.size() > 0 ? arr[0].toDouble() : 0.0);
-			material->setValue(QStringLiteral("textureVelocityV"), arr.size() > 1 ? arr[1].toDouble() : 0.0);
+			material->setValue("textureVelocityU", iris::Value(arr.size() > 0 ? arr[0].toDouble() : 0.0));
+			material->setValue("textureVelocityV", iris::Value(arr.size() > 1 ? arr[1].toDouble() : 0.0));
 		}
 		else if (key == "textureScale" || key == "textureOffset") {
 			const auto val = values[key];
@@ -99,16 +103,26 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 				u = v = val.toDouble(u);
 			}
 			if (isScale) {
-				material->setValue(QStringLiteral("textureScale"), u);   // sets both axes
-				material->setValue(QStringLiteral("textureScaleV"), v);
+				material->setValue("textureScale", iris::Value(u));   // sets both axes
+				material->setValue("textureScaleV", iris::Value(v));
 			}
 			else {
-				material->setValue(QStringLiteral("textureOffsetU"), u);
-				material->setValue(QStringLiteral("textureOffsetV"), v);
+				material->setValue("textureOffsetU", iris::Value(u));
+				material->setValue("textureOffsetV", iris::Value(v));
 			}
 		}
-		else
-			material->setValue(key, values[key].toDouble());
+		else {
+			// Every other value is a NUMBER in the file, converted BY THE ROW's
+			// KIND at this edge (qtstd::toRowValue): a Bool row's toBool, an Int /
+			// List row's toInt, a Float row's toFloat, as the rows' QVariant setters
+			// did; a field with no row (the scroll's U / V) takes the Number.
+			const std::string name = key.toStdString();
+			const QVariant number(values[key].toDouble());
+			iris::Value value(number.toDouble());
+			for (const iris::Property *prop : material->properties())
+				if (prop->name == name) { value = qtstd::toRowValue(prop->type, number); break; }
+			material->setValue(name, value);
+		}
 	}
 
 	return material;

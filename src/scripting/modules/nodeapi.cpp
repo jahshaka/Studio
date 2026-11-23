@@ -990,7 +990,7 @@ QStringList NodeApi::propertyKeys(const iris::SceneNodePtr &node)
     QStringList keys;
     if (!node) return keys;
     const iris::PropertyRows props = node->getProperties();
-    for (auto *prop : props.view()) keys << prop->name;
+    for (auto *prop : props.view()) keys << qtstd::toQString(prop->name);
     return keys;
 }
 

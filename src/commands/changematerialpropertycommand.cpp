@@ -14,25 +14,23 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/material.h"
 
 
-ChangeMaterialPropertyCommand::ChangeMaterialPropertyCommand(iris::MaterialPtr material, QString name, QVariant oldValue, QVariant newValue)
+ChangeMaterialPropertyCommand::ChangeMaterialPropertyCommand(iris::MaterialPtr material, std::string name,
+                                                             iris::Value oldValue, iris::Value newValue)
+    : material(std::move(material)), propName(std::move(name)), oldValue(std::move(oldValue)), newValue(std::move(newValue))
 {
-    this->material = material;
-    propName = name;
-    this->newValue = newValue;
-    this->oldValue = oldValue;
 }
 
 void ChangeMaterialPropertyCommand::undo()
 {
-    setMaterialProperty(propName, oldValue);
+    setMaterialProperty(oldValue);
 }
 
 void ChangeMaterialPropertyCommand::redo()
 {
-    setMaterialProperty(propName, newValue);
+    setMaterialProperty(newValue);
 }
 
-void ChangeMaterialPropertyCommand::setMaterialProperty(QString name, QVariant value)
+void ChangeMaterialPropertyCommand::setMaterialProperty(const iris::Value &value)
 {
     if (!material)
         return;
@@ -43,5 +41,7 @@ void ChangeMaterialPropertyCommand::setMaterialProperty(QString name, QVariant v
     // CustomMaterial any more.
     // PbrMaterial (and any future material) bridges by name — its setValue
     // carries the value onto the real fields the shader reads, textures as paths.
-    material->setValue(name, value);
+    // Its answer is not read: both Values were built of the row's kind by the
+    // verb or the panel that pushed this command (the edge, qtstd::toRowValue).
+    material->setValue(propName, value);
 }

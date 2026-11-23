@@ -427,15 +427,15 @@ bool addBasicWorld(const iris::ScenePtr &doc, const QString &binDir, const QStri
     floor->defaultFloor = true;
     {
         auto m = iris::PbrMaterial::create();
-        m->setValue("baseColor", QColor(255, 255, 255));
+        m->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
         m->setValue("baseColorMap",
-                    iris::Material::textureRef(QDir(binDir).filePath(QStringLiteral("app/content/textures/tile.png")), QString()));
+                    iris::Material::textureRef(QDir(binDir).filePath(QStringLiteral("app/content/textures/tile.png")).toStdString(), std::string()));
         m->setValue("textureScale", 25.0f);
         m->setValue("roughness", 1.0f);
         m->setValue("metallic", 0.0f);
         m->setValue("workflow", 1);
         m->setValue("ior", 1.0f);
-        m->setValue("specularColor", QColor(0, 0, 0));
+        m->setValue("specularColor", iris::colourToValue(iris::toSrgbColor(QColor(0, 0, 0))));
         floor->setMaterial(m);
     }
     doc->getRootNode()->addChild(floor);

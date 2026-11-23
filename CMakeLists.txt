@@ -879,6 +879,7 @@ set(HEADERS
     src/ui/controls/waveformwidget.h
     src/app/breakpad.h
     src/app/notices.h
+    src/app/qtstdgui.h
     src/app/updatechecker.h
     src/ui/dialogs/softwareupdatedialog.h
     src/services/assethelper.h

@@ -43,17 +43,17 @@ public:
     /// pickers this widget builds.
     Project *project = nullptr;
 
-    void setProperties(QList<iris::Property*>);
+    void setProperties(const std::vector<iris::Property *> &);
 
     /// CAN THESE ROWS SHOW THAT LIST? (ADD-1) True when `props` has the same
     /// SHAPE as the list on screen — the same order, types, names, labels,
     /// ranges and enum vocabularies — i.e. when the rows this panel already
     /// holds would have been built identically for it.
-    bool canRebind(const QList<iris::Property *> &props) const;
+    bool canRebind(const std::vector<iris::Property *> &props) const;
     /// Points the EXISTING rows at another property list: nothing destroyed,
     /// nothing created, no popup rebuilt, no row retired from the property-row
     /// registry. Only legal when canRebind() says so.
-    void rebind(const QList<iris::Property *> &props);
+    void rebind(const std::vector<iris::Property *> &props);
 
     /// THE DOCUMENT POINTERS GO (lane OPEN-FRAMES-1, from the §497 witness).
     ///
@@ -89,9 +89,7 @@ public:
     CheckBoxWidget      *addCheckBox(const QString&);
     TexturePickerWidget *addTexturePicker(const QString&);
     FilePickerWidget    *addFilePicker(const QString &name, const QString &suffix);
-	Widget2D*			addVector2Widget(const QString&, float xValue, float yValue);
 	Widget3D*			addVector3Widget(const QString&, float xValue, float yValue, float zValue);
-	Widget4D*			addVector4Widget(const QString&, float xValue, float yValue, float zValue, float wValue);
 	QWidget*			addWidgetHolder(QString title, QWidget *widget);
 
     void addFloatProperty(iris::Property*);
@@ -105,9 +103,7 @@ public:
     void addTextureProperty(iris::Property*);
     void addFileProperty(iris::Property*);
 
-	void addVector2Property(iris::Property*);
 	void addVector3Property(iris::Property*);
-	void addVector4Property(iris::Property*);
 
     void setListener(iris::PropertyListener*);
 
@@ -134,9 +130,9 @@ private:
     struct RowShape
     {
         iris::PropertyType type = iris::PropertyType::None;
-        QString name, displayName, suffix;
+        std::string name, displayName, suffix;
         double lo = 0.0, hi = 0.0;
-        QStringList labels;
+        std::vector<std::string> labels;
         bool operator==(const RowShape &o) const
         {
             return type == o.type && name == o.name && displayName == o.displayName && suffix == o.suffix &&

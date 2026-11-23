@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/document/qt/qtinterop.h"
 #include "irisgl/core/math/vec.h"
 #include "services/animationedits.h"
+#include "app/qtstdgui.h"
 
 #include <QColor>
 #include <algorithm>
@@ -98,10 +99,10 @@ QList<PropertyInfo> animatableProperties(const iris::SceneNodePtr &node)
         if (!prop || !isAnimatablePropertyType(prop->type))
             continue;
         PropertyInfo info;
-        info.name = prop->name;
-        info.displayName = prop->displayName;
+        info.name = qtstd::toQString(prop->name);
+        info.displayName = qtstd::toQString(prop->displayName);
         info.type = prop->type;
-        info.value = prop->getValue();
+        info.value = qtstd::toRowVariant(prop->type, prop->getValue());
         info.index = propIndex;
         out.append(info);
     }

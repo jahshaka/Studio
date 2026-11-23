@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/document/properties/property.h"
+#include "app/qtstd.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/assets/mesh.h"
@@ -395,11 +396,12 @@ void SceneIssues::checkNode(iris::SceneNode *node)
             // the scene names (there is no file name to show: there is no file).
             for (iris::Property *prop : material->properties()) {
                 if (!prop || prop->type != iris::PropertyType::Texture) continue;
-                const QString guid = material->textureGuid(prop->name);
-                if (guid.isEmpty() || material->textures.value(QStringLiteral("u_") + prop->name))
+                const QString guid = qtstd::toQString(material->textureGuid(prop->name));
+                const QString slot = QStringLiteral("u_") + qtstd::toQString(prop->name);
+                if (guid.isEmpty() || material->textures.value(slot))
                     continue;
                 missing << tr("%1 (asset %2: not in this library's store)")
-                               .arg(textureSlotName(QStringLiteral("u_") + prop->name), guid);
+                               .arg(textureSlotName(slot), guid);
             }
         }
         if (!missing.isEmpty()) {

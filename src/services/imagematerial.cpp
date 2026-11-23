@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/imagematerial.h"
+#include "app/qtstdgui.h"
 #include "services/materialbundle.h"
 
 #include <QBuffer>
@@ -57,15 +58,15 @@ iris::PbrMaterialPtr fromTexture(const QString &textureGuid, Database *db,
     // stay in step with what the shader reads.
     // UNTINTED, stated (DRAG-1): baseColor multiplies the map, and an image
     // shown on a plane must be the image. See defaultfloormaterial for the same note.
-    material->setValue(QStringLiteral("baseColor"), QColor(255, 255, 255));
+    material->setValue("baseColor", qtstd::colourValue(QColor(255, 255, 255)));
     // The row binds the file AND the image asset it is (TEX-REF-1).
-    material->setValue(QStringLiteral("baseColorMap"), iris::Material::textureRef(path, textureGuid));
-    material->setValue(QStringLiteral("roughness"), 1.0f);
-    material->setValue(QStringLiteral("metallic"), 0.0f);
+    material->setValue("baseColorMap", iris::Material::textureRef(path.toStdString(), textureGuid.toStdString()));
+    material->setValue("roughness", 1.0f);
+    material->setValue("metallic", 0.0f);
     if (hasAlpha) {
         // Owner call (§8.2): BLEND, so the plane carries the image's true
         // alpha; the sorting caveat is accepted, cutout stays manual.
-        material->setValue(QStringLiteral("alphaMode"), 2);
+        material->setValue("alphaMode", 2);
     }
 
     if (resolvedPathOut) *resolvedPathOut = path;

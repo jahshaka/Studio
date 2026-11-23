@@ -9,8 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/document/qt/qtinterop.h"
 #include "irisgl/document/qt/colorjson.h"
+#include "irisgl/document/qt/colour.h"
+#include "app/qtstd.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/looks.h"
@@ -841,25 +842,33 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 
 	QJsonObject valuesObj;
     for (auto prop : mat->properties()) {
+        // The row's own typed value (NOQT-DOCUMENT-1 stage 4): exactly what the
+        // QVariant it used to hand out carried (a float widened to the double
+        // QJsonValue holds, an int, a bool), so no saved byte moves.
+        const QString key = qtstd::toQString(prop->name);
         if (prop->type == iris::PropertyType::Bool) {
-			valuesObj[prop->name] = prop->getValue().toBool();
+			valuesObj[key] = static_cast<const iris::BoolProperty *>(prop)->value;
         }
 
         if (prop->type == iris::PropertyType::Float) {
-			valuesObj[prop->name] = prop->getValue().toFloat();
+			valuesObj[key] = double(static_cast<const iris::FloatProperty *>(prop)->value);
         }
 
         // An enum row (PropertyType::List — alphaMode, brdf) writes as the
         // plain INT it stores, exactly like an IntProperty. That is why enums
         // were moved onto ListProperty rather than given a new on-disk shape:
         // materials saved before the move read back identically.
-        if (prop->type == iris::PropertyType::Int ||
-            prop->type == iris::PropertyType::List) {
-			valuesObj[prop->name] = prop->getValue().toInt();
+        if (prop->type == iris::PropertyType::Int) {
+			valuesObj[key] = static_cast<const iris::IntProperty *>(prop)->value;
+        }
+        if (prop->type == iris::PropertyType::List) {
+			valuesObj[key] = static_cast<const iris::ListProperty *>(prop)->value;
         }
 
+        // "#rrggbb" is THE EDITOR's EDGE (the spec's RULED 3): the type has no
+        // name(); QColor writes it, from the row's colour through the adapter.
         if (prop->type == iris::PropertyType::Color) {
-			valuesObj[prop->name] = prop->getValue().value<QColor>().name();
+			valuesObj[key] = iris::toQColor(static_cast<const iris::ColorProperty *>(prop)->value).name();
         }
 
         if (prop->type == iris::PropertyType::Texture) {
@@ -871,8 +880,8 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 			// state the reader already handles perfectly: the material comes
 			// back with no map and its base colour, which is exactly what a
 			// live texture that is gone should look like.
-			if (iris::LiveTextures::isLiveRef(prop->getValue().toString())) {
-				valuesObj[prop->name] = QString();
+			if (iris::LiveTextures::isLiveRef(qtstd::toQString(static_cast<const iris::TextureProperty *>(prop)->value))) {
+				valuesObj[key] = QString();
 				continue;
 			}
 			// THE ROW'S ASSET, AS THE ROW CARRIES IT (TEX-REF-1) — the guid a
@@ -883,22 +892,12 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 			// out, relative and meaningless), and there is no path arm: a file
 			// nobody named has no identity a scene can keep, and is written as
 			// absent.
-			valuesObj[prop->name] = mat->textureGuid(prop->name);
+			valuesObj[key] = qtstd::toQString(mat->textureGuid(prop->name));
         }
 
-		if (prop->type == iris::PropertyType::Vec2) {
-			valuesObj[prop->name] = jsonVector2(iris::fromQt(prop->getValue().value<QVector2D>()));
-		}
-
 		if (prop->type == iris::PropertyType::Vec3) {
-			valuesObj[prop->name] = jsonVector3(iris::fromQt(prop->getValue().value<QVector3D>()));
+			valuesObj[key] = jsonVector3(static_cast<const iris::Vec3Property *>(prop)->value);
 		}
-
-		if (prop->type == iris::PropertyType::Vec4) {
-			valuesObj[prop->name] = jsonVector4(iris::fromQt(prop->getValue().value<QVector4D>()));
-		}
-
-		// add vector properties
     }
 
 	// GENERATED SHADER PIECES (HLMS_ADOPTION P5). Not Property rows: a piece is
@@ -923,15 +922,6 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 	matObj["values"] = valuesObj;
 }
 
-QJsonObject SceneWriter::jsonVector2(iris::Vec2 vec)
-{
-    QJsonObject obj;
-    obj["x"] = vec.x();
-    obj["y"] = vec.y();
-
-    return obj;
-}
-
 QJsonObject SceneWriter::jsonVector3(iris::Vec3 vec)
 {
 	QJsonObject obj;
@@ -952,17 +942,6 @@ QJsonObject SceneWriter::jsonQuaternion(iris::Quat q)
 	obj["y"] = q.y();
 	obj["z"] = q.z();
 	obj["scalar"] = q.scalar();
-
-	return obj;
-}
-
-QJsonObject SceneWriter::jsonVector4(iris::Vec4 vec)
-{
-	QJsonObject obj;
-	obj["x"] = vec.x();
-	obj["y"] = vec.y();
-	obj["z"] = vec.z();
-	obj["w"] = vec.w();
 
 	return obj;
 }

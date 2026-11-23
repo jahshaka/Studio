@@ -34,6 +34,8 @@ For more information see the LICENSE file
 #include "irisgl/import/scenelights.h"
 #include "irisgl/import/nodeclips.h"
 #include <QSqlDatabase>
+#include "app/qtstd.h"
+#include "app/qtstdgui.h"
 
 // Thanks to Qt not allowing updating its json values and instead returning temp objects
 // This class updates a meshnode with the values in a material definition
@@ -47,11 +49,11 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     // the identity reaches the next save. A guid that does not resolve stays
     // bound with no file (texture.missing); there is no path arm.
     Q_UNUSED(db);
-    const auto textureRef = [](const QString &stored) -> QVariant {
-        if (stored.isEmpty()) return iris::Material::textureRef(QString(), QString());
+    const auto textureRef = [](const QString &stored) -> iris::Value {
+        if (stored.isEmpty()) return iris::Material::textureRef(std::string(), std::string());
         QSqlDatabase conn = QSqlDatabase::database();
         return iris::Material::textureRef(
-            AssetCas::resolveSource(conn, AssetStorePaths::root(), stored), stored);
+            AssetCas::resolveSource(conn, AssetStorePaths::root(), stored).toStdString(), stored.toStdString());
     };
 
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -70,15 +72,21 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
                                                                   .arg(node->getName()));
 
         auto pbr = iris::PbrMaterial::create();
+        // Each row's Value by the row's kind (NOQT-DOCUMENT-1 stage 4, walk 1): a
+        // colour as the stored definition's QColor (an unreadable one is the
+        // invalid colour, as before), a map through its guid, every other row
+        // through THE edge's one conversion (qtstd::toRowValue: a value Qt
+        // cannot convert to the row's kind is refused, the row keeps its own).
         for (const iris::Property* property : pbr->properties()) {
-            if (!values.contains(property->name)) continue;
+            const QString key = qtstd::toQString(property->name);
+            if (!values.contains(key)) continue;
             if (property->type == iris::PropertyType::Color)
                 pbr->setValue(property->name,
-                              QVariant::fromValue(values.value(property->name).toVariant().value<QColor>()));
+                              qtstd::colourValue(values.value(key).toVariant().value<QColor>()));
             else if (property->type == iris::PropertyType::Texture)
-                pbr->setValue(property->name, textureRef(values.value(property->name).toString()));
+                pbr->setValue(property->name, textureRef(values.value(key).toString()));
             else
-                pbr->setValue(property->name, values.value(property->name).toVariant());
+                pbr->setValue(property->name, qtstd::toRowValue(property->type, values.value(key).toVariant()));
         }
         std::static_pointer_cast<iris::MeshNode>(node)->setMaterial(pbr);
     }
@@ -304,7 +312,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
                     continue;
                 }
 
-                QString path = prop->getValue().toString();
+                QString path = qtstd::toQString(static_cast<const iris::TextureProperty *>(prop)->value);
                 if (path.isEmpty()) {
                     continue;
                 }

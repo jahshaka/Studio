@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "io/builtinmaterials.h"
+#include "app/qtstdgui.h"
 
 #include <QColor>
 #include <QJsonValue>
@@ -26,23 +27,23 @@ iris::PbrMaterialPtr fromPreset(const MaterialPreset &preset)
     mat->setName(preset.name);
 
     if (preset.type.compare(QStringLiteral("PBR"), Qt::CaseInsensitive) == 0) {
-        mat->setValue(QStringLiteral("baseColor"),           preset.baseColor);
-        mat->setValue(QStringLiteral("metallic"),            preset.metallic);
-        mat->setValue(QStringLiteral("roughness"),           preset.roughness);
-        mat->setValue(QStringLiteral("roughnessLowerBound"), preset.roughnessLowerBound);
-        mat->setValue(QStringLiteral("roughnessUpperBound"), preset.roughnessUpperBound);
-        mat->setValue(QStringLiteral("normalFactor"),        preset.pbrNormalFactor);
-        mat->setValue(QStringLiteral("emissiveColor"),       preset.emissiveColor);
-        mat->setValue(QStringLiteral("emissiveIntensity"),   preset.emissiveIntensity);
-        mat->setValue(QStringLiteral("textureScale"),        preset.textureScale);
-        mat->setValue(QStringLiteral("alphaMode"),           preset.alphaMode);
-        mat->setValue(QStringLiteral("alpha"),               preset.alpha);
-        mat->setValue(QStringLiteral("alphaCutoff"),         preset.alphaCutoff);
-        mat->setValue(QStringLiteral("baseColorMap"),  preset.baseColorMap);
-        mat->setValue(QStringLiteral("metallicMap"),   preset.metallicMap);
-        mat->setValue(QStringLiteral("roughnessMap"),  preset.roughnessMap);
-        mat->setValue(QStringLiteral("normalMap"),     preset.pbrNormalMap);
-        mat->setValue(QStringLiteral("emissiveMap"),   preset.emissiveMap);
+        mat->setValue("baseColor",           qtstd::colourValue(preset.baseColor));
+        mat->setValue("metallic",            preset.metallic);
+        mat->setValue("roughness",           preset.roughness);
+        mat->setValue("roughnessLowerBound", preset.roughnessLowerBound);
+        mat->setValue("roughnessUpperBound", preset.roughnessUpperBound);
+        mat->setValue("normalFactor",        preset.pbrNormalFactor);
+        mat->setValue("emissiveColor",       qtstd::colourValue(preset.emissiveColor));
+        mat->setValue("emissiveIntensity",   preset.emissiveIntensity);
+        mat->setValue("textureScale",        preset.textureScale);
+        mat->setValue("alphaMode",           preset.alphaMode);
+        mat->setValue("alpha",               preset.alpha);
+        mat->setValue("alphaCutoff",         preset.alphaCutoff);
+        mat->setValue("baseColorMap",  iris::Value(preset.baseColorMap.toStdString()));
+        mat->setValue("metallicMap",   iris::Value(preset.metallicMap.toStdString()));
+        mat->setValue("roughnessMap",  iris::Value(preset.roughnessMap.toStdString()));
+        mat->setValue("normalMap",     iris::Value(preset.pbrNormalMap.toStdString()));
+        mat->setValue("emissiveMap",   iris::Value(preset.emissiveMap.toStdString()));
         return mat;
     }
 

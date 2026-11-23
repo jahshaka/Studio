@@ -42,6 +42,8 @@ For more information see the LICENSE file
 #include "services/videoutils.h"
 #include "services/apppaths.h"
 #include "irisgl/document/properties/property.h"
+#include "app/qtstd.h"
+#include "app/qtstdgui.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -110,8 +112,8 @@ static QJsonObject importSummaryOf(const iris::SceneNodePtr &root, const QString
                 ++scales[QString::number(double(s), 'g', 4)];
                 if (auto m = std::static_pointer_cast<iris::MeshNode>(n)->getMaterial()) {
                     for (auto *prop : m->properties()) {
-                        if (!prop || prop->name != QLatin1String("alphaMode")) continue;
-                        const int mode = prop->getValue().toInt();
+                        if (!prop || prop->name != "alphaMode" || prop->type != iris::PropertyType::List) continue;
+                        const int mode = static_cast<const iris::ListProperty *>(prop)->value;
                         if (mode == 1) ++cutouts;
                         if (mode == 3) ++glass;
                     }
@@ -373,12 +375,12 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
             if (auto material = meshNode->getMaterial()) {
                 for (auto *prop : material->properties()) {
                     if (!prop || prop->type != iris::PropertyType::Texture) continue;
-                    const QString path = prop->getValue().toString();
+                    const QString path = qtstd::toQString(static_cast<const iris::TextureProperty *>(prop)->value);
                     const QString fileName = QFileInfo(path).fileName();
                     if (fileName.isEmpty()) continue;
                     for (const auto &tex : textures) {
                         if (tex.fileName != fileName) continue;
-                        material->setValue(prop->name, iris::Material::textureRef(path, tex.guid));
+                        material->setValue(prop->name, iris::Material::textureRef(path.toStdString(), tex.guid.toStdString()));
                         break;
                     }
                 }
@@ -726,9 +728,10 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
     struct TexEntry { QString fileName, guid, path; };
     QVector<TexEntry> textures;
     for (const auto &prop : material->properties()) {
-        if (!normalised.contains(prop->name)) continue;
+        const QString key = qtstd::toQString(prop->name);
+        if (!normalised.contains(key)) continue;
         if (prop->type == iris::PropertyType::Texture) {
-            const QString textureStr = normalised[prop->name].toString();
+            const QString textureStr = normalised[key].toString();
             if (textureStr.isEmpty()) continue;
             // Textures referenced by the definition that exist beside the
             // .material file import as members; the reference becomes a guid.
@@ -739,12 +742,14 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
                 textures.append(entry);
                 // The row binds the file it renders from AND the member asset
                 // it is (TEX-REF-1): the writer persists the guid it carries.
-                material->setValue(prop->name, iris::Material::textureRef(entry.path, entry.guid));
+                material->setValue(prop->name, iris::Material::textureRef(entry.path.toStdString(), entry.guid.toStdString()));
             }
             // A map the definition names but the folder does not hold has no
             // bytes to import and no identity: the material arrives without it.
         } else {
-            material->setValue(prop->name, normalised[prop->name].toVariant());
+            // THE EDGE's one conversion by the row's kind (qtstd::toRowValue): what
+            // Qt cannot convert is refused, the row keeping its default.
+            material->setValue(prop->name, qtstd::toRowValue(prop->type, normalised[key].toVariant()));
         }
     }
 

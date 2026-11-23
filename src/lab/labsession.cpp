@@ -1730,7 +1730,7 @@ bool Session::material(const Command &c)
             labFail("LAB REFUSED material: '%s' is not r,g,b in 0..1\n", c.args[2].c_str());
             return false;
         }
-        mat->setValue("baseColor", QColor::fromRgbF(rgb.x(), rgb.y(), rgb.z()));
+        mat->setValue("baseColor", iris::colourToValue(iris::SrgbColor::fromRgbF(rgb.x(), rgb.y(), rgb.z())));
         return true;
     }
     if (c.args[1] == "roughness") {

@@ -10,6 +10,7 @@
 // absolute and therefore depend on the device's clock state — the ctest rows run under the
 // GPU-timing lock, and a number quoted in a report states whether the clocks were locked.
 #include "scale_world.h"
+#include "app/qtstdgui.h"
 #include "irisgl/document/qt/colour.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/gesture.h"
@@ -376,7 +377,7 @@ static void lightListArms(Env &env)
             n->setLocalPos(pos);
             n->setLocalScale(scale);
             auto m = iris::PbrMaterial::create();
-            m->setValue("baseColor", col);
+            m->setValue("baseColor", qtstd::colourValue(col));
             m->setValue("roughness", 0.9f);
             m->setValue("metallic", 0.0f);
             n->setMaterial(m);
@@ -772,7 +773,7 @@ static int lightsMain()
             n->setLocalPos(pos);
             n->setLocalScale(scale);
             auto m = iris::PbrMaterial::create();
-            m->setValue("baseColor", col);
+            m->setValue("baseColor", qtstd::colourValue(col));
             m->setValue("roughness", 0.9f);
             m->setValue("metallic", 0.0f);
             n->setMaterial(m);
@@ -953,7 +954,7 @@ static std::vector<iris::MeshNodePtr> placeModel(Env &env, const QList<iris::Mes
 {
     std::vector<iris::MeshNodePtr> out;
     auto mat = iris::PbrMaterial::create();
-    mat->setValue("baseColor", QColor(180, 170, 160));
+    mat->setValue("baseColor", qtstd::colourValue(QColor(180, 170, 160)));
     mat->setValue("roughness", 0.6f);
     mat->setValue("metallic", 0.0f);
     for (const iris::MeshPtr &m : pieces) {
@@ -1977,14 +1978,14 @@ static int farFieldMain()
     farDoc(env, worldmodes::PhotonTier::High);
     {
         auto m = iris::PbrMaterial::create();
-        m->setValue("baseColor", QColor(0, 0, 0));
-        m->setValue("emissiveColor", QColor(255, 255, 255));
+        m->setValue("baseColor", qtstd::colourValue(QColor(0, 0, 0)));
+        m->setValue("emissiveColor", qtstd::colourValue(QColor(255, 255, 255)));
         m->setValue("emissiveIntensity", 1.0f);
         m->setValue("roughness", 1.0f);
         farBox(env, cube, iris::Vec3(0, -0.5f, -300.0f), iris::Vec3(1200.0f, 1.0f, 1200.0f), 0.0f, m);
     }
     auto white = iris::PbrMaterial::create();
-    white->setValue("baseColor", QColor(255, 255, 255));
+    white->setValue("baseColor", qtstd::colourValue(QColor(255, 255, 255)));
     white->setValue("roughness", 1.0f);
     white->setValue("metallic", 0.0f);
     std::vector<iris::Vec3> faces;
@@ -2015,14 +2016,14 @@ static int farFieldMain()
     farDoc(env, worldmodes::PhotonTier::Epic);
     {
         auto mirrorMat = iris::PbrMaterial::create();
-        mirrorMat->setValue("baseColor", QColor(255, 255, 255));
+        mirrorMat->setValue("baseColor", qtstd::colourValue(QColor(255, 255, 255)));
         mirrorMat->setValue("metallic", 1.0f);
         mirrorMat->setValue("roughness", 0.0f);
         farBox(env, cube, iris::Vec3(0, 4.0f, -6.0f), iris::Vec3(40.0f, 24.0f, 0.2f), 0.0f, mirrorMat);
     }
     auto glow = iris::PbrMaterial::create();
-    glow->setValue("baseColor", QColor(0, 0, 0));
-    glow->setValue("emissiveColor", QColor(255, 255, 255));
+    glow->setValue("baseColor", qtstd::colourValue(QColor(0, 0, 0)));
+    glow->setValue("emissiveColor", qtstd::colourValue(QColor(255, 255, 255)));
     glow->setValue("emissiveIntensity", 1.0f);
     std::vector<iris::Vec3> mirrored;
     for (int i = 0; i < n; ++i) {
@@ -2345,7 +2346,7 @@ static void buildLattice(Env &env)
                 n->setLocalPos(iris::Vec3(float(x) - 9.5f, float(y) + 0.5f, float(z) - 9.5f));
                 auto m = iris::PbrMaterial::create();
                 const int i = (y * 20 + z) * 20 + x;
-                m->setValue("baseColor", QColor(90 + (i * 37) % 160, 90 + (i * 13) % 160, 90 + (i * 7) % 160));
+                m->setValue("baseColor", qtstd::colourValue(QColor(90 + (i * 37) % 160, 90 + (i * 13) % 160, 90 + (i * 7) % 160)));
                 n->setMaterial(m);
                 env.doc->getRootNode()->addChild(n);
             }

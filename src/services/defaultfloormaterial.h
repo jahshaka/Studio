@@ -35,6 +35,7 @@ For more information see the LICENSE file
 //     never the name or the mesh path.
 
 #include <QColor>
+#include "app/qtstdgui.h"
 #include <QString>
 
 #include "services/apppaths.h"
@@ -122,14 +123,14 @@ inline iris::PbrMaterialPtr createUnpinned(const QString &tilePath = shippedTile
     // THE TILE, UNTINTED — stated rather than inherited (DRAG-1). baseColor
     // MULTIPLIES the base-colour map; the constructor's default is a physical
     // grey (RENDER_AUDIT I-1), which would dim the checker by 0.58.
-    material->setValue("baseColor", QColor(255, 255, 255));
-    material->setValue("baseColorMap", iris::Material::textureRef(tilePath, tileGuid));
+    material->setValue("baseColor", qtstd::colourValue(QColor(255, 255, 255)));
+    material->setValue("baseColorMap", iris::Material::textureRef(tilePath.toStdString(), tileGuid.toStdString()));
     material->setValue("textureScale", kTextureScale);
     material->setValue("roughness", kRoughness);
     material->setValue("metallic", kMetallic);
     material->setValue("workflow", kWorkflow);
     material->setValue("ior", kIor);
-    material->setValue("specularColor", specularColor());
+    material->setValue("specularColor", qtstd::colourValue(specularColor()));
     return material;
 }
 

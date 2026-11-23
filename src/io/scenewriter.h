@@ -73,9 +73,7 @@ public:
     /// stays exactly where it is.
     static void writeCameraData(QJsonObject& sceneNodeObject, iris::CameraNodePtr node);
 
-	static QJsonObject jsonVector2(iris::Vec2 vec);
 	static QJsonObject jsonVector3(iris::Vec3 vec);
-	static QJsonObject jsonVector4(iris::Vec4 vec);
 	static QJsonObject jsonQuaternion(iris::Quat q);
 
     static QString getSceneNodeTypeName(iris::SceneNodeType nodeType);

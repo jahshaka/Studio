@@ -91,6 +91,17 @@ function arm1(staged, loc, root) {
     });
     assert(w.modelGuids.baseColorMap && w.modelGuids.baseColorMap.length > 10,
            "the model's maps carry their member assets (" + J(w.modelGuids) + ")");
+    // A MAP ROW TAKES AN IMAGE, BY NAME (NOQT-DOCUMENT-1 stage 4): the MODEL's own asset guid bound as
+    // a map is REFUSED - the verb's error (as its other refusals: a guid that names nothing), naming
+    // the asset, and the row keeps the asset it had (it used to be bound and to fail later at the
+    // image probe, with only a log line).
+    assert(placed.assetGuid && placed.assetGuid.length > 10, "the model's asset guid (" + placed.assetGuid + ")");
+    var refusal = "";
+    try { material.set(w.cube, { baseColorMap: placed.assetGuid }); } catch (e) { refusal = String(e); }
+    assert(refusal.indexOf("is not an image asset") >= 0 && refusal.indexOf(placed.assetGuid) >= 0,
+           "material.set refuses a model asset as a map, by name: " + refusal);
+    assert(material.get(w.cube).textureAssets.baseColorMap === w.cubeGuids.baseColorMap,
+           "...and the row keeps the image it had (" + material.get(w.cube).textureAssets.baseColorMap + ")");
     // A particle emitter with an image bound by guid.
     w.emitter = scene.addParticles();
     w.emitterGuid = assets.importFile(staged + "/spark.png");

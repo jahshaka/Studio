@@ -318,8 +318,8 @@ int main(int argc, char **argv)
     // ---- an UNLIT PbrMaterial renders its authored colour, unshaded ----
     {
         auto flat = iris::PbrMaterial::create();
-        flat->setValue(QStringLiteral("shadingModel"), 1);
-        flat->setValue(QStringLiteral("baseColor"), QColor(QStringLiteral("#00cc22")));
+        flat->setValue("shadingModel", 1);
+        flat->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(QStringLiteral("#00cc22")))));
         meshNode2->setMaterial(flat);
         mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("unlit PbrMaterial", img);
@@ -344,8 +344,8 @@ int main(int argc, char **argv)
         const QString grayPath = QDir::temp().filePath("jahshaka_mirror_gray.png");
         QImage gray(16, 16, QImage::Format_Grayscale8); gray.fill(230); gray.save(grayPath);
         auto pbr = iris::PbrMaterial::create();
-        pbr->setValue("baseColor", QColor(255, 255, 255));
-        pbr->setValue("baseColorMap", grayPath);
+        pbr->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
+        pbr->setValue("baseColorMap", iris::Value(grayPath.toStdString()));
         meshNode2->setMaterial(pbr);
         mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("grayscale base map", img);
@@ -368,9 +368,9 @@ int main(int argc, char **argv)
         QImage base(16, 16, QImage::Format_RGBA8888); base.fill(QColor(20, 230, 40)); base.save(basePath);
         QImage normal(16, 16, QImage::Format_RGBA8888); normal.fill(QColor(128, 128, 255)); normal.save(normalPath);
         auto pbr = iris::PbrMaterial::create();
-        pbr->setValue("baseColor", QColor(255, 255, 255));
-        pbr->setValue("baseColorMap", basePath);
-        pbr->setValue("normalMap", normalPath);
+        pbr->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
+        pbr->setValue("baseColorMap", iris::Value(basePath.toStdString()));
+        pbr->setValue("normalMap", iris::Value(normalPath.toStdString()));
         meshNode2->setMaterial(pbr);
         mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("PBR base + normal map", img);
@@ -407,7 +407,7 @@ int main(int argc, char **argv)
         doc->skyType = iris::SkyType::CUBEMAP;
         mirror.sync(mirrorframe::sky(view));
         auto glassMat = iris::PbrMaterial::create();
-        glassMat->setValue("baseColor", QColor(238, 244, 248));
+        glassMat->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(238, 244, 248))));
         glassMat->setValue("roughness", 0.05f);
         glassMat->setValue("metallic", 0.0f);
         glassMat->setValue("alpha", 0.3f);
@@ -460,7 +460,7 @@ int main(int argc, char **argv)
         const QString pngPath = dir + "/albedo_green.png";
         QImage tex(32, 32, QImage::Format_RGBA8888); tex.fill(QColor(20, 230, 40)); tex.save(pngPath);
         auto saved = iris::PbrMaterial::create();
-        saved->setValue("baseColor", QColor(255, 255, 255));
+        saved->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
         saved->setValue("metallic", 0.05f);
         saved->setValue("roughness", 0.9f);
         saved->setValue("roughnessLowerBound", 0.2f);
@@ -468,7 +468,7 @@ int main(int argc, char **argv)
         saved->setValue("alphaMode", 2);
         saved->setValue("alpha", 0.5f);
         saved->setValue("alphaCutoff", 0.7f);
-        saved->setValue("baseColorMap", pngPath);
+        saved->setValue("baseColorMap", iris::Value(pngPath.toStdString()));
         CHECK(saved->textures.contains("u_baseColorMap"), "setValue bound the base colour map");
 
         // Serialise exactly as SceneWriter::writeSceneNodeMaterial does: a values
@@ -482,18 +482,22 @@ int main(int argc, char **argv)
         QJsonObject values;
         const QDir sceneDir(dir);
         for (auto *prop : saved->properties()) {
+            const QString key = QString::fromStdString(prop->name);
             switch (prop->type) {
-            case iris::PropertyType::Bool:  values[prop->name] = prop->getValue().toBool(); break;
+            case iris::PropertyType::Bool:  values[key] = static_cast<iris::BoolProperty *>(prop)->value; break;
             // List is the ENUM row (alphaMode, brdf) and serializes as the
             // plain int it stores — same case as Int, exactly as SceneWriter does.
-            case iris::PropertyType::Int:
-            case iris::PropertyType::List:  values[prop->name] = prop->getValue().toInt(); break;
-            case iris::PropertyType::Float: values[prop->name] = prop->getValue().toFloat(); break;
-            case iris::PropertyType::Color: values[prop->name] = prop->getValue().value<QColor>().name(); break;
-            case iris::PropertyType::Texture:
-                values[prop->name] = prop->getValue().toString().isEmpty()
-                    ? QString() : sceneDir.relativeFilePath(prop->getValue().toString());
+            case iris::PropertyType::Int:   values[key] = static_cast<iris::IntProperty *>(prop)->value; break;
+            case iris::PropertyType::List:  values[key] = static_cast<iris::ListProperty *>(prop)->value; break;
+            case iris::PropertyType::Float: values[key] = double(static_cast<iris::FloatProperty *>(prop)->value); break;
+            case iris::PropertyType::Color:
+                values[key] = iris::toQColor(static_cast<iris::ColorProperty *>(prop)->value).name();
                 break;
+            case iris::PropertyType::Texture: {
+                const QString path = QString::fromStdString(static_cast<iris::TextureProperty *>(prop)->value);
+                values[key] = path.isEmpty() ? QString() : sceneDir.relativeFilePath(path);
+                break;
+            }
             default: break;
             }
         }
@@ -508,16 +512,20 @@ int main(int argc, char **argv)
         auto reloaded = iris::PbrMaterial::create();
         const QJsonObject rvalues = matObj["values"].toObject();
         for (auto *prop : reloaded->properties()) {
-            if (!rvalues.contains(prop->name)) continue;
-            const auto val = rvalues.value(prop->name);
+            const QString key = QString::fromStdString(prop->name);
+            if (!rvalues.contains(key)) continue;
+            const auto val = rvalues.value(key);
             switch (prop->type) {
-            case iris::PropertyType::Float:  reloaded->setValue(prop->name, static_cast<float>(val.toDouble())); break;
+            case iris::PropertyType::Float:  reloaded->setValue(prop->name, iris::Value(double(static_cast<float>(val.toDouble())))); break;
             case iris::PropertyType::Int:
-            case iris::PropertyType::List:   reloaded->setValue(prop->name, val.toInt()); break;
-            case iris::PropertyType::Color:  reloaded->setValue(prop->name, QColor(val.toString())); break;
-            case iris::PropertyType::Bool:   reloaded->setValue(prop->name, val.toBool()); break;
+            case iris::PropertyType::List:   reloaded->setValue(prop->name, iris::Value(val.toInt())); break;
+            case iris::PropertyType::Color:
+                reloaded->setValue(prop->name, iris::colourToValue(iris::toSrgbColor(QColor(val.toString()))));
+                break;
+            case iris::PropertyType::Bool:   reloaded->setValue(prop->name, iris::Value(val.toBool())); break;
             case iris::PropertyType::Texture:
-                reloaded->setValue(prop->name, val.toString().isEmpty() ? QString() : sceneDir.filePath(val.toString()));
+                reloaded->setValue(prop->name, iris::Value(val.toString().isEmpty()
+                                                               ? std::string() : sceneDir.filePath(val.toString()).toStdString()));
                 break;
             default: break;
             }
@@ -900,7 +908,7 @@ int main(int argc, char **argv)
         // A big flat "floor" quad made from the cube mesh, lit straight down, with
         // the camera looking down at it — the decal paints its image on the top face.
         auto floorMat = iris::PbrMaterial::create();
-        floorMat->setValue("baseColor", QColor(128, 128, 128));
+        floorMat->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(128, 128, 128))));
         floorMat->setValue("roughness", 1.0f);
         floorMat->setValue("metallic", 0.0f);
         auto floorNode = iris::MeshNode::create();
@@ -1231,7 +1239,7 @@ int main(int argc, char **argv)
         docSkyLight->color = iris::SrgbColor(255, 255, 255);
         doc->getRootNode()->addChild(docSkyLight);
         auto matte = iris::PbrMaterial::create();
-        matte->setValue("baseColor", QColor(255, 255, 255));
+        matte->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
         matte->setValue("metallic", 0.0f);
         matte->setValue("roughness", 1.0f);
         meshNode->setMaterial(matte);
@@ -1325,7 +1333,7 @@ int main(int argc, char **argv)
         // A mirror-metal cube in near-darkness: everything it shows is reflection.
         target->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
         auto chromeMat = iris::PbrMaterial::create();
-        chromeMat->setValue("baseColor", QColor(255, 255, 255));
+        chromeMat->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
         chromeMat->setValue("metallic", 1.0f);
         chromeMat->setValue("roughness", 0.1f);
         meshNode->setMaterial(chromeMat);
@@ -1393,7 +1401,7 @@ int main(int argc, char **argv)
         // cubemap, so a re-convolution shows up as a changed pixel.
         target->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
         auto chrome = iris::PbrMaterial::create();
-        chrome->setValue("baseColor", QColor(255, 255, 255));
+        chrome->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
         chrome->setValue("metallic", 1.0f);
         chrome->setValue("roughness", 0.1f);
         meshNode->setMaterial(chrome);
@@ -2280,7 +2288,7 @@ int main(int argc, char **argv)
         sdoc->skyColor = iris::SrgbColor(0, 0, 255);
 
         auto floorMat = iris::PbrMaterial::create();
-        floorMat->setValue("baseColor", QColor(220, 220, 220));
+        floorMat->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(220, 220, 220))));
         floorMat->setValue("roughness", 1.0f);
         floorMat->setValue("metallic", 0.0f);
         auto floor = iris::MeshNode::create();

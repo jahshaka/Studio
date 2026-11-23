@@ -337,6 +337,17 @@ add_test(NAME app.gate_settle COMMAND test_gate_settle)
 set_tests_properties(app.gate_settle PROPERTIES TIMEOUT 60 LABELS "scripting")
 jah_no_display(app.gate_settle)
 
+# app.qtstd — THE EDITOR's QtCore CONVERSIONS ARE EXACT (NOQT-DOCUMENT-1 stage 4; test_qtstd.cpp says the laws): iris::Value
+# <-> QJsonValue / QVariant round trips, kind and bits (2^53 + 1 as an Int), an Object in Qt's own order after it, and
+# the colour's QJsonObject codec (the four F accessors, the clamp, the invalid colours by name). CPU, no engine, no display.
+add_executable(test_qtstd test_qtstd.cpp)
+set_target_properties(test_qtstd PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_qtstd PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_qtstd PRIVATE IrisCore Qt6::Core)
+add_test(NAME app.qtstd COMMAND test_qtstd)
+set_tests_properties(app.qtstd PROPERTIES TIMEOUT 60 LABELS "document")
+jah_no_display(app.qtstd)
+
 # app.window_answers — THE WINDOW ANSWERS THROUGHOUT THE STARTUP GATE (COLD-BOOT-1 stage 4, the lead's acceptance (a);
 # window_answers.js says the law): a VIRGIN home's boot (the subject: the gate compiles the startup set cold,
 # --clear-shader-cache) and a script whose first act reads the UI thread's heartbeat - started by the watchdog before

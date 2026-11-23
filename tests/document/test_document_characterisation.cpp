@@ -361,7 +361,7 @@ int main(int argc, char **argv)
         auto names = [](iris::SceneNodePtr n) {
             QSet<QString> out;
             const auto props = n->getProperties();
-            for (auto *p : props.view()) out.insert(p->name);   // the list owns its rows
+            for (auto *p : props.view()) out.insert(QString::fromStdString(p->name));   // the list owns its rows
             return out;
         };
         auto advertises = [&](iris::SceneNodePtr n, const QStringList &keys, const QString &what) {
@@ -968,14 +968,14 @@ int main(int argc, char **argv)
         auto pbr = iris::PbrMaterial::create();
         auto row = [&](const char *name) {
             for (auto prop : pbr->properties())
-                if (prop->name == QLatin1String(name)) return prop->getValue().toFloat();
+                if (prop->name == name) return static_cast<const iris::FloatProperty *>(prop)->value;
             return -1.0f;
         };
         CHECK(std::fabs(row("textureScale") - 1.0f) < 1e-6f &&
               std::fabs(row("textureScaleV") - 1.0f) < 1e-6f,
               "uv rows: a fresh PbrMaterial is (1, 1) in its rows");
 
-        pbr->setValue(QStringLiteral("textureScale"), 4.0f);
+        pbr->setValue("textureScale", iris::Value(double(4.0f)));
         CHECK(std::fabs(pbr->textureScale - 4.0f) < 1e-6f &&
               std::fabs(pbr->textureScaleV - 4.0f) < 1e-6f,
               "uv fields: setValue(textureScale, 4) is uniform tiling");
@@ -985,7 +985,7 @@ int main(int argc, char **argv)
 
         // The deliberate non-uniform case still works, and still SAVES: a
         // caller sets V after U, which is the order both readers apply.
-        pbr->setValue(QStringLiteral("textureScaleV"), 1.0f);
+        pbr->setValue("textureScaleV", iris::Value(double(1.0f)));
         CHECK(std::fabs(pbr->textureScale - 4.0f) < 1e-6f &&
               std::fabs(pbr->textureScaleV - 1.0f) < 1e-6f &&
               std::fabs(row("textureScale") - 4.0f) < 1e-6f &&
@@ -1021,18 +1021,18 @@ int main(int argc, char **argv)
         auto pbr = iris::PbrMaterial::create();
         pbr->setName(QStringLiteral("Red Paint"));
         pbr->setGuid(QStringLiteral("11111111-2222-3333-4444-555555555555"));
-        pbr->setValue(QStringLiteral("baseColor"), QColor(200, 20, 20));
-        pbr->setValue(QStringLiteral("metallic"), 0.25f);
-        pbr->setValue(QStringLiteral("roughness"), 0.7f);
-        pbr->setValue(QStringLiteral("emissiveColor"), QColor(10, 0, 0));
-        pbr->setValue(QStringLiteral("emissiveIntensity"), 0.5f);
-        pbr->setValue(QStringLiteral("alphaMode"), 2);
-        pbr->setValue(QStringLiteral("alpha"), 0.8f);
-        pbr->setValue(QStringLiteral("textureScale"), 3.0f);
-        pbr->setValue(QStringLiteral("textureScaleV"), 2.0f);
-        pbr->setValue(QStringLiteral("baseColorMap"), texPath);
-        pbr->setValue(QStringLiteral("detail0Blend"), 4);
-        pbr->setValue(QStringLiteral("normalMapAddress"), 1);
+        pbr->setValue("baseColor", iris::colourToValue(iris::SrgbColor(200, 20, 20)));
+        pbr->setValue("metallic", iris::Value(double(0.25f)));
+        pbr->setValue("roughness", iris::Value(double(0.7f)));
+        pbr->setValue("emissiveColor", iris::colourToValue(iris::SrgbColor(10, 0, 0)));
+        pbr->setValue("emissiveIntensity", iris::Value(double(0.5f)));
+        pbr->setValue("alphaMode", iris::Value(2));
+        pbr->setValue("alpha", iris::Value(double(0.8f)));
+        pbr->setValue("textureScale", iris::Value(double(3.0f)));
+        pbr->setValue("textureScaleV", iris::Value(double(2.0f)));
+        pbr->setValue("baseColorMap", iris::Value(texPath.toStdString()));
+        pbr->setValue("detail0Blend", iris::Value(4));
+        pbr->setValue("normalMapAddress", iris::Value(1));
         CHECK(pbr->textures.contains(QStringLiteral("u_baseColorMap")),
               "dup: the original carries a base colour map");
         source->setMaterial(pbr);
@@ -1065,13 +1065,11 @@ int main(int argc, char **argv)
             // in name, order and value — and distinct objects.
             bool rowsEqual = dupMat->properties().size() == pbr->properties().size();
             bool rowsShared = false;
-            for (int i = 0; rowsEqual && i < pbr->properties().size(); ++i) {
+            for (size_t i = 0; rowsEqual && i < pbr->properties().size(); ++i) {
                 iris::Property *a = pbr->properties()[i], *b = dupMat->properties()[i];
                 if (a == b) rowsShared = true;
                 if (a->name != b->name || a->getValue() != b->getValue()) {
-                    printf("    row %s: %s vs %s %s\n", qPrintable(a->name),
-                           qPrintable(a->getValue().toString()), qPrintable(b->name),
-                           qPrintable(b->getValue().toString()));
+                    printf("    row %s differs from %s\n", a->name.c_str(), b->name.c_str());
                     rowsEqual = false;
                 }
             }
@@ -1080,13 +1078,13 @@ int main(int argc, char **argv)
 
             // Independence, both ways round: an edit to the copy (fields AND the
             // saved rows) leaves the original alone.
-            dupMat->setValue(QStringLiteral("baseColor"), QColor(20, 20, 200));
-            dupMat->setValue(QStringLiteral("roughness"), 0.1f);
-            QVariant origRow;
+            dupMat->setValue("baseColor", iris::colourToValue(iris::SrgbColor(20, 20, 200)));
+            dupMat->setValue("roughness", iris::Value(double(0.1f)));
+            iris::Value origRow;
             for (auto prop : pbr->properties())
-                if (prop->name == QLatin1String("baseColor")) origRow = prop->getValue();
+                if (prop->name == "baseColor") origRow = prop->getValue();
             CHECK(pbr->baseColor == iris::SrgbColor(200, 20, 20) && std::fabs(pbr->roughnessFactor - 0.7f) < 1e-6f &&
-                  origRow.value<QColor>() == QColor(200, 20, 20),
+                  iris::colourFromValue(origRow) == iris::SrgbColor(200, 20, 20),
                   "dup: editing the copy leaves the original's fields and rows untouched");
         }
         CHECK(dupNode && dupNode->faceCullingMode == iris::FaceCullingMode::None,
@@ -1122,7 +1120,7 @@ int main(int argc, char **argv)
         auto real = iris::Texture2D::load(realPng);
         CHECK(real && real->source == realPng, "probe: a real png's path is recorded");
         auto pbrProbe = iris::PbrMaterial::create();
-        pbrProbe->setValue(QStringLiteral("baseColorMap"), textPng);
+        pbrProbe->setValue("baseColorMap", iris::Value(textPng.toStdString()));
         CHECK(!pbrProbe->textures.value(QStringLiteral("u_baseColorMap")),
               "probe: PbrMaterial::loadTexture keeps its null for an unreadable file (ruling 1b)");
     }

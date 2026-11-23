@@ -86,7 +86,7 @@ const QSet<QString> &textureSlots()
         auto material = iris::PbrMaterial::create();
         for (auto *prop : material->properties())
             if (prop && prop->type == iris::PropertyType::Texture)
-                out.insert(prop->name);
+                out.insert(QString::fromStdString(prop->name));
         return out;
     }();
     return slotNames;

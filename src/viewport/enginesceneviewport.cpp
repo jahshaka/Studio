@@ -1450,13 +1450,12 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
                 // The PBR repair: baseColorMap, undoable like the panel edit —
                 // the row binds the dropped image's file AND its asset, and the
                 // undo restores the row's previous pair (TEX-REF-1).
-                const QVariant oldMap = pbr->textureRefOf(QStringLiteral("baseColorMap"));
-                const QVariant newMap = iris::Material::textureRef(texPath, textureGuid);
+                const iris::Value oldMap = pbr->textureRefOf("baseColorMap");
+                const iris::Value newMap = iris::Material::textureRef(texPath.toStdString(), textureGuid.toStdString());
                 if (mServices && mServices->undo) {
-                    mServices->undo->push(new ChangeMaterialPropertyCommand(
-                        pbr, QStringLiteral("baseColorMap"), oldMap, newMap));
+                    mServices->undo->push(new ChangeMaterialPropertyCommand(pbr, "baseColorMap", oldMap, newMap));
                 } else {
-                    pbr->setValue(QStringLiteral("baseColorMap"), newMap);
+                    pbr->setValue("baseColorMap", newMap);   // a texture row's own kind: not refused
                 }
                 if (mShell) mShell->selectNode(node);
             }

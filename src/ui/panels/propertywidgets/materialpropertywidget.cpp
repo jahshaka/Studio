@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
 #include "data/project.h"
+#include "app/qtstd.h"
 
 #include <QJsonObject>
 #include <QDirIterator>
@@ -77,7 +78,7 @@ void MaterialPropertyWidget::snapshotTextures()
     // row-to-row edge, and the row carries its guid.
     for (auto prop : material->properties())
         if (prop->type == iris::PropertyType::Texture)
-            existingTextures.insert(prop->name, material->textureGuid(prop->name));
+            existingTextures.insert(qtstd::toQString(prop->name), qtstd::toQString(material->textureGuid(prop->name)));
 }
 
 // SHOWING ANOTHER MESH'S MATERIAL IS A REFILL, NOT A REBUILD (ADD-1, 2026-09-15).
@@ -153,13 +154,13 @@ void MaterialPropertyWidget::clearShownRows()
 /// The base and detail halves of a material's rows, split by the document's own
 /// naming rule (PbrMaterial::detailRow) — see setWidgetProperties.
 void MaterialPropertyWidget::splitRows(const iris::MaterialPtr &mat,
-                                       QList<iris::Property *> &base,
-                                       QList<iris::Property *> &details)
+                                       std::vector<iris::Property *> &base,
+                                       std::vector<iris::Property *> &details)
 {
     if (!mat) return;
     for (auto *prop : mat->properties()) {
         if (!prop) continue;
-        (prop->name.startsWith(QStringLiteral("detail")) ? details : base).append(prop);
+        (prop->name.rfind("detail", 0) == 0 ? details : base).push_back(prop);
     }
 }
 
@@ -168,12 +169,12 @@ bool MaterialPropertyWidget::rebindTo(const std::shared_ptr<iris::MeshNode> &nod
 {
     if (!materialPropWidget || !materialSelector) return false;
 
-    QList<iris::Property *> base, details;
+    std::vector<iris::Property *> base, details;
     splitRows(mat, base, details);
     if (!materialPropWidget->canRebind(base)) return false;
     // The detail section is built only when the material declares detail rows,
     // so its PRESENCE is part of the shape.
-    if (details.isEmpty() != (detailPropWidget == nullptr)) return false;
+    if (details.empty() != (detailPropWidget == nullptr)) return false;
     if (detailPropWidget && !detailPropWidget->canRebind(details)) return false;
     // "Reset to <provider>" is the NODE's row, not the material's.
     if (materialdefaults::providerName(node).isEmpty() != resetButton.isNull()) return false;
@@ -281,13 +282,13 @@ void MaterialPropertyWidget::setWidgetProperties()
     // The split is by ROW NAME, from the document's own naming rule
     // (PbrMaterial::detailRow), not by index or position: adding a base row
     // later must not silently push a detail row into the wrong section.
-    QList<iris::Property *> base, details;
+    std::vector<iris::Property *> base, details;
     splitRows(mat, base, details);
 
     materialPropWidget->setProperties(base);
 
     detailPropWidget = nullptr;
-    if (!details.isEmpty()) {
+    if (!details.empty()) {
         auto *section = this->addSection(tr("Detail Layers"));
         detailPropWidget = section->addPropertyWidget();
         detailPropWidget->setListener(this);
@@ -400,6 +401,8 @@ void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
     // A texture row arrives already bound to its file AND its asset (the
     // picker hands PropertyWidget {path, guid}, which the row keeps — TEX-REF-1);
     // the same path re-applied here keeps that identity.
+    // Value to Value, no Qt between (the row's own value: its kind is the row's,
+    // so the material takes it).
     material->setValue(prop->name, prop->getValue());
     if (prop->type == iris::PropertyType::Texture)
         updateTextureDependency(prop);
@@ -415,9 +418,9 @@ void MaterialPropertyWidget::updateTextureDependency(iris::Property *prop)
     // THE ROW CARRIES ITS ASSET (TEX-REF-1): the edge is to the guid the pick
     // bound, never one recovered from the resolved path.
     // HANDLE CASE where the widget isn't deselected
-    const QString assetGuid = material ? material->textureGuid(prop->name) : QString();
+    const QString assetGuid = material ? qtstd::toQString(material->textureGuid(prop->name)) : QString();
     if (assetGuid.isEmpty()) {
-        const QString previous = existingTextures.value(prop->name);
+        const QString previous = existingTextures.value(qtstd::toQString(prop->name));
         if (!previous.isEmpty()) db->deleteDependency(meshNodeGuid, previous);
     }
     else {
@@ -451,14 +454,14 @@ void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
     // A gesture that ended on its starting value (slider pressed and released
     // in place, colour dialog cancelled, Enter on an unchanged field) is not
     // an edit - don't pollute the undo stack with a no-op command.
-    const QVariant endValue = undoValueOf(prop);
+    const iris::Value endValue = undoValueOf(prop);
     if (startValue == endValue) return;
 
     if (services && services->undo)
         services->undo->push(new ChangeMaterialPropertyCommand(material, prop->name, startValue, endValue));
 }
 
-QVariant MaterialPropertyWidget::undoValueOf(iris::Property *prop) const
+iris::Value MaterialPropertyWidget::undoValueOf(iris::Property *prop) const
 {
     if (prop->type == iris::PropertyType::Texture && material)
         return material->textureRefOf(prop->name);

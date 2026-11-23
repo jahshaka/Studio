@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/document/qt/qtinterop.h"
+#include "irisgl/document/qt/colour.h"
+#include "app/qtstd.h"
 #include <QJsonArray>
 
 #include "io/materialreader.h"
@@ -112,23 +114,31 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 	// editor-facing Property object update (same contract as
 	// SceneReader::readPbrMaterial, which reads these out of the scene blob).
 	for (auto prop : mat->properties()) {
-		if (!values.contains(prop->name)) continue;
-		const auto val = values.value(prop->name);
+		// Each row's Value built from the file's text exactly as its QVariant
+		// was (NOQT-DOCUMENT-1 stage 4, walk 6): the kind is the row's own, so
+		// setValue takes it (its bool is not read: this switch built that kind).
+		const QString key = qtstd::toQString(prop->name);
+		if (!values.contains(key)) continue;
+		const auto val = values.value(key);
 
 		switch (prop->type) {
 		case iris::PropertyType::Float:
-			mat->setValue(prop->name, static_cast<float>(val.toDouble()));
+			mat->setValue(prop->name, iris::Value(double(static_cast<float>(val.toDouble()))));
 			break;
 		case iris::PropertyType::Int:
 		// An enum row stores (and serializes) a plain int — see SceneWriter.
 		case iris::PropertyType::List:
-			mat->setValue(prop->name, val.toInt());
+			mat->setValue(prop->name, iris::Value(val.toInt()));
 			break;
 		case iris::PropertyType::Color:
-			mat->setValue(prop->name, QColor(val.toString()));
+			// "#rrggbb" is read at THE EDITOR's EDGE (the spec's RULED 3): QColor
+			// parses it, the adapter carries it (an unparseable text reads as the
+			// invalid colour, whose shape is black's: the next save writes the
+			// "#000000" it wrote before).
+			mat->setValue(prop->name, iris::colourToValue(iris::toSrgbColor(QColor(val.toString()))));
 			break;
 		case iris::PropertyType::Bool:
-			mat->setValue(prop->name, val.toBool());
+			mat->setValue(prop->name, iris::Value(val.toBool()));
 			break;
 		case iris::PropertyType::Texture: {
 			if (!loadTextures) break;
@@ -138,7 +148,7 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			// path arm (a definition stores no path).
 			const QString stored = val.toString();
 			mat->setValue(prop->name, iris::Material::textureRef(
-				stored.isEmpty() ? QString() : resolveTextureGuid(stored), stored));
+				stored.isEmpty() ? std::string() : resolveTextureGuid(stored).toStdString(), stored.toStdString()));
 			break;
 		}
 		default:
@@ -150,8 +160,8 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 	{
 		const QJsonArray velocity = values.value(QStringLiteral("textureVelocity")).toArray();
 		if (velocity.size() == 2) {
-			mat->setValue(QStringLiteral("textureVelocityU"), velocity[0].toDouble());
-			mat->setValue(QStringLiteral("textureVelocityV"), velocity[1].toDouble());
+			mat->setValue("textureVelocityU", iris::Value(velocity[0].toDouble()));
+			mat->setValue("textureVelocityV", iris::Value(velocity[1].toDouble()));
 		}
 	}
 	restoreGeneratedPieces(mat, matObject);

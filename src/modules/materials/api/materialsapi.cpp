@@ -118,9 +118,9 @@ const QStringList kPbrMapKeys = makePbrMapKeys();
 /// The material's declared Property rows. `properties` lives on the base class,
 /// so this no longer has to guess which subclass it is holding (it used to try
 /// CustomMaterial first, then PbrMaterial, and return nothing for anything else).
-QList<iris::Property *> declaredProperties(const iris::MaterialPtr &material)
+std::vector<iris::Property *> declaredProperties(const iris::MaterialPtr &material)
 {
-    return material ? material->properties() : QList<iris::Property *>();
+    return material ? material->properties() : std::vector<iris::Property *>();
 }
 
 /// The keys material.set will accept on this material — the declared rows plus,
@@ -128,7 +128,7 @@ QList<iris::Property *> declaredProperties(const iris::MaterialPtr &material)
 QStringList writableMaterialKeys(const iris::MaterialPtr &material)
 {
     QStringList keys;
-    for (auto *prop : declaredProperties(material)) keys << prop->name;
+    for (auto *prop : declaredProperties(material)) keys << qtstd::toQString(prop->name);
     // The union, deduplicated: the six slots are declared rows on today's
     // PbrMaterial, but material.set accepts them either way, and a key listed
     // twice in an error message reads as a bug in the message.
@@ -1594,6 +1594,9 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     for (auto it = expanded.constBegin(); it != expanded.constEnd(); ++it) {
         const QString &key = it.key();
         QVariant newValue = normalizeJs(it.value());
+        // A map row's bound Value ({path, guid} or a live reference), set by the map branch below.
+        iris::Value mapValue;
+        bool mapBound = false;
 
         if (colorKeys.contains(key)) {
             // F8: a colour string the parser cannot read used to keep the old
@@ -1624,7 +1627,8 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                         "texture — a reflection cubemap is built once by projecting the image "
                         "onto six faces, so a live texture bound here would freeze at its first "
                         "frame instead of following its generation"));
-                newValue = LiveTextureCatalog::refFor(ref);
+                mapValue = iris::Value(LiveTextureCatalog::refFor(ref).toStdString());
+                mapBound = true;
             }
             else if (!ref.isEmpty()) {
                 // A MAP ROW NAMES AN ASSET (TEX-REF-1): the row carries the
@@ -1652,6 +1656,14 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 const auto record = host.db->fetchAsset(guid);
                 if (record.guid.isEmpty())
                     return fail(QStringLiteral("material.set: no texture file or asset '%1'").arg(ref));
+                // A MAP ROW TAKES AN IMAGE, BY NAME (NOQT-DOCUMENT-1 stage 4; OPEN_REDS: "material.set
+                // binds any asset as a texture map"): a model's or a sound's guid used to be bound
+                // and to fail later at the image probe with only a log line. Refused here, before
+                // anything is written or pushed.
+                if (record.type != static_cast<int>(ModelTypes::Texture))
+                    return fail(QStringLiteral("material.set: '%1' is not an image asset (its type is %2) "
+                                               "— a map row ('%3') takes an image")
+                                    .arg(ref, QString::number(record.type), key));
                 // The pinned bytes in a project (resolvePinned falls back to the
                 // library source itself), the library source otherwise.
                 QSqlDatabase conn = QSqlDatabase::database();
@@ -1659,23 +1671,26 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                     ? AssetCas::resolvePinned(conn, AssetStorePaths::root(),
                                               host.project->getProjectGuid(), guid)
                     : AssetCas::resolveSource(conn, AssetStorePaths::root(), guid);
-                newValue = iris::Material::textureRef(path, guid);
-                if (host.isProjectOpen() && record.type == static_cast<int>(ModelTypes::Texture)
-                    && !boundTextures.contains(guid))
+                mapValue = iris::Material::textureRef(path.toStdString(), guid.toStdString());
+                mapBound = true;
+                if (host.isProjectOpen() && !boundTextures.contains(guid))
                     boundTextures << guid;
             }
         }
 
         // Old value for undo: from the material's editor property list when the
         // key is declared there; texture/map keys fall back to empty.
-        QVariant oldValue;
-        QList<iris::Property *> props = declaredProperties(material);
+        iris::Value oldValue;
+        const std::string name = key.toStdString();
+        // A map key with no row is a Texture value (material.set accepts the PBR slots either way).
+        iris::PropertyType kind = iris::PropertyType::Texture;
         bool known = false;
-        for (auto prop : props) {
-            if (prop->name != key) continue;
+        for (auto prop : declaredProperties(material)) {
+            if (prop->name != name) continue;
             // A map row's undo restores its file AND its asset (TEX-REF-1).
-            oldValue = prop->type == iris::PropertyType::Texture ? material->textureRefOf(key)
+            oldValue = prop->type == iris::PropertyType::Texture ? material->textureRefOf(name)
                                                                  : prop->getValue();
+            kind = prop->type;
             known = true;
             // ENUM ROWS ACCEPT THEIR OWN VOCABULARY, not just the index.
             // ListProperty::setValue is `value.toInt()`, so a script that wrote
@@ -1689,12 +1704,14 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 if (newValue.typeId() == QMetaType::QString) {
                     const QString label = newValue.toString();
                     int index = -1;
-                    for (int i = 0; i < list->labels.size(); ++i)
-                        if (list->labels[i].compare(label, Qt::CaseInsensitive) == 0) { index = i; break; }
+                    QStringList labels;
+                    for (const std::string &l : list->labels) labels << qtstd::toQString(l);
+                    for (int i = 0; i < labels.size(); ++i)
+                        if (labels[i].compare(label, Qt::CaseInsensitive) == 0) { index = i; break; }
                     if (index < 0)
                         return fail(QStringLiteral("material.set: '%1' is not a value of '%2' "
                                                    "— accepted: %3")
-                                        .arg(label, key, list->labels.join(QStringLiteral(", "))));
+                                        .arg(label, key, labels.join(QStringLiteral(", "))));
                     newValue = index;
                 }
                 // AN OUT-OF-RANGE ORDINAL IS DELIBERATELY STILL ACCEPTED, and
@@ -1726,7 +1743,15 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                                      nodeId));
         }
 
-        host.services->undo->push(new ChangeMaterialPropertyCommand(material, key, oldValue, newValue));
+        // THE EDGE (NOQT-DOCUMENT-1 stage 4, walk 1): the value is converted BY THE ROW's KIND
+        // (qtstd::toRowValue: Qt's own calls) before the command is pushed, so its replay is never
+        // refused; what Qt cannot convert is refused here, by name (the lead's ruling: a value is
+        // refused, never silently moved - "abc" is not 0).
+        const iris::Value value = mapBound ? mapValue : qtstd::toRowValue(kind, newValue);
+        if (value.isNull())
+            return fail(QStringLiteral("material.set: %1: '%2' is not a %3")
+                            .arg(key, newValue.toString(), propertyTypeName(kind)));
+        host.services->undo->push(new ChangeMaterialPropertyCommand(material, name, oldValue, value));
     }
 
     // A MATERIAL SLOT BOUND BY GUID PINS THE IMAGE (lane L13): a scene now
@@ -1901,11 +1926,15 @@ QVariantMap MaterialApi::get(const QString &nodeId)
     auto material = meshNode->getMaterial();
     if (!material) return out;
 
+    // By the row's type (walk 13): the same JS as when it switched on the QVariant's.
     for (auto prop : declaredProperties(material)) {
-        const QVariant value = prop->getValue();
-        if (value.typeId() == QMetaType::QColor) out[prop->name] = colorToJs(value.value<QColor>());
-        else if (value.typeId() == QMetaType::QVector3D) out[prop->name] = vecToJs(iris::fromQt(value.value<QVector3D>()));
-        else out[prop->name] = value;
+        const QString key = qtstd::toQString(prop->name);
+        if (prop->type == iris::PropertyType::Color)
+            out[key] = colorToJs(iris::toQColor(static_cast<const iris::ColorProperty *>(prop)->value));
+        else if (prop->type == iris::PropertyType::Vec3)
+            out[key] = vecToJs(static_cast<const iris::Vec3Property *>(prop)->value);
+        else
+            out[key] = qtstd::toRowVariant(prop->type, prop->getValue());
     }
     // The generated shader pieces (HLMS_ADOPTION P5) are NOT declared
     // properties — they are a cache reference the emitter owns, not something
@@ -1927,8 +1956,8 @@ QVariantMap MaterialApi::get(const QString &nodeId)
     // file is one the store could not resolve (texture.missing).
     QVariantMap textureAssets;
     for (auto prop : declaredProperties(material))
-        if (prop->type == iris::PropertyType::Texture && !material->textureGuid(prop->name).isEmpty())
-            textureAssets[prop->name] = material->textureGuid(prop->name);
+        if (prop->type == iris::PropertyType::Texture && !material->textureGuid(prop->name).empty())
+            textureAssets[qtstd::toQString(prop->name)] = qtstd::toQString(material->textureGuid(prop->name));
     out["textureAssets"] = textureAssets;
     return out;
 }

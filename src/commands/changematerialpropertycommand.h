@@ -13,8 +13,10 @@ For more information see the LICENSE file
 #define CHANGEMATERIALPROPERTYCOMMAND_H
 
 #include <QUndoCommand>
-#include <QVariant>
 #include "irisgl/irisglfwd.h"
+#include "irisgl/core/value.h"
+
+#include <string>
 
 // Widened from CustomMaterialPtr to MaterialPtr (SCRIPTING_SPEC §1.4): PbrMaterial
 // edits — the engine viewport's authoring model — are undoable through the same
@@ -23,19 +25,21 @@ For more information see the LICENSE file
 class ChangeMaterialPropertyCommand : public QUndoCommand
 {
     iris::MaterialPtr material;
-    QString propName;
-    QVariant oldValue;
-    QVariant newValue;
+    std::string propName;
+    iris::Value oldValue;
+    iris::Value newValue;
 
 
 public:
-    ChangeMaterialPropertyCommand(iris::MaterialPtr material, QString name, QVariant oldValue, QVariant newValue);
+    /// The two Values are of the row's kind: the verb and the panel convert at their edge
+    /// (qtstd::toRowValue) BEFORE they push, so a replay is never refused.
+    ChangeMaterialPropertyCommand(iris::MaterialPtr material, std::string name, iris::Value oldValue, iris::Value newValue);
 
     void undo() override;
     void redo() override;
 
 private:
-    void setMaterialProperty(QString name, QVariant value);
+    void setMaterialProperty(const iris::Value &value);
 };
 
 #endif // CHANGEMATERIALPROPERTYCOMMAND_H

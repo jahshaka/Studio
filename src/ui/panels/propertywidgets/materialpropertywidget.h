@@ -104,8 +104,8 @@ private:
     /// The base / "detail*" split of a material's property list, by the
     /// document's own naming rule.
     static void splitRows(const iris::MaterialPtr &mat,
-                          QList<iris::Property *> &base,
-                          QList<iris::Property *> &details);
+                          std::vector<iris::Property *> &base,
+                          std::vector<iris::Property *> &details);
     /// THE MATERIAL COMBO'S ENTRIES, AS A STRING (COMBO-FP-1). `materialItemsKey`
     /// is the (guid, label) list setupShaderSelector would build RIGHT NOW;
     /// `comboItemsKey` is the list the combo on screen actually holds. Equal
@@ -139,10 +139,10 @@ private:
     void onPropertyChangeEnd(iris::Property*) override;
     /// What an undo entry records for a row: a texture row's {path, guid}
     /// (iris::Material::textureRefOf), any other row's value.
-    QVariant undoValueOf(iris::Property *prop) const;
+    iris::Value undoValueOf(iris::Property *prop) const;
 
     // for undo/redo
-    QVariant startValue;
+    iris::Value startValue;
     /// True between onPropertyChangeStart and onPropertyChangeEnd — i.e. only
     /// for a gesture this panel actually saw begin. A gesture that spans the
     /// end of a script run (the rows are inert while one is in flight) must

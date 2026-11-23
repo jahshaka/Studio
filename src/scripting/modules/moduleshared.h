@@ -34,6 +34,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/properties/property.h"
+#include "app/qtstd.h"
+#include "app/qtstdgui.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
@@ -285,9 +287,7 @@ inline QString propertyTypeName(iris::PropertyType type)
     case iris::PropertyType::Bool:    return QStringLiteral("bool");
     case iris::PropertyType::Int:     return QStringLiteral("int");
     case iris::PropertyType::Float:   return QStringLiteral("float");
-    case iris::PropertyType::Vec2:    return QStringLiteral("vec2");
     case iris::PropertyType::Vec3:    return QStringLiteral("vec3");
-    case iris::PropertyType::Vec4:    return QStringLiteral("vec4");
     case iris::PropertyType::Color:   return QStringLiteral("color");
     case iris::PropertyType::Texture: return QStringLiteral("texture");
     case iris::PropertyType::File:    return QStringLiteral("string");
@@ -316,15 +316,23 @@ inline QVariantMap propertyRowToJs(iris::Property *prop)
 {
     QVariantMap row;
     if (!prop) return row;
-    row["name"] = prop->name;
-    row["displayName"] = prop->displayName;
+    row["name"] = qtstd::toQString(prop->name);
+    row["displayName"] = qtstd::toQString(prop->displayName);
     row["type"] = propertyTypeName(prop->type);
 
-    const QVariant value = prop->getValue();
-    switch (value.typeId()) {
-    case QMetaType::QColor:    row["value"] = colorToJs(value.value<QColor>()); break;
-    case QMetaType::QVector3D: row["value"] = vecToJs(iris::fromQt(value.value<QVector3D>())); break;
-    default:                   row["value"] = value; break;
+    // BY THE ROW's TYPE (NOQT-DOCUMENT-1 stage 4, walk 13), where it switched on
+    // the QVariant's: the same JS as before (a colour's hex, a vector's {x,y,z},
+    // an int, a float, a bool, a string).
+    switch (prop->type) {
+    case iris::PropertyType::Color:
+        row["value"] = colorToJs(iris::toQColor(static_cast<const iris::ColorProperty *>(prop)->value));
+        break;
+    case iris::PropertyType::Vec3:
+        row["value"] = vecToJs(static_cast<const iris::Vec3Property *>(prop)->value);
+        break;
+    default:
+        row["value"] = qtstd::toRowVariant(prop->type, prop->getValue());
+        break;
     }
 
     if (auto *f = dynamic_cast<iris::FloatProperty *>(prop)) {
@@ -338,7 +346,11 @@ inline QVariantMap propertyRowToJs(iris::Property *prop)
         // the index (that is what material.set writes back); `options` is
         // spelled the same as NodeApi's faceCullingMode row, which reports the
         // same idea for a name-valued enum.
-        if (!e->labels.isEmpty()) row["options"] = e->labels;
+        if (!e->labels.empty()) {
+            QStringList options;
+            for (const std::string &label : e->labels) options << qtstd::toQString(label);
+            row["options"] = options;
+        }
     }
     return row;
 }

@@ -49,6 +49,22 @@ add_test(NAME document.ptr_laws COMMAND test_ptr_laws WORKING_DIRECTORY ${CMAKE_
 set_tests_properties(document.ptr_laws PROPERTIES LABELS "document" TIMEOUT 60)
 jah_no_display(document.ptr_laws)
 
+# document.property_rows — THE STRICT DOCUMENT AND THE CONVERTING EDGE (NOQT-DOCUMENT-1 stage 4; test_property_rows.cpp says
+# the laws): every row of every node class and of PbrMaterial round-trips its own Value and refuses every other kind
+# with nothing moved; a QVariant through qtstd::toRowValue leaves what Qt's own call gives, and what Qt cannot convert is
+# refused; the colour's Value shape over all 65,536 16-bit values. CPU only: the document's own types, no engine, no
+# display (Qt6::Gui is the edge under test and the reference).
+add_executable(test_property_rows test_property_rows.cpp)
+set_target_properties(test_property_rows PROPERTIES AUTOMOC OFF)
+target_include_directories(test_property_rows PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_property_rows PRIVATE IrisGL Qt6::Gui)
+add_test(NAME document.property_rows COMMAND test_property_rows WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.property_rows PROPERTIES LABELS "document" TIMEOUT 60)
+jah_no_display(document.property_rows)
+
 # document.sky_bake_parity — the gradient sky's bytes against the Qt-typed bake it replaced (NOQT-DOCUMENT-1 stage 3):
 # iris::bakeGradientSky (an iris::Image from SrgbColor stops) equals the old QColor/QImage implementation, kept in the
 # test as the reference, byte for byte over seeded stops, offsets and sizes. Qt6::Gui is the reference only.

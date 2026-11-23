@@ -236,7 +236,7 @@ void AnimationWidget::buildPropertiesMenu()
             continue;
 
         auto action = new QAction(menu);
-        action->setText(prop->name);
+        action->setText(QString::fromStdString(prop->name));
         action->setData(propIndex);
 
         menu->addAction(action);
@@ -467,12 +467,13 @@ void AnimationWidget::addPropertyKey(QAction *action)
         return;
 
     auto index = action->data().toInt();
-    if (index < 0 || index >= nodeProperties.view().count())
+    if (index < 0 || index >= int(nodeProperties.view().size()))
         return;
 
     auto animProp = nodeProperties.view()[index];
     if (!animProp)
         return;
+    const QString propName = QString::fromStdString(animProp->name);
 
     // ONE keyframe writer (services/animationedits.h): the get-or-create, the
     // track-shape check, the overwrite-at-the-same-time rule and the length
@@ -480,40 +481,40 @@ void AnimationWidget::addPropertyKey(QAction *action)
     // script cannot key a property differently. The panel keeps only what is
     // its own: the menu index, the label view and the reporting.
     animedits::PropertyInfo info;
-    info.name = animProp->name;
-    info.displayName = animProp->displayName;
+    info.name = propName;
+    info.displayName = QString::fromStdString(animProp->displayName);
     info.type = animProp->type;
     info.index = index;
     // The cached Property carries the value the node had when it was SELECTED;
     // the key must carry what it holds now.
-    info.value = node->getPropertyValue(animProp->name);
+    info.value = node->getPropertyValue(propName);
 
     bool createdTrack = false;
     QString error;
     // F16: the panel's insert-key button is undoable now, through the SAME
     // command the anim.keyframe verb pushes.
-    const animedits::TrackSnapshot before = animedits::snapshotTrack(animation, animProp->name);
+    const animedits::TrackSnapshot before = animedits::snapshotTrack(animation, propName);
     if (!animedits::setKeyframe(animation, info, animWidgetData->cursorPosInSeconds,
                                 QVariant(), &createdTrack, &error)) {
         // The menu filter and the writer share one predicate, so a refusal here
         // can only mean the two got out of sync — or an action reached this slot
         // from somewhere else. Report it once per property.
         static QSet<QString> reported;
-        if (!reported.contains(animProp->name)) {
-            reported.insert(animProp->name);
+        if (!reported.contains(propName)) {
+            reported.insert(propName);
             JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("AnimationWidget: %1 — key ignored").arg(error));
         }
         return;
     }
 
-    pushEdit(new SetKeyframeCommand(animation, animProp->name, before,
-                                    animedits::snapshotTrack(animation, animProp->name)));
+    pushEdit(new SetKeyframeCommand(animation, propName, before,
+                                    animedits::snapshotTrack(animation, propName)));
 
     if (createdTrack)
-        ui->keylabelView->addProperty(animProp->name);
+        ui->keylabelView->addProperty(propName);
 
     // recalc summary keys for this property
-    ui->keylabelView->recalcPropertySummaryKeys(animProp->name);
+    ui->keylabelView->recalcPropertySummaryKeys(propName);
 
     this->repaintViews();
 }

@@ -62,12 +62,13 @@ if(TEST log.engine)
 endif()
 
 # log.iris_forwarded (NOQT-CORE-1 stage 2) — IrisCore's log reaches the session log: the document's own warning (a
-# model asset bound as a map: texture2d's image probe refuses it) lands in the category `iris` at Warning
+# text file named .png bound as a map: texture2d's image probe refuses it) lands in the category `iris` at Warning
 # (iris_forwarded.js.in says the trigger and the law). One --headless launch: the NULL render system, a fresh home (no shader cache, no warm-up product).
 set(_ifHome ${CMAKE_CURRENT_BINARY_DIR}/log-iris-forwarded-home)
 jah_fresh_home_fixture(log.iris_forwarded.fresh_home logIrisForwardedHome "${_ifHome}" LABELS "log")
 file(MAKE_DIRECTORY ${_ifHome}/run)
 set(IRIS_FWD_STL ${CMAKE_SOURCE_DIR}/tests/importer/fixtures/tetra_normals.stl)
+set(IRIS_FWD_TEXT_PNG ${CMAKE_CURRENT_SOURCE_DIR}/not_an_image.png)
 configure_file(iris_forwarded.js.in ${CMAKE_CURRENT_BINARY_DIR}/iris_forwarded.js @ONLY)
 add_test(NAME log.iris_forwarded
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/iris_forwarded.js --headless

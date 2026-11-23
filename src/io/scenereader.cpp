@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "io/cascadesetformat.h"
 #include "irisgl/document/qt/colour.h"
 #include "irisgl/document/qt/colorjson.h"
+#include "app/qtstd.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/looks.h"
@@ -1738,23 +1739,31 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 	// Drive the material through setValue so the field the shader reads and the
 	// Property object the panel shows are both updated from one place.
 	for (auto prop : mat->properties()) {
-		if (!values.contains(prop->name)) continue;
-		const auto val = values.value(prop->name);
+		// Each row's Value built from the file's text exactly as its QVariant
+		// was (NOQT-DOCUMENT-1 stage 4, walk 6): the kind is the row's own, so
+		// setValue takes it (its bool is not read: this switch built that kind).
+		const QString key = qtstd::toQString(prop->name);
+		if (!values.contains(key)) continue;
+		const auto val = values.value(key);
 
 		switch (prop->type) {
 		case iris::PropertyType::Float:
-			mat->setValue(prop->name, static_cast<float>(val.toDouble()));
+			mat->setValue(prop->name, iris::Value(double(static_cast<float>(val.toDouble()))));
 			break;
 		case iris::PropertyType::Int:
 		// An enum row stores (and serializes) a plain int — see SceneWriter.
 		case iris::PropertyType::List:
-			mat->setValue(prop->name, val.toInt());
+			mat->setValue(prop->name, iris::Value(val.toInt()));
 			break;
 		case iris::PropertyType::Color:
-			mat->setValue(prop->name, QColor(val.toString()));
+			// "#rrggbb" is read at THE EDITOR's EDGE (the spec's RULED 3): QColor
+			// parses it, the adapter carries it (an unparseable text reads as the
+			// invalid colour, whose shape is black's: the next save writes the
+			// "#000000" it wrote before).
+			mat->setValue(prop->name, iris::colourToValue(iris::toSrgbColor(QColor(val.toString()))));
 			break;
 		case iris::PropertyType::Bool:
-			mat->setValue(prop->name, val.toBool());
+			mat->setValue(prop->name, iris::Value(val.toBool()));
 			break;
 		case iris::PropertyType::Texture: {
 			// A TEXTURE IS ITS ASSET GUID (TEX-REF-1). The row binds the bytes
@@ -1765,7 +1774,7 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 			// getAbsolutePath(guid) saved a meaningless path on the next write.
 			const QString stored = val.toString();
 			mat->setValue(prop->name, iris::Material::textureRef(
-				stored.isEmpty() ? QString() : resolveAssetPath(stored), stored));
+				stored.isEmpty() ? std::string() : resolveAssetPath(stored).toStdString(), stored.toStdString()));
 			break;
 		}
 		default:
@@ -1778,8 +1787,8 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 	{
 		const QJsonArray velocity = values["textureVelocity"].toArray();
 		if (velocity.size() == 2) {
-			mat->setValue(QStringLiteral("textureVelocityU"), velocity[0].toDouble(mat->textureVelocityU));
-			mat->setValue(QStringLiteral("textureVelocityV"), velocity[1].toDouble(mat->textureVelocityV));
+			mat->setValue("textureVelocityU", iris::Value(velocity[0].toDouble(mat->textureVelocityU)));
+			mat->setValue("textureVelocityV", iris::Value(velocity[1].toDouble(mat->textureVelocityV)));
 		}
 	}
 	return mat;

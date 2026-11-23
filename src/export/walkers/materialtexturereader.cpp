@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/livetextures.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/properties/property.h"
+#include "app/qtstd.h"
 
 namespace exportwalk {
 
@@ -46,9 +47,9 @@ QVector<TextureSlot> materialTextureSlots(iris::Material *material)
     // (HLMS_ADOPTION P4b) and it stays as the belt to that brace.
     for (iris::Property *prop : material->properties()) {
         if (!prop || prop->type != iris::PropertyType::Texture) continue;
-        const QString path = prop->getValue().toString();
+        const QString path = qtstd::toQString(static_cast<const iris::TextureProperty *>(prop)->value);
         if (path.isEmpty() || seen(path) || iris::LiveTextures::isLiveRef(path)) continue;
-        found.append({ prop->name, path });
+        found.append({ qtstd::toQString(prop->name), path });
     }
     return found;
 }
