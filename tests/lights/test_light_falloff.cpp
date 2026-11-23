@@ -39,6 +39,14 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
+// MEASURING ARM (SCRIPT-IN-ENGINE-1 2f, the equality proof): every picture's FNV-1a 64 - reverted by a new commit
+static void armHash(const char *what, const unsigned char *p, size_t n)
+{
+    unsigned long long h = 14695981039346656037ull;
+    for (size_t i = 0; i < n; ++i) { h ^= p[i]; h *= 1099511628211ull; }
+    std::printf("ARM %s fnv1a64 %016llx\n", what, h);
+}
+
 static float probeAt(Engine *engine, View *view, Scene *s, NodeId probe, float x, float z)
 {
     enginetest::setNodePosition(s, probe, Vec3(x, 0.0f, z));
@@ -46,6 +54,7 @@ static float probeAt(Engine *engine, View *view, Scene *s, NodeId probe, float x
     enginetest::testCameraLookAt(view, Vec3(x, 3.0f, z + 0.001f), Vec3(x, 0.0f, z));
     enginetest::frames(engine, 3);
     Image img; view->readPixels(img);
+    armHash("picture", img.rgba.data(), img.rgba.size());
     const Colour c = img.at(64, 64);
     return (c.r + c.g + c.b) / 3.0f;
 }
@@ -61,6 +70,7 @@ static float radianceAt(Engine *engine, View *view, Scene *s, NodeId lightNode, 
     enginetest::frames(engine, 3);
     ImageF img;
     if (!view->readPixelsHdr(img)) return -1.0f;
+    armHash("radiance", reinterpret_cast<const unsigned char *>(img.rgba.data()), img.rgba.size() * sizeof(float));
     const Colour c = img.at(64, 64);
     return (c.r + c.g + c.b) / 3.0f;
 }

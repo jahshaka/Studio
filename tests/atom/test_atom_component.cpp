@@ -173,6 +173,13 @@ int main()
         e->popMonitorRecords(drop);
     }
     enginetest::frames(e, 3);
+    {   // MEASURING ARM (SCRIPT-IN-ENGINE-1 2f, the equality proof): A's last frame's picture FNV-1a 64 - reverted by a new commit
+        Image img;
+        va->readPixels(img);
+        unsigned long long h = 14695981039346656037ull;
+        for (unsigned char b : img.rgba) { h ^= b; h *= 1099511628211ull; }
+        std::printf("ARM picture fnv1a64 %016llx (%ux%u)\n", h, img.width, img.height);
+    }
     e->setFrameMonitor(MonitorLevel::Off);
     recs.clear();
     e->popMonitorRecords(recs);
