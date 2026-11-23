@@ -103,6 +103,11 @@ inline QJsonValue toQJsonValue(const iris::Value &v)
     return QJsonValue(QJsonValue::Null);
 }
 
+/// The two Object shorthands (a document member that is an Object <-> the QJsonObject an editor file or panel builds):
+/// any other kind reads as the empty QJsonObject, as QJsonValue::toObject() does.
+inline QJsonObject toQJsonObject(const iris::Value &v) { return toQJsonValue(v).toObject(); }
+inline iris::Value fromQJsonObject(const QJsonObject &o) { return toValue(QJsonValue(o)); }
+
 // ---- iris::Value <-> QVariant of the core kinds --------------------------------------------------------------------
 // Null <-> an invalid QVariant; Bool <-> bool; Int <-> qlonglong (any integral QVariant in); Number <-> double (a float
 // widened); String <-> QString; Array <-> QVariantList (a QStringList in); Object <-> QVariantMap (a QVariantHash in);

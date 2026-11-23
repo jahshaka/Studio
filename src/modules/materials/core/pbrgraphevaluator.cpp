@@ -9,7 +9,6 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "pbrgraphevaluator.h"
-#include "irisgl/document/qt/colorjson.h"
 #include "irisgl/document/qt/colour.h"
 #include "app/qtstd.h"
 #include "app/qtstdgui.h"

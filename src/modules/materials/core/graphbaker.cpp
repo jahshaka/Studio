@@ -10,7 +10,6 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "graphbaker.h"
 #include "irisgl/document/qt/colour.h"
-#include "irisgl/document/qt/colorjson.h"
 
 #include "app/qtstd.h"
 #include "irisgl/core/files.h"
@@ -648,7 +647,7 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiledIn, cons
 				out.eval.values[slot.valueKey] = qBound(0.0, s, 1.0);
 			}
 			else if (slot.target == MasterSlot::ColorSlot) {
-				out.eval.values[slot.valueKey] = iris::colorToJson(iris::toSrgbColor(colorFromValue(v)));
+				out.eval.values[slot.valueKey] = qtstd::colorToJson(iris::toSrgbColor(colorFromValue(v)));
 			}
 			else {
 				unsupported(slot.socketName, rootTypeName(program)); // Normal: map-only
@@ -675,11 +674,11 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiledIn, cons
 		// texture rendered its own picture at 0.784x, silently. It is the
 		// same statement as the others: the graph says the colour IS the
 		// map, so the tint that multiplies it is 1.
-		if (mapKey == "baseColorMap") out.eval.values["baseColor"] = iris::colorToJson(iris::toSrgbColor(QColor(Qt::white)));
+		if (mapKey == "baseColorMap") out.eval.values["baseColor"] = qtstd::colorToJson(iris::toSrgbColor(QColor(Qt::white)));
 		else if (mapKey == "metallicMap") out.eval.values["metallic"] = 1.0;
 		else if (mapKey == "roughnessMap") out.eval.values["roughness"] = 1.0;
 		else if (mapKey == "emissiveMap") {
-			out.eval.values["emissiveColor"] = iris::colorToJson(iris::toSrgbColor(QColor(Qt::white)));
+			out.eval.values["emissiveColor"] = qtstd::colorToJson(iris::toSrgbColor(QColor(Qt::white)));
 			out.eval.values["emissiveIntensity"] = 1.0;
 		}
 	};
@@ -694,13 +693,13 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiledIn, cons
 		const Value c = cs.factor.coerced(3);
 		const double peak = std::max(c.x, std::max(c.y, c.z));
 		if (peak > 0.0) {
-			out.eval.values["emissiveColor"] = iris::colorToJson(iris::toSrgbColor(QColor::fromRgbF(
+			out.eval.values["emissiveColor"] = qtstd::colorToJson(iris::toSrgbColor(QColor::fromRgbF(
 				float(qBound(0.0, c.x / peak, 1.0)), float(qBound(0.0, c.y / peak, 1.0)),
 				float(qBound(0.0, c.z / peak, 1.0)))));
 			out.eval.values["emissiveIntensity"] = peak;
 		}
 		else {
-			out.eval.values["emissiveColor"] = iris::colorToJson(iris::toSrgbColor(QColor(Qt::black)));
+			out.eval.values["emissiveColor"] = qtstd::colorToJson(iris::toSrgbColor(QColor(Qt::black)));
 			out.eval.values["emissiveIntensity"] = 1.0;
 		}
 	}

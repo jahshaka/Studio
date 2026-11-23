@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldcloudspropertywidget.h"
+#include "app/qtstd.h"
 
 #include <QFileInfo>
 #include <QSqlDatabase>
@@ -115,7 +116,7 @@ QVariant WorldCloudsPropertyWidget::withField(const std::function<void(iris::Clo
     iris::CloudLayer c = scene->clouds;
     edit(c);
     c = iris::CloudLayer::clamped(c);
-    QVariantMap m = c.toJson().toVariantMap();
+    QVariantMap m = qtstd::toVariantMap(c.toJson());
     if (scene->cloudWeatherMap && !c.weatherMapGuid.isEmpty())
         m.insert(QStringLiteral("weatherPath"), scene->cloudWeatherMap->source);
     return m;
@@ -136,7 +137,7 @@ void WorldCloudsPropertyWidget::onWeatherPicked(const QString &value, const QStr
     Q_UNUSED(value)
     iris::CloudLayer c = scene->clouds;
     c.weatherMapGuid = path.isEmpty() ? QString() : guid;
-    QVariantMap m = iris::CloudLayer::clamped(c).toJson().toVariantMap();
+    QVariantMap m = qtstd::toVariantMap(iris::CloudLayer::clamped(c).toJson());
     if (!path.isEmpty()) m.insert(QStringLiteral("weatherPath"), path);
     const QVariant before = sceneprops::get(scene, QStringLiteral("clouds"));
     sceneprops::set(scene, QStringLiteral("clouds"), m);

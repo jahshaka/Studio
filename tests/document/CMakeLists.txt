@@ -65,6 +65,21 @@ add_test(NAME document.property_rows COMMAND test_property_rows WORKING_DIRECTOR
 set_tests_properties(document.property_rows PROPERTIES LABELS "document" TIMEOUT 60)
 jah_no_display(document.property_rows)
 
+# document.fragment_codecs — THE SCENE's JSON FRAGMENTS ON iris::Value WRITE THE BYTES THEY WROTE (NOQT-DOCUMENT-1 stage 4;
+# test_fragment_codecs.cpp says the laws): the cloud layer, the height fog, the sun contact and the realistic sky block
+# are fixed points, and their text through qtstd into a QJsonDocument equals the Qt-typed codec's (kept in the test as the
+# reference); the avatar definition and the locomotion asset write the same bytes after a read. CPU only.
+add_executable(test_fragment_codecs test_fragment_codecs.cpp)
+set_target_properties(test_fragment_codecs PROPERTIES AUTOMOC OFF)
+target_include_directories(test_fragment_codecs PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_fragment_codecs PRIVATE IrisGL Qt6::Core)
+add_test(NAME document.fragment_codecs COMMAND test_fragment_codecs WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.fragment_codecs PROPERTIES LABELS "document" TIMEOUT 60)
+jah_no_display(document.fragment_codecs)
+
 # document.sky_bake_parity — the gradient sky's bytes against the Qt-typed bake it replaced (NOQT-DOCUMENT-1 stage 3):
 # iris::bakeGradientSky (an iris::Image from SrgbColor stops) equals the old QColor/QImage implementation, kept in the
 # test as the reference, byte for byte over seeded stops, offsets and sizes. Qt6::Gui is the reference only.

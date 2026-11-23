@@ -88,8 +88,10 @@ rowundo::Binding NodeRows::operator()(const QString &key,
         if (!node || !services || !services->undo) return;
         const auto was = qtstd::toNodeValue(*node, name, before);
         const auto now = qtstd::toNodeValue(*node, name, after);
-        services->undo->push(new SetNodePropertyCommand(node, name, was ? *was : iris::Value(),
-                                                        now ? *now : iris::Value()));
+        // A value the edge cannot convert is NOT recorded as a Null (a Null is a value: a colour's none, a postFx
+        // clear): the step is skipped (the reader's F8; read() gives nodeVariant's own values, so it does not occur).
+        if (!was || !now) return;
+        services->undo->push(new SetNodePropertyCommand(node, name, *was, *now));
     };
     return b;
 }

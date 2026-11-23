@@ -10,7 +10,8 @@
 # driven at runtime by gi.tiers (archived: archive/tests/gi) (photon_override_reads_custom), the reader by
 # scripting.e2e.photon_pin_read (archived: archive/tests/scripting) (a blob that pins photon, reopened); this lint is the source half:
 # the reader deletes the key right after it reads the map (forward-only: one remove, never
-# honoured), each setter refuses it before its insert, and nothing first-party writes a `photon`
+# honoured), each setter refuses it before its set (iris::Value::set since NOQT-DOCUMENT-1 stage 4), and nothing
+# first-party writes a `photon`
 # pin by hand.
 #
 # $1 = the repo root
@@ -21,17 +22,17 @@ cd "$ROOT" || { echo "source.photon_never_pinned: no such root $ROOT"; exit 1; }
 failures=0
 
 # 1. THE READER drops the key on the line after it reads the map.
-if grep -A2 'scene->worldOverrides = sceneObj.value("worldOverrides").toObject();' src/io/scenereader.cpp \
-       | grep -q 'scene->worldOverrides.remove(worldmodes::photonRowId());'; then
+if grep -A2 'scene->worldOverrides = qtstd::fromQJsonObject(sceneObj.value("worldOverrides").toObject());' src/io/scenereader.cpp \
+       | grep -q 'scene->worldOverrides.erase(worldmodes::photonRowId().toStdString());'; then
     echo "source.photon_never_pinned: ok — the reader deletes a 'photon' pin on read"
 else
     echo "source.photon_never_pinned: FAIL — src/io/scenereader.cpp reads worldOverrides without"
-    echo "    deleting the 'photon' key (scene->worldOverrides.remove(worldmodes::photonRowId()))"
+    echo "    deleting the 'photon' key (scene->worldOverrides.erase(worldmodes::photonRowId().toStdString()))"
     failures=1
 fi
 
-# 2. THE TWO SETTERS refuse it — the guard INSIDE each body and BEFORE its first insert (a guard
-#    elsewhere in the file, or one after the insert, does not count).
+# 2. THE TWO SETTERS refuse it — the guard INSIDE each body and BEFORE its first set( (a guard
+#    elsewhere in the file, or one after the set, does not count).
 setter_report=$(python3 - irisgl/document/scenegraph/worldmodes.cpp <<'PYEOF'
 import re, sys
 src = open(sys.argv[1]).read()
@@ -44,7 +45,7 @@ for sig in (r"bool setRowValue\(const iris::ScenePtr &scene, const QString &id",
     body_end = re.search(r"^\}", src[m.end():], re.M)
     body = src[m.end(): m.end() + (body_end.start() if body_end else 0)]
     guard = re.search(r"if \(id == photonRowId\(\)\)\s*return", body)
-    insert = re.search(r"worldOverrides\s*\.\s*insert\s*\(", body)
+    insert = re.search(r"worldOverrides\s*\.\s*set\s*\(", body)
     name = sig.split("(")[0].split()[-1].rstrip("\\")
     if not guard:
         bad.append("%s: no 'if (id == photonRowId()) return' in its body" % name)
@@ -79,7 +80,7 @@ import os, re
 roots = ("src", "irisgl/document", "irisgl/core")
 allowed = {"src/io/scenereader.cpp", "src/commands/worldmodecommand.cpp",
            "irisgl/document/scenegraph/scene.cpp"}
-ins = re.compile(r"worldOverrides\s*(?:\.\s*insert\s*\(|\[)([^;]*?)(?:;)", re.S)
+ins = re.compile(r"worldOverrides\s*(?:\.\s*(?:set|insert)\s*\(|\[)([^;]*?)(?:;)", re.S)
 assign = re.compile(r"worldOverrides\s*=(?!=)")
 out = []
 seen = set()

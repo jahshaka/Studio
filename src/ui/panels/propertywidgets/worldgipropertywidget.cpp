@@ -81,7 +81,7 @@ int giRowFor(iris::GiMode m)
 /// Mode panel uses for a pinned row.
 QString pinMark(const iris::ScenePtr &scene, const char *rowId)
 {
-    return scene && scene->worldOverrides.contains(QLatin1String(rowId))
+    return scene && scene->worldOverrides.find(rowId)
         ? QStringLiteral(" *") : QString();
 }
 }
@@ -480,7 +480,7 @@ bool WorldGiPropertyWidget::advancedResettable() const
     if (!scene) return false;
     bool anyPin = !worldmodes::photonDeviations(scene).isEmpty();
     for (const QString &id : worldmodes::photonRowIds())
-        anyPin = anyPin || scene->worldOverrides.contains(id);
+        anyPin = anyPin || scene->worldOverrides.find(id.toStdString());
     return anyPin;
 }
 

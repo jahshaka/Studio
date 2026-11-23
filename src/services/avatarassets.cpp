@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/avatarassets.h"
+#include "app/qtstd.h"
 
 #include <QSqlQuery>
 #include <QDir>
@@ -104,7 +105,7 @@ QString AvatarAssets::stageDefinition(const iris::AvatarDefinition &definition,
         if (errorOut) *errorOut = QStringLiteral("could not write %1").arg(path);
         return QString();
     }
-    file.write(QJsonDocument(iris::avatarDefinitionToJson(definition)).toJson());
+    file.write(QJsonDocument(qtstd::toQJsonObject(iris::avatarDefinitionToJson(definition))).toJson());
     file.close();
     return path;
 }
@@ -288,7 +289,7 @@ AvatarAssets::Loaded AvatarAssets::load(const QString &guid, Scope scope, Databa
     file.close();
 
     QString parseError;
-    if (!iris::avatarDefinitionFromJson(obj, out.definition, &parseError)) {
+    if (!iris::avatarDefinitionFromJson(qtstd::fromQJsonObject(obj), out.definition, &parseError)) {
         out.error = QStringLiteral("'%1': %2").arg(record.name, parseError);
         return out;
     }

@@ -397,7 +397,9 @@ static void testNodeRows()
         const iris::PropertyRows rows = n.getProperties();
         // Before any write (a write can move another field: a focal length switches the author mode).
         for (const iris::Property *prop : rows.view())
-            QUIET(n.getPropertyValue(prop->name) == prop->getValue(), cls + "." + prop->name + ": getPropertyValue is the row's Value");
+            QUIET(n.getPropertyValue(prop->name) == prop->getValue() &&
+                      n.getPropertyValue(prop->name).kind() == prop->getValue().kind(),
+                  cls + "." + prop->name + ": getPropertyValue is the row's Value, of the row's own KIND (an Int is no Number)");
         for (const iris::Property *prop : rows.view()) {
             ++perType[typeName(prop->type)];
             const iris::Value own = n.getPropertyValue(prop->name);

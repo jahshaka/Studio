@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/lightbindings.h"
+#include "app/qtstd.h"
 
 #include <QFileInfo>
 #include <QJsonObject>
@@ -130,7 +131,7 @@ bool LightBindings::bindSkyCube(const iris::LightNodePtr &light, const QJsonObje
     }
     if (faces.isEmpty()) {   // the scene's sky (the default)
         light->skySource = iris::SkyLightSource::Sky;
-        light->skyCubeFaces = QJsonObject();
+        light->skyCubeFaces = iris::Value(iris::Value::Object{});
         light->skyCubeTexture.reset();
         light->markChanged(iris::NodeChange::Params);
         return true;
@@ -165,7 +166,7 @@ bool LightBindings::bindSkyCube(const iris::LightNodePtr &light, const QJsonObje
         for (auto it = kept.begin(); it != kept.end(); ++it)
             ProjectAssets::addToProject(it.value().toString(), db, project, ProjectAssets::AddKind::Binding);
     light->skySource = iris::SkyLightSource::Cubemap;
-    light->skyCubeFaces = kept;
+    light->skyCubeFaces = qtstd::fromQJsonObject(kept);
     light->skyCubeTexture = cube;
     light->markChanged(iris::NodeChange::Params);
     return true;

@@ -43,7 +43,7 @@ QVariant captureSky(const ScenePtr &s)
     m["skyType"] = int(s->skyType);
     QJsonObject data;
     for (auto it = s->skyData.constBegin(); it != s->skyData.constEnd(); ++it)
-        data.insert(it.key(), it.value());
+        data.insert(it.key(), qtstd::toQJsonValue(it.value()));
     m["skyData"] = data;
     m["skyColor"] = iris::toQColor(s->skyColor);
     m["gradientTop"] = iris::toQColor(s->gradientTop);
@@ -66,7 +66,7 @@ void applySky(const ScenePtr &s, const QVariant &value)
     const QJsonObject data = m.value("skyData").toJsonObject();
     s->skyData.clear();
     for (auto it = data.constBegin(); it != data.constEnd(); ++it)
-        s->skyData.insert(it.key(), it.value().toObject());
+        s->skyData.insert(it.key(), qtstd::fromQJsonObject(it.value().toObject()));
     s->skyColor = iris::toSrgbColor(m.value("skyColor").value<QColor>());
     s->gradientTop = iris::toSrgbColor(m.value("gradientTop").value<QColor>());
     s->gradientMid = iris::toSrgbColor(m.value("gradientMid").value<QColor>());
@@ -113,13 +113,13 @@ QVector<sceneprops::Field> buildFields()
     // this table has no asset resolver, and restoring a guid without its
     // pixels would leave the renderer showing the other map.
     add("clouds", [](const ScenePtr &s) {
-            QVariantMap m = s->clouds.toJson().toVariantMap();
+            QVariantMap m = qtstd::toVariantMap(s->clouds.toJson());
             if (s->cloudWeatherMap) m.insert("weatherPath", s->cloudWeatherMap->source);
             return QVariant(m);
         },
         [](const ScenePtr &s, const QVariant &v) {
             const QVariantMap m = v.toMap();
-            s->clouds = iris::CloudLayer::fromJson(QJsonObject::fromVariantMap(m));
+            s->clouds = iris::CloudLayer::fromJson(qtstd::fromVariant(QVariant(m)));
             const QString path = m.value("weatherPath").toString();
             if (s->clouds.weatherMapGuid.isEmpty() || path.isEmpty())
                 s->cloudWeatherMap.reset();
@@ -128,9 +128,9 @@ QVector<sceneprops::Field> buildFields()
         });
     // THE HEIGHT FOG (SKY-DEFAULTS-1), whole — one gesture or one
     // world.heightFog call is one step.
-    add("heightFog", [](const ScenePtr &s) { return QVariant(s->heightFog.toJson().toVariantMap()); },
+    add("heightFog", [](const ScenePtr &s) { return QVariant(qtstd::toVariantMap(s->heightFog.toJson())); },
         [](const ScenePtr &s, const QVariant &v) {
-            s->heightFog = iris::HeightFog::fromJson(QJsonObject::fromVariantMap(v.toMap()));
+            s->heightFog = iris::HeightFog::fromJson(qtstd::fromVariant(QVariant(v.toMap())));
         });
     // HARDWARE RAY TRACING (ledger §425) — the project's own state, as the
     // enum's int. Auto is 0, so a blob that lost the value restores the
@@ -145,9 +145,9 @@ QVector<sceneprops::Field> buildFields()
         });
     // HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1), whole — one value, so one
     // world.sunContact call is one undo step.
-    add("sunContact", [](const ScenePtr &s) { return QVariant(s->sunContact.toJson().toVariantMap()); },
+    add("sunContact", [](const ScenePtr &s) { return QVariant(qtstd::toVariantMap(s->sunContact.toJson())); },
         [](const ScenePtr &s, const QVariant &v) {
-            s->sunContact = iris::SunContact::fromJson(QJsonObject::fromVariantMap(v.toMap()));
+            s->sunContact = iris::SunContact::fromJson(qtstd::fromVariant(QVariant(v.toMap())));
         });
     // THE SCREEN-SPACE MARCH'S PHASE RULE (SSR-RINGS-1), 0..2.
     add("ssrMarch", [](const ScenePtr &s) { return QVariant(s->ssrMarch); },

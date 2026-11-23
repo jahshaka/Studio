@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/qt/colour.h"
-#include "irisgl/document/qt/colorjson.h"
+#include "app/qtstd.h"
 #include "scripting/modules/worldapi.h"
 #include "jahshaka/engine/Stillness.h"
 #include "services/apppaths.h"
@@ -3093,7 +3093,7 @@ QVariantMap WorldApi::clouds(const QVariantMap &params)
             }
         }
         c = iris::CloudLayer::clamped(c);
-        QVariantMap value = c.toJson().toVariantMap();
+        QVariantMap value = qtstd::toVariantMap(c.toJson());
         if (!c.weatherMapGuid.isEmpty() && !weatherPath.isEmpty())
             value.insert(QStringLiteral("weatherPath"), weatherPath);
         WorldEdit edit(scene, { QStringLiteral("clouds") });
@@ -3184,7 +3184,7 @@ QVariantMap WorldApi::heightFog(const QVariantMap &params)
         }
         h = iris::HeightFog::clamped(h);
         WorldEdit edit(scene, { QStringLiteral("heightFog") });
-        sceneprops::set(scene, QStringLiteral("heightFog"), h.toJson().toVariantMap());
+        sceneprops::set(scene, QStringLiteral("heightFog"), qtstd::toVariantMap(h.toJson()));
         edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("Height Fog"));
     }
     const iris::HeightFog &h = scene->heightFog;
@@ -3258,7 +3258,7 @@ QVariantMap WorldApi::sunContact(const QVariantMap &params)
         }
         c = iris::SunContact::clamped(c);
         WorldEdit edit(scene, { QStringLiteral("sunContact") });
-        sceneprops::set(scene, QStringLiteral("sunContact"), c.toJson().toVariantMap());
+        sceneprops::set(scene, QStringLiteral("sunContact"), qtstd::toVariantMap(c.toJson()));
         edit.commit(host.services ? host.services->undo : nullptr,
                     QStringLiteral("Sun Contact Shadows"));
     }
@@ -3726,8 +3726,8 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         }
         scene->skyColor = iris::toSrgbColor(c);
         QJsonObject def;
-        def.insert("skyColor", iris::colorToJson(iris::toSrgbColor(c)));
-        scene->skyData.insert("SingleColor", def);
+        def.insert("skyColor", qtstd::colorToJson(iris::toSrgbColor(c)));
+        scene->skyData.insert("SingleColor", qtstd::fromQJsonObject(def));
         scene->skyType = iris::SkyType::SINGLE_COLOR;
     } else if (t == "gradient") {
         struct { const char *key; iris::SrgbColor *field; } stops[] = {
@@ -3748,11 +3748,11 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         }
         if (params.contains("offset")) scene->gradientOffset = params.value("offset").toFloat();
         QJsonObject def;
-        def.insert("gradientTop", iris::colorToJson(scene->gradientTop));
-        def.insert("gradientMid", iris::colorToJson(scene->gradientMid));
-        def.insert("gradientBot", iris::colorToJson(scene->gradientBot));
+        def.insert("gradientTop", qtstd::colorToJson(scene->gradientTop));
+        def.insert("gradientMid", qtstd::colorToJson(scene->gradientMid));
+        def.insert("gradientBot", qtstd::colorToJson(scene->gradientBot));
         def.insert("gradientOffset", double(scene->gradientOffset));
-        scene->skyData.insert("Gradient", def);
+        scene->skyData.insert("Gradient", qtstd::fromQJsonObject(def));
         scene->skyType = iris::SkyType::GRADIENT;
     } else if (t == "realistic") {
         // ONE WRITER (SKY-WRITE-1): read the current dials, apply what the call
@@ -3792,7 +3792,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         scene->setSkyTexture(iris::Texture2D::load(path));
         QJsonObject def;
         def.insert("equiSkyGuid", guid);
-        scene->skyData.insert("Equirectangular", def);
+        scene->skyData.insert("Equirectangular", qtstd::fromQJsonObject(def));
         scene->skyType = iris::SkyType::EQUIRECTANGULAR;
         // dependency bookkeeping, exactly like the sky panel
         host.db->removeDependenciesByType(scene->skyGuid, ModelTypes::Texture);
@@ -3827,7 +3827,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
             paths.value("left"), paths.value("right")));
         QJsonObject def;
         for (const char *face : faces) def.insert(face, guids.value(face));
-        scene->skyData.insert("Cubemap", def);
+        scene->skyData.insert("Cubemap", qtstd::fromQJsonObject(def));
         scene->skyType = iris::SkyType::CUBEMAP;
         host.db->removeDependenciesByType(scene->skyGuid, ModelTypes::Texture);
         for (const char *face : faces) {
@@ -3948,7 +3948,7 @@ QVariantMap WorldApi::get()
     QVariantMap sky;
     const int typeIndex = qBound(0, int(scene->skyType), scene->skyTypeToStr.size() - 1);
     sky["type"] = scene->skyTypeToStr.at(typeIndex);
-    sky["data"] = scene->skyData.value(scene->skyTypeToStr.at(typeIndex)).toVariantMap();
+    sky["data"] = qtstd::toVariantMap(scene->skyData.value(scene->skyTypeToStr.at(typeIndex)));
     if (scene->skyType == iris::SkyType::SINGLE_COLOR) sky["color"] = colorToJs(iris::toQColor(scene->skyColor));
     // The sun PIN (which directional light is the sun), empty = automatic. The
     // sky's own sun dials and its steering switch are gone (D15) — world.sun()

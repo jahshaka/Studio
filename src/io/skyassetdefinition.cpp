@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "io/skyassetdefinition.h"
-#include "irisgl/document/qt/colorjson.h"
+#include "app/qtstd.h"
 
 #include <QFileInfo>
 
@@ -43,13 +43,13 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
 
     switch (type) {
     case iris::SkyType::SINGLE_COLOR:
-        scene->skyColor = iris::colorFromJson(skyData.value("skyColor").toObject());
+        scene->skyColor = qtstd::colorFromJson(skyData.value("skyColor").toObject());
         return true;
 
     case iris::SkyType::GRADIENT:
-        scene->gradientTop = iris::colorFromJson(skyData.value("gradientTop").toObject());
-        scene->gradientMid = iris::colorFromJson(skyData.value("gradientMid").toObject());
-        scene->gradientBot = iris::colorFromJson(skyData.value("gradientBot").toObject());
+        scene->gradientTop = qtstd::colorFromJson(skyData.value("gradientTop").toObject());
+        scene->gradientMid = qtstd::colorFromJson(skyData.value("gradientMid").toObject());
+        scene->gradientBot = qtstd::colorFromJson(skyData.value("gradientBot").toObject());
         scene->gradientOffset = float(skyData.value("gradientOffset").toDouble());
         return true;
 
@@ -59,7 +59,7 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
         // reader's own copy of them is what let `sunHaze` be read as an
         // indeterminate float once. The sun keys are GONE (SKY_LIGHT_SPEC §3):
         // a preset's sun is the scene's sun light.
-        scene->setSkyRealistic(iris::Scene::skyRealisticFromJson(skyData));
+        scene->setSkyRealistic(iris::Scene::skyRealisticFromJson(qtstd::fromQJsonObject(skyData)));
         return true;
     }
 

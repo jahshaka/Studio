@@ -13,6 +13,7 @@ For more information see the LICENSE file
 // itself is the document's (irisgl/document/scenegraph/worldmodes.h, moved down by LAB-1); the test tier is a Studio
 // PROCESS setting, so the one function that reads it stays here.
 #include "services/testtier.h"
+#include "app/qtstd.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
@@ -37,7 +38,7 @@ void applyTestTier(const iris::ScenePtr &scene)
     // setPhoton(false) writes over (giMode, giTier). A pin on a machinery row (giQuality, giDdgi, giBounces, giProbeSize)
     // says how Photon runs WHEN it runs — setPhoton honours it either way — so it never keeps
     // Photon on in a row that did not name it.
-    const bool photonPinned = scene->worldOverrides.contains(QStringLiteral("giMode"));
+    const bool photonPinned = scene->worldOverrides.find("giMode") != nullptr;
     // The RAW fields, never the Rows' get/set: a giDdgi of -1 (auto) read through its row comes
     // back concrete, and a save would then keep the concrete value.
     // (each field by NAME: an aggregate's positional list followed a member's move silently - R7 moved `bounces`
@@ -56,7 +57,7 @@ void applyTestTier(const iris::ScenePtr &scene)
     kept.bounces = scene->giBounces;
     if (photonPinned) {
         for (const QString &id : photonRowIds())
-            if (scene->worldOverrides.contains(id)) kept.pins.insert(id, scene->worldOverrides.value(id));
+            if (const iris::Value *pin = scene->worldOverrides.find(id.toStdString())) kept.pins.insert(id, qtstd::toQJsonValue(*pin));
     }
     setMode(scene, m);
     if (photonPinned) {
@@ -67,7 +68,7 @@ void applyTestTier(const iris::ScenePtr &scene)
         scene->giProbeCaptureSize = kept.probeSize;
         scene->giTier = kept.tier;
         for (auto it = kept.pins.constBegin(); it != kept.pins.constEnd(); ++it)
-            scene->worldOverrides.insert(it.key(), it.value());
+            (void)scene->worldOverrides.set(it.key().toStdString(), qtstd::toValue(it.value()));   // an Object always
     }
     // A TEST PASSES WHAT IT NEEDS (owner rule; WORLD-MODE-1 + TEST-NEEDS-1): a test-tier process
     // boots every switchable feature its JAHSHAKA_TEST_NEEDS does not name OFF, so a row boots
@@ -102,7 +103,7 @@ void applyTestTier(const iris::ScenePtr &scene)
     };
     for (const Feature &f : kFeatures) {
         const QString rowId = QLatin1String(f.rowId);
-        if (testtier::needs(QLatin1String(f.need)) || scene->worldOverrides.contains(rowId)) continue;
+        if (testtier::needs(QLatin1String(f.need)) || scene->worldOverrides.find(rowId.toStdString())) continue;
         setRowValue(scene, rowId, f.off, false);
     }
 }

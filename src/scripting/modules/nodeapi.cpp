@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/document/qt/qtinterop.h"
+#include "app/qtstd.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/locomotion.h"
 #include "irisgl/core/math/quat.h"
@@ -1361,7 +1362,7 @@ bool NodeApi::setSkyLightSource(const QString &id, const QString &source, const 
     if (source == QLatin1String("cubemap") && now.isEmpty())
         return fail(QStringLiteral("node.setSkyLightSource: a cubemap source needs its six faces "
                                    "{front, back, top, bottom, left, right}"));
-    const QJsonObject was = light->skySource == iris::SkyLightSource::Cubemap ? light->skyCubeFaces : QJsonObject();
+    const QJsonObject was = light->skySource == iris::SkyLightSource::Cubemap ? qtstd::toQJsonObject(light->skyCubeFaces) : QJsonObject();
     QString error;
     if (!LightBindings::bindSkyCube(light, now, host.db, host.project, &error))
         return fail(QStringLiteral("node.setSkyLightSource: %1").arg(error));
@@ -1379,7 +1380,7 @@ QVariant NodeApi::skyLightSource(const QString &id)
     if (!light) return QVariant();
     const bool cube = light->skySource == iris::SkyLightSource::Cubemap;
     return QVariantMap{ { "source", cube ? QStringLiteral("cubemap") : QStringLiteral("sky") },
-                        { "faces", cube ? light->skyCubeFaces.toVariantMap() : QVariantMap() } };
+                        { "faces", cube ? qtstd::toVariantMap(light->skyCubeFaces) : QVariantMap() } };
 }
 
 QVariant NodeApi::lightProfile(const QString &id)

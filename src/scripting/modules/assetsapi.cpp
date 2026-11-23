@@ -55,7 +55,7 @@ For more information see the LICENSE file
 #include "jahshaka/engine/Mesh.h"
 #include "data/constants.h"
 #include "irisgl/document/scenegraph/scene.h"
-#include "irisgl/document/qt/colorjson.h"
+#include "app/qtstd.h"
 #include "data/primitives.h"
 #include "data/settingsmanager.h"
 #include "services/assethelper.h"
@@ -1299,16 +1299,16 @@ QString AssetsApi::createSky(const QVariantMap &options)
         // The sky panel's FRESH colour sky (skypropertywidget's default): one
         // default, whichever door minted the row.
         if (!colour("color", QColor(72, 72, 72), &c)) return QString();
-        definition.insert(QStringLiteral("skyColor"), iris::colorToJson(iris::toSrgbColor(c)));
+        definition.insert(QStringLiteral("skyColor"), qtstd::colorToJson(iris::toSrgbColor(c)));
     } else if (t == QLatin1String("gradient")) {
         type = iris::SkyType::GRADIENT;
         QColor top, mid, bottom;
         if (!colour("top", QColor(255, 146, 138), &top) || !colour("mid", QColor(Qt::white), &mid)
             || !colour("bottom", QColor(64, 128, 255), &bottom))
             return QString();
-        definition.insert(QStringLiteral("gradientTop"), iris::colorToJson(iris::toSrgbColor(top)));
-        definition.insert(QStringLiteral("gradientMid"), iris::colorToJson(iris::toSrgbColor(mid)));
-        definition.insert(QStringLiteral("gradientBot"), iris::colorToJson(iris::toSrgbColor(bottom)));
+        definition.insert(QStringLiteral("gradientTop"), qtstd::colorToJson(iris::toSrgbColor(top)));
+        definition.insert(QStringLiteral("gradientMid"), qtstd::colorToJson(iris::toSrgbColor(mid)));
+        definition.insert(QStringLiteral("gradientBot"), qtstd::colorToJson(iris::toSrgbColor(bottom)));
         definition.insert(QStringLiteral("gradientOffset"),
                           options.value(QStringLiteral("offset"), 0.73).toDouble());
     } else if (t == QLatin1String("equirectangular") || t == QLatin1String("equirect")) {
@@ -1334,7 +1334,7 @@ QString AssetsApi::createSky(const QVariantMap &options)
         }
     } else if (t == QLatin1String("realistic")) {
         type = iris::SkyType::REALISTIC;
-        definition = iris::Scene::skyRealisticJson(iris::SkyRealistic());
+        definition = qtstd::toQJsonObject(iris::Scene::skyRealisticJson(iris::SkyRealistic()));
     } else {
         fail(QStringLiteral("%1: unknown type '%2' (color, gradient, equirectangular, cubemap, realistic)")
                  .arg(verb, t));

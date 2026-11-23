@@ -31,7 +31,7 @@ For more information see the LICENSE file
 
 #include <QHash>
 #include <QVector>
-#include <QJsonObject>
+#include "irisgl/core/value.h"
 #include <QString>
 
 #include <functional>
@@ -51,7 +51,7 @@ public:
         /// "off" and carries no tier, so an undo of "turn Photon off" would come
         /// back at whatever tier the scene happened to hold.
         int photonTier = 3;
-        QJsonObject overrides;
+        iris::Value overrides;
         QHash<QString, int> rowValues;   ///< rowId -> backing-field value
         /// PHOTON'S CASCADE FIELDS THAT ARE NOT ROWS (audit D12, PHOTON_SPEC
         /// §7 E2 (7)). The table a scene may pin and the per-cascade instance

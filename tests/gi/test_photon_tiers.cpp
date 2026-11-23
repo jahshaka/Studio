@@ -151,7 +151,7 @@ static void testSsrRow()
             // THE ROUND TRIP (the Fable read's D1): Off pinned -> Traced chosen ->
             // the pin dropped -> the row reads its tier's value again, non-zero.
             const worldmodes::ComboItem offItem = traced[0], tracedItem = traced[1];
-            CHECK(worldmodes::applyComboItem(s, *ssr, offItem) && s->worldOverrides.contains(QStringLiteral("ssr")) &&
+            CHECK(worldmodes::applyComboItem(s, *ssr, offItem) && s->worldOverrides.find("ssr") &&
                       worldmodes::resolved(s, *ssr) == 0,
                   qPrintable(QStringLiteral("%1: choosing Off pins the SSR row at 0").arg(worldmodes::photonTierName(t))));
             const int tierCol = worldmodes::tierValue(*ssr, worldmodes::pickedMode(s), s);
@@ -159,7 +159,7 @@ static void testSsrRow()
                   qPrintable(QStringLiteral("%1: Traced can be chosen").arg(worldmodes::photonTierName(t))));
             const int after = worldmodes::resolved(s, *ssr);
             CHECK(after > 0 && worldmodes::comboIndexOf(worldmodes::comboItems(*ssr, s, true), after) == 1 &&
-                      (tierCol > 0 ? !s->worldOverrides.contains(QStringLiteral("ssr")) && after == tierCol
+                      (tierCol > 0 ? !s->worldOverrides.find("ssr") && after == tierCol
                                    : after == tracedItem.value),
                   qPrintable(QStringLiteral("%1: choosing Traced drops the pin and the row reads the tier's value "
                                             "(%2; the World column %3), shown as Traced")
@@ -170,7 +170,7 @@ static void testSsrRow()
             worldmodes::setPhoton(s, true, t);
             if (worldmodes::tierValue(*ssr, worldmodes::pickedMode(s), s) == 0) {
                 CHECK(worldmodes::applyComboItem(s, *ssr, tracedItem) && worldmodes::resolved(s, *ssr) == tracedItem.value &&
-                          s->worldOverrides.contains(QStringLiteral("ssr")),
+                          s->worldOverrides.find("ssr"),
                       qPrintable(QStringLiteral("%1: under a World mode whose SSR column is off, Traced pins %2")
                                      .arg(worldmodes::photonTierName(t)).arg(tracedItem.value)));
             }

@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldshadowpropertywidget.h"
+#include "app/qtstd.h"
 #include "ui/panels/propertywidgets/panelrefresh.h"
 #include <QPointer>
 #include "ui/panels/propertyrows.h"
@@ -201,7 +202,7 @@ QVariant WorldShadowPropertyWidget::withContact(
     if (!scene) return QVariant();
     iris::SunContact c = scene->sunContact;
     edit(c);
-    return iris::SunContact::clamped(c).toJson().toVariantMap();
+    return qtstd::toVariantMap(iris::SunContact::clamped(c).toJson());
 }
 
 // THE SUN CONTACT ROWS, re-read in place: the document block (what

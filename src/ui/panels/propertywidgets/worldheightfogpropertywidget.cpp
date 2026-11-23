@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldheightfogpropertywidget.h"
+#include "app/qtstd.h"
 
 #include "commands/scenepropertycommand.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -81,7 +82,7 @@ QVariant WorldHeightFogPropertyWidget::withField(const std::function<void(iris::
     if (!scene) return QVariant();
     iris::HeightFog h = scene->heightFog;
     edit(h);
-    return iris::HeightFog::clamped(h).toJson().toVariantMap();
+    return qtstd::toVariantMap(iris::HeightFog::clamped(h).toJson());
 }
 
 void WorldHeightFogPropertyWidget::setScene(std::shared_ptr<iris::Scene> s)

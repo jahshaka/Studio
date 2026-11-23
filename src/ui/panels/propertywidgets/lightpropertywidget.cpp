@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/controls/accordionbladewidget.h"
+#include "app/qtstd.h"
 #include "irisgl/document/qt/colour.h"
 #include "ui/panels/propertyrows.h"
 #include <QWidget>
@@ -424,7 +425,7 @@ void LightPropertyWidget::lightChannelsChanged(quint32 mask)
 void LightPropertyWidget::bindSkyDome(const QJsonObject &faces)
 {
     if (!lightNode) return;
-    const QJsonObject before = lightNode->skySource == iris::SkyLightSource::Cubemap ? lightNode->skyCubeFaces
+    const QJsonObject before = lightNode->skySource == iris::SkyLightSource::Cubemap ? qtstd::toQJsonObject(lightNode->skyCubeFaces)
                                                                                        : QJsonObject();
     if (before == faces) return;
     QString error;

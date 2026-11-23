@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/qt/colour.h"
-#include "irisgl/document/qt/colorjson.h"
+#include "app/qtstd.h"
 #include "test.h"
 #include "../models/library.h"
 #include "../core/texturemanager.h"
@@ -636,10 +636,10 @@ ColorPickerNode::ColorPickerNode()
 
 QJsonValue ColorPickerNode::serializeWidgetValue(int widgetIndex)
 {
-	return iris::colorToJson(iris::toSrgbColor(colorWidget->getColor()));
+	return qtstd::colorToJson(iris::toSrgbColor(colorWidget->getColor()));
 }
 
 void ColorPickerNode::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 {
-	colorWidget->setColor(iris::toQColor(iris::colorFromJson(val.toObject(), iris::toSrgbColor(QColor(Qt::black)))));
+	colorWidget->setColor(iris::toQColor(qtstd::colorFromJson(val.toObject(), iris::toSrgbColor(QColor(Qt::black)))));
 }

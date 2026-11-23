@@ -261,7 +261,7 @@ void WorldModesPropertyWidget::refreshRows()
     }
 
     if (resetRow) {
-        PropertyRows::setPanelVisible(resetRow, !scene->worldOverrides.isEmpty());
+        PropertyRows::setPanelVisible(resetRow, !scene->worldOverrides.asObject().empty());
         resetRow->setValue(false);
     }
     loading = false;

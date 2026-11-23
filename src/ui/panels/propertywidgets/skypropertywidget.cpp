@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertywidgets/skypropertywidget.h"
 #include "irisgl/document/qt/colour.h"
-#include "irisgl/document/qt/colorjson.h"
+#include "app/qtstd.h"
 #include "ui/panels/propertyrows.h"
 #include "data/project.h"
 
@@ -147,7 +147,7 @@ iris::ScenePtr SkyPropertyWidget::liveScene() const
 QJsonObject SkyPropertyWidget::storedDefinition(iris::SkyType type) const
 {
     if (binding == Binding::Scene)
-        return scene ? scene->skyData.value(skyDataKey(type)) : QJsonObject();
+        return scene ? qtstd::toQJsonObject(scene->skyData.value(skyDataKey(type))) : QJsonObject();
     // The asset's stored blob is only the definition for the type it was SAVED
     // as: switching an asset to a different sky type starts from that type's
     // defaults, exactly as the asset panel always did.
@@ -208,10 +208,10 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			singleColor = this->addColorPicker("Sky Color");
 
 			QColor skyColor = skyDefinition.contains("skyColor")
-			                      ? iris::toQColor(iris::colorFromJson(skyDefinition.value("skyColor").toObject()))
+			                      ? iris::toQColor(qtstd::colorFromJson(skyDefinition.value("skyColor").toObject()))
 			                      : QColor(72, 72, 72);
 			singleColor->setColorValue(skyColor);
-			singleColorDefinition.insert("skyColor", iris::colorToJson(iris::toSrgbColor(skyColor)));
+			singleColorDefinition.insert("skyColor", qtstd::colorToJson(iris::toSrgbColor(skyColor)));
 			if (auto live = liveScene()) live->skyColor = iris::toSrgbColor(skyColor);
 			updateAssetAndKeys();
 			wireSkyRow(singleColor->getPicker(), tr("Sky Colour"),
@@ -228,7 +228,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			// THE BLOCK, THROUGH THE DOCUMENT'S OWN READER AND WRITER
 			// (SKY-WRITE-1): one representation of the pair and one function
 			// that maps between them; a bind reads and re-writes the SAME fact.
-			iris::SkyRealistic loaded = iris::Scene::skyRealisticFromJson(skyDefinition);
+			iris::SkyRealistic loaded = iris::Scene::skyRealisticFromJson(qtstd::fromQJsonObject(skyDefinition));
 			if (auto live = liveScene()) {
 				live->setSkyRealistic(loaded);
 				loaded = live->skyRealistic;         // as clamped
@@ -273,7 +273,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			wireSkyRow(groundAlbedo, tr("Ground Albedo"),
 			           [this](const QVariant &v) { onGroundAlbedoChanged(v.toFloat()); });
 
-			realisticDefinition = iris::Scene::skyRealisticJson(loaded);
+			realisticDefinition = qtstd::toQJsonObject(iris::Scene::skyRealisticJson(loaded));
 			updateAssetAndKeys();
 
 			break;
@@ -337,20 +337,20 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 			const bool fresh = skyDefinition.isEmpty();
 			const QColor top = fresh ? QColor(255, 146, 138)
-			                         : iris::toQColor(iris::colorFromJson(skyDefinition.value("gradientTop").toObject()));
+			                         : iris::toQColor(qtstd::colorFromJson(skyDefinition.value("gradientTop").toObject()));
 			const QColor mid = fresh ? QColor("white")
-			                         : iris::toQColor(iris::colorFromJson(skyDefinition.value("gradientMid").toObject()));
+			                         : iris::toQColor(qtstd::colorFromJson(skyDefinition.value("gradientMid").toObject()));
 			const QColor bot = fresh ? QColor(64, 128, 255)
-			                         : iris::toQColor(iris::colorFromJson(skyDefinition.value("gradientBot").toObject()));
+			                         : iris::toQColor(qtstd::colorFromJson(skyDefinition.value("gradientBot").toObject()));
 			const float off = fresh ? .73f : float(skyDefinition.value("gradientOffset").toDouble());
 			colorTop->setColorValue(top);
 			colorMid->setColorValue(mid);
 			colorBot->setColorValue(bot);
 			offset->setValue(off);
 
-			gradientDefinition.insert("gradientTop", iris::colorToJson(iris::toSrgbColor(top)));
-			gradientDefinition.insert("gradientMid", iris::colorToJson(iris::toSrgbColor(mid)));
-			gradientDefinition.insert("gradientBot", iris::colorToJson(iris::toSrgbColor(bot)));
+			gradientDefinition.insert("gradientTop", qtstd::colorToJson(iris::toSrgbColor(top)));
+			gradientDefinition.insert("gradientMid", qtstd::colorToJson(iris::toSrgbColor(mid)));
+			gradientDefinition.insert("gradientBot", qtstd::colorToJson(iris::toSrgbColor(bot)));
 			gradientDefinition.insert("gradientOffset", off);
 
 			if (auto live = liveScene()) {
@@ -513,9 +513,9 @@ void SkyPropertyWidget::updateAssetAndKeys()
 			// the clamp and without the typed fields the renderer reads — the
 			// exact bypass iris::Scene::skyRealisticInSync() exists to catch.
 			if (currentSky == iris::SkyType::REALISTIC)
-				scene->setSkyRealistic(iris::Scene::skyRealisticFromJson(skyProperties));
+				scene->setSkyRealistic(iris::Scene::skyRealisticFromJson(qtstd::fromQJsonObject(skyProperties)));
 			else
-				scene->skyData.insert(skyDataKey(currentSky), skyProperties);
+				scene->skyData.insert(skyDataKey(currentSky), qtstd::fromQJsonObject(skyProperties));
 		}
 		return;
 	}
@@ -587,7 +587,7 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 
 void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)
 {
-	singleColorDefinition.insert("skyColor", iris::colorToJson(iris::toSrgbColor(color)));
+	singleColorDefinition.insert("skyColor", qtstd::colorToJson(iris::toSrgbColor(color)));
 	if (auto live = liveScene()) live->skyColor = iris::toSrgbColor(color);
 	updateAssetAndKeys();
 }
@@ -627,7 +627,7 @@ void SkyPropertyWidget::onGroundAlbedoChanged(float val)
 /// in the stored block too.
 void SkyPropertyWidget::writeRealisticDial(const std::function<void(iris::SkyRealistic &)> &edit)
 {
-	iris::SkyRealistic r = iris::Scene::skyRealisticFromJson(realisticDefinition);
+	iris::SkyRealistic r = iris::Scene::skyRealisticFromJson(qtstd::fromQJsonObject(realisticDefinition));
 	if (auto live = liveScene()) r = live->skyRealistic;
 	edit(r);
 	if (auto live = liveScene()) {
@@ -636,27 +636,27 @@ void SkyPropertyWidget::writeRealisticDial(const std::function<void(iris::SkyRea
 	} else {
 		r = iris::Scene::clampSkyRealistic(r);
 	}
-	realisticDefinition = iris::Scene::skyRealisticJson(r);
+	realisticDefinition = qtstd::toQJsonObject(iris::Scene::skyRealisticJson(r));
 	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onGradientTopColorChanged(QColor color)
 {
-	gradientDefinition.insert("gradientTop", iris::colorToJson(iris::toSrgbColor(color)));
+	gradientDefinition.insert("gradientTop", qtstd::colorToJson(iris::toSrgbColor(color)));
 	if (auto live = liveScene()) live->gradientTop = iris::toSrgbColor(color);
 	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onGradientMidColorChanged(QColor color)
 {
-	gradientDefinition.insert("gradientMid", iris::colorToJson(iris::toSrgbColor(color)));
+	gradientDefinition.insert("gradientMid", qtstd::colorToJson(iris::toSrgbColor(color)));
 	if (auto live = liveScene()) live->gradientMid = iris::toSrgbColor(color);
 	updateAssetAndKeys();
 }
 
 void SkyPropertyWidget::onGradientBotColorChanged(QColor color)
 {
-	gradientDefinition.insert("gradientBot", iris::colorToJson(iris::toSrgbColor(color)));
+	gradientDefinition.insert("gradientBot", qtstd::colorToJson(iris::toSrgbColor(color)));
 	if (auto live = liveScene()) live->gradientBot = iris::toSrgbColor(color);
 	updateAssetAndKeys();
 }

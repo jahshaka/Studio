@@ -1,4 +1,5 @@
 #include "services/livecompiles.h"
+#include "app/qtstd.h"
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
@@ -1471,7 +1472,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         const QJsonObject skyDefinition = QJsonDocument::fromJson(mDatabase->fetchAssetData(skyGuid)).object();
         const QJsonObject skyProperties = QJsonDocument::fromJson(mDatabase->fetchAsset(skyGuid).properties).object();
         const int skyTypeIndex = skyProperties.value("sky").toObject().value("type").toInt();
-        mScene->skyData.insert(mScene->skyTypeToStr[skyTypeIndex], skyDefinition);
+        mScene->skyData.insert(mScene->skyTypeToStr[skyTypeIndex], qtstd::fromQJsonObject(skyDefinition));
         mScene->skyType = static_cast<iris::SkyType>(skyTypeIndex);
         emit mEvents.changeSkyFromAssetWidget(skyTypeIndex);
     }

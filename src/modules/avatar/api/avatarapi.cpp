@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "modules/avatar/api/avatarapi.h"
+#include "app/qtstd.h"
 
 #include <QColor>
 #include <QJsonArray>
@@ -2039,7 +2040,7 @@ QVariantMap AvatarApi::locomotionAsset(const QString &nodeId)
     QVariantMap out;
     auto *loco = locomotionOrFail("avatar.locomotionAsset", nodeId);
     if (!loco) return out;
-    out = iris::locomotionAssetToJson(loco->asset()).toVariantMap();
+    out = qtstd::toVariantMap(iris::locomotionAssetToJson(loco->asset()));
     out["default"] = loco->usesDefaultAsset();
     return out;
 }
@@ -2059,8 +2060,7 @@ bool AvatarApi::setLocomotionAsset(const QString &nodeId, const QVariantMap &val
     // ONE grammar (the document's), so a refusal here reads exactly like a
     // refusal from a hand-edited scene file, and gate S6's round trip covers
     // both paths because they ARE one path.
-    const QJsonObject obj =
-        QJsonObject::fromVariantMap(scriptmod::normalizeJs(values).toMap());
+    const iris::Value obj = qtstd::fromVariant(QVariant(scriptmod::normalizeJs(values).toMap()));
     iris::LocomotionAsset asset;
     QString err;
     if (!iris::locomotionAssetFromJson(obj, asset, &err))

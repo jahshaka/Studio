@@ -11,7 +11,6 @@ For more information see the LICENSE file
 
 #include "io/cascadesetformat.h"
 #include "irisgl/document/qt/colour.h"
-#include "irisgl/document/qt/colorjson.h"
 #include "app/qtstd.h"
 #include "app/qtstdgui.h"
 #include "irisgl/core/math/quat.h"
@@ -347,14 +346,14 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// the constructor's layer, OFF; CloudLayer::fromJson gives each absent key
 	// inside a present block the constructor's value too (the reader-defaults
 	// law). The weather map is resolved here, like the sky's own image.
-	scene->clouds = iris::CloudLayer::fromJson(sceneObj.value("clouds").toObject());
+	scene->clouds = iris::CloudLayer::fromJson(qtstd::fromQJsonObject(sceneObj.value("clouds").toObject()));
 	// THE HEIGHT FOG (SKY-DEFAULTS-1): an absent block is the constructor's, OFF
 	// (forward only: a scene written before it has none, and there is no reader
 	// for anything older).
-	scene->heightFog = iris::HeightFog::fromJson(sceneObj.value("heightFog").toObject());
+	scene->heightFog = iris::HeightFog::fromJson(qtstd::fromQJsonObject(sceneObj.value("heightFog").toObject()));
 	// HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1): an absent block is the
 	// constructor's row, OFF (the reader-defaults law, fromJson's own).
-	scene->sunContact = iris::SunContact::fromJson(sceneObj.value("sunContact").toObject());
+	scene->sunContact = iris::SunContact::fromJson(qtstd::fromQJsonObject(sceneObj.value("sunContact").toObject()));
 	if (!scene->clouds.weatherMapGuid.isEmpty()) {
 		const QString weather = resolveAssetPath(scene->clouds.weatherMapGuid);
 		if (QFileInfo(weather).isFile())
@@ -374,12 +373,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	    sceneObj.value("skyType").toInt(static_cast<int>(scene->skyType)));
 	QJsonObject skyDataDef = sceneObj.value("skyData").toObject();
 	for (const auto &key : skyDataDef.keys()) {
-		scene->skyData.insert(key, skyDataDef.value(key).toObject());
+		scene->skyData.insert(key, qtstd::fromQJsonObject(skyDataDef.value(key).toObject()));
 	}
 
 	switch (scene->skyType) {
         case iris::SkyType::SINGLE_COLOR: {
-			scene->skyColor = iris::colorFromJson(scene->skyData.value("SingleColor").value("skyColor").toObject());
+			scene->skyColor = qtstd::colorFromJson(qtstd::toQJsonObject(scene->skyData.value("SingleColor")).value("skyColor").toObject());
 			break;
 		}
 
@@ -402,14 +401,14 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		}
 
 		case iris::SkyType::EQUIRECTANGULAR: {
-			QString textureGuid = scene->skyData.value("Equirectangular").value("equiSkyGuid").toString();
+			QString textureGuid = qtstd::toQJsonObject(scene->skyData.value("Equirectangular")).value("equiSkyGuid").toString();
 			auto image = resolveAssetPath(textureGuid);
 			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image));
 			break;
 		}
 
         case iris::SkyType::CUBEMAP: {
-			auto cubeDefs = scene->skyData.value("Cubemap");
+			const QJsonObject cubeDefs = qtstd::toQJsonObject(scene->skyData.value("Cubemap"));
 			auto front = resolveAssetPath(cubeDefs["front"].toString());
 			auto back = resolveAssetPath(cubeDefs["back"].toString());
 			auto left = resolveAssetPath(cubeDefs["left"].toString());
@@ -439,11 +438,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		}
 
         case iris::SkyType::GRADIENT: {
-			auto gradientDefinition = scene->skyData.value("Gradient");
+			const QJsonObject gradientDefinition = qtstd::toQJsonObject(scene->skyData.value("Gradient"));
 
-			scene->gradientTop = iris::colorFromJson(gradientDefinition.value("gradientTop").toObject());
-			scene->gradientMid = iris::colorFromJson(gradientDefinition.value("gradientMid").toObject());
-			scene->gradientBot = iris::colorFromJson(gradientDefinition.value("gradientBot").toObject());
+			scene->gradientTop = qtstd::colorFromJson(gradientDefinition.value("gradientTop").toObject());
+			scene->gradientMid = qtstd::colorFromJson(gradientDefinition.value("gradientMid").toObject());
+			scene->gradientBot = qtstd::colorFromJson(gradientDefinition.value("gradientBot").toObject());
 			scene->gradientOffset =
 			    gradientDefinition.value("gradientOffset").toDouble(scene->gradientOffset);
 			break;
@@ -457,7 +456,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // colour is not the constructor's (250,250,250) — so an absent key keeps
     // what the Scene was born with instead of blanking it.
     {
-        const iris::SrgbColor fogColor = iris::colorFromJson(sceneObj.value("fogColor").toObject());
+        const iris::SrgbColor fogColor = qtstd::colorFromJson(sceneObj.value("fogColor").toObject());
         if (fogColor.isValid()) scene->fogColor = fogColor;
     }
     scene->fogEnabled = sceneObj.value("fogEnabled").toBool(scene->fogEnabled);
@@ -706,9 +705,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // derived or converted (FORWARD-ONLY-1: no absent-means-Epic, no Photon
     // tier derivation for a document without `giTier`).
     {
-        scene->worldOverrides = sceneObj.value("worldOverrides").toObject();
+        scene->worldOverrides = qtstd::fromQJsonObject(sceneObj.value("worldOverrides").toObject());
         // The Photon row is never pinned (WORLD-MODE-1): a `photon` pin is deleted on read.
-        scene->worldOverrides.remove(worldmodes::photonRowId());
+        scene->worldOverrides.erase(worldmodes::photonRowId().toStdString());
         const QString m = sceneObj.value("worldMode").toString().trimmed().toLower();
         bool ok = false;
         const auto mode = worldmodes::modeFromName(m, &ok);
@@ -998,7 +997,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         if (l.contains(QLatin1String("asset"))) {
             iris::LocomotionAsset asset;
             QString err;
-            if (iris::locomotionAssetFromJson(l["asset"].toObject(), asset, &err)) {
+            if (iris::locomotionAssetFromJson(qtstd::fromQJsonObject(l["asset"].toObject()), asset, &err)) {
                 loco->setAssetPreservingDefaultFlag(asset, &err);
             } else {
                 qWarning("SceneReader: node '%s' has an invalid locomotion asset (%s) — "
@@ -1381,11 +1380,11 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     // THE SKY LIGHT's SOURCE (R5b): the dome's guids are the fact; its six faces are loaded here, from the store.
     if (nodeObj.value("skySource").toString() == QLatin1String("cubemap")) {
         lightNode->skySource = iris::SkyLightSource::Cubemap;
-        lightNode->skyCubeFaces = nodeObj.value("skyCubeFaces").toObject();
+        lightNode->skyCubeFaces = qtstd::fromQJsonObject(nodeObj.value("skyCubeFaces").toObject());
         lightNode->skyCubeTexture = LightBindings::loadSkyCube(
-            lightNode->skyCubeFaces, [this](const QString &guid) { return resolveAssetPath(guid); });
+            qtstd::toQJsonObject(lightNode->skyCubeFaces), [this](const QString &guid) { return resolveAssetPath(guid); });
     }
-    lightNode->color = iris::colorFromJson(nodeObj["color"].toObject());
+    lightNode->color = qtstd::colorFromJson(nodeObj["color"].toObject());
 	lightNode->setVisible(nodeObj["visible"].toBool(lightNode->isVisible()));
 
 	// (`shadowAlpha`, `shadowColor` and `shadowBias` were READ here into three
@@ -1646,15 +1645,15 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     if (nodeObj.contains("wind"))
         particleNode->wind = readVector3(nodeObj["wind"].toObject());
     if (nodeObj.contains("emitColourStart"))
-        particleNode->emitColourStart = iris::colorFromJson(nodeObj["emitColourStart"].toObject());
+        particleNode->emitColourStart = qtstd::colorFromJson(nodeObj["emitColourStart"].toObject());
     if (nodeObj.contains("emitColourEnd"))
-        particleNode->emitColourEnd = iris::colorFromJson(nodeObj["emitColourEnd"].toObject());
+        particleNode->emitColourEnd = qtstd::colorFromJson(nodeObj["emitColourEnd"].toObject());
     // ADDENDUM A-4, tolerant-absent: an old scene has none of these keys and
     // every default is the neutral value, so it loads unchanged.
     if (nodeObj.contains("colourFade1"))
-        particleNode->colourFade1 = iris::colorFromJson(nodeObj["colourFade1"].toObject());
+        particleNode->colourFade1 = qtstd::colorFromJson(nodeObj["colourFade1"].toObject());
     if (nodeObj.contains("colourFade2"))
-        particleNode->colourFade2 = iris::colorFromJson(nodeObj["colourFade2"].toObject());
+        particleNode->colourFade2 = qtstd::colorFromJson(nodeObj["colourFade2"].toObject());
     particleNode->colourFadeSwitch  =
         (float) nodeObj["colourFadeSwitch"].toDouble(particleNode->colourFadeSwitch);
     particleNode->colourRampGuid    = nodeObj["colourRampGuid"].toString();

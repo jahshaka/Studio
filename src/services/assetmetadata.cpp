@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/assetmetadata.h"
+#include "app/qtstd.h"
 
 #include <QDir>
 #include <QFile>
@@ -321,7 +322,7 @@ QJsonObject AssetMetadata::forAvatarFile(const QString &filePath)
 
     iris::AvatarDefinition def;
     QString error;
-    if (!iris::avatarDefinitionFromJson(obj, def, &error)) {
+    if (!iris::avatarDefinitionFromJson(qtstd::fromQJsonObject(obj), def, &error)) {
         // A row whose definition will not parse still gets a block, for the
         // same reason a bad .ies does: otherwise the lazy backfill re-parses
         // it on every inspection. The refusal is carried so the UI can SAY

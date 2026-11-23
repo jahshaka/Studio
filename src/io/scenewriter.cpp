@@ -9,7 +9,6 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/document/qt/colorjson.h"
 #include "irisgl/document/qt/colour.h"
 #include "app/qtstd.h"
 #include "irisgl/core/math/quat.h"
@@ -106,11 +105,10 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     QJsonObject sceneObj;
 
 	QJsonObject skyDefs;
-	QMapIterator<QString, QJsonObject> it(scene->skyData);
-	while (it.hasNext()) {
-		it.next();
-		skyDefs.insert(it.key(), it.value());
-	}
+	// The document's Values through the editor's edge: QJsonObject orders the keys and QJsonDocument writes the
+	// numbers as it always did (no saved byte moves).
+	for (auto it = scene->skyData.constBegin(); it != scene->skyData.constEnd(); ++it)
+		skyDefs.insert(it.key(), qtstd::toQJsonValue(it.value()));
 
 	sceneObj["skyType"] = static_cast<int>(scene->skyType);
     sceneObj["skyGuid"] = scene->skyGuid;
@@ -136,20 +134,20 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // so a scene nobody gave clouds is byte-for-byte the file it was before the
     // layer existed (the reader reads an absent block as the default).
     if (scene->clouds != iris::CloudLayer())
-        sceneObj["clouds"] = scene->clouds.toJson();
+        sceneObj["clouds"] = qtstd::toQJsonValue(scene->clouds.toJson());
     // THE HEIGHT FOG (SKY-DEFAULTS-1), the same rule: only when not the
     // constructor's (off), so a scene nobody gave it is the file it was.
     if (scene->heightFog != iris::HeightFog())
-        sceneObj["heightFog"] = scene->heightFog.toJson();
+        sceneObj["heightFog"] = qtstd::toQJsonValue(scene->heightFog.toJson());
     // HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1) — the same rule: only when it is
     // not the default, so every scene that never turned it on is unchanged.
     if (scene->sunContact != iris::SunContact())
-        sceneObj["sunContact"] = scene->sunContact.toJson();
+        sceneObj["sunContact"] = qtstd::toQJsonValue(scene->sunContact.toJson());
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
     sceneObj["gravity"] = scene->gravity;
 
-    sceneObj["fogColor"] = iris::colorToJson(scene->fogColor);
+    sceneObj["fogColor"] = qtstd::colorToJson(scene->fogColor);
     // (`fogStart`/`fogEnd`, the retired LINEAR pair, and `fogAtmosphere`, the
     // retired aerial switch, are neither written nor read — CRUD law.
     // `fogDensity` below is the whole distance fog.)
@@ -237,7 +235,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["worldMode"] = (scene->worldMode >= 0 && scene->worldMode <= 3)
                                 ? QString::fromLatin1(worldModeNames[scene->worldMode])
                                 : QStringLiteral("custom");
-    sceneObj["worldOverrides"] = scene->worldOverrides;
+    sceneObj["worldOverrides"] = qtstd::toQJsonValue(scene->worldOverrides);
     // Realistic-sky bake width (VISUAL_PARITY item 1): a scene-wide render
     // setting, not a sky *parameter*, so it lives beside antiAliasing rather
     // than inside skyData.
@@ -518,7 +516,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         }
         locoObj["roles"] = rolesObj;
         if (!loco->asset().isEmpty())
-            locoObj["asset"] = iris::locomotionAssetToJson(loco->asset());
+            locoObj["asset"] = qtstd::toQJsonValue(iris::locomotionAssetToJson(loco->asset()));
         sceneNodeObj["locomotion"] = locoObj;
     }
 
@@ -791,13 +789,13 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["extents"]          = jsonVector3(node->extents);
     sceneNodeObject["innerExtents"]     = jsonVector3(node->innerExtents);
     sceneNodeObject["wind"]             = jsonVector3(node->wind);
-    sceneNodeObject["emitColourStart"]  = iris::colorToJson(node->emitColourStart);
-    sceneNodeObject["emitColourEnd"]    = iris::colorToJson(node->emitColourEnd);
+    sceneNodeObject["emitColourStart"]  = qtstd::colorToJson(node->emitColourStart);
+    sceneNodeObject["emitColourEnd"]    = qtstd::colorToJson(node->emitColourEnd);
     // ADDENDUM A-4. Written unconditionally, read tolerant-absent: every
     // default is neutral, so an old file with none of these keys loads to
     // exactly the emitter it always was.
-    sceneNodeObject["colourFade1"]      = iris::colorToJson(node->colourFade1);
-    sceneNodeObject["colourFade2"]      = iris::colorToJson(node->colourFade2);
+    sceneNodeObject["colourFade1"]      = qtstd::colorToJson(node->colourFade1);
+    sceneNodeObject["colourFade2"]      = qtstd::colorToJson(node->colourFade2);
     sceneNodeObject["colourFadeSwitch"] = node->colourFadeSwitch;
     sceneNodeObject["colourRampGuid"]   = node->colourRampGuid;
     sceneNodeObject["scaleRate"]        = node->scaleRate;
@@ -993,9 +991,9 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     // THE SKY LIGHT's SOURCE (R5b): a dome's six texture guids under their roles; nothing for the default (the sky).
     if (lightNode->lightType == iris::LightType::Sky && lightNode->skySource == iris::SkyLightSource::Cubemap) {
         sceneNodeObject["skySource"] = QStringLiteral("cubemap");
-        sceneNodeObject["skyCubeFaces"] = lightNode->skyCubeFaces;
+        sceneNodeObject["skyCubeFaces"] = qtstd::toQJsonValue(lightNode->skyCubeFaces);
     }
-	sceneNodeObject["color"] = iris::colorToJson(lightNode->color);
+	sceneNodeObject["color"] = qtstd::colorToJson(lightNode->color);
 
     // (`shadowAlpha`, `shadowColor` and `shadowBias` are no longer written —
     // the three fields are gone from the document, CRUD law: the renderer never
