@@ -139,10 +139,10 @@ const int kRestCap = 1500;
 const int kLandingWatch = 30, kLandingBound = 4, kQuietCap = 1500, kRestWatch = 30;
 /// THE ORDER ROW: the cap on a run's frames until its service is quiet (a bound on the fixture: a cold room's frames are
 /// ~2 ms), the frames past the service's quiet a run keeps drawing (the picture's last change after the last job lands),
-/// and the bound on ON's time-to-picture over OFF's (frames): twice the same arm's spread between two runs (OFF 505 and
-/// 534: 29 frames), rounded up - the red-first run (the ahead class removed) read ON 763 against OFF 505, +258; the green
-/// ON 439 against OFF 534 (spikes/shader-system/ss7/p3/order/)
-const int kOrderCap = 6000, kOrderTail = 30, kOrderBound = 60;
+/// and the bound on ON's time-to-picture over OFF's (frames): twice the same arm's spread over FIVE solo runs (OFF 534,
+/// 505, 481, 468, 505: 66 frames) - the red-first run (the ahead class removed) read ON 763 against OFF 505, +258; the
+/// greens ON - OFF -95, -14, +38, -50, -72 (spikes/shader-system/ss7/p3/order/ and slot/order-*.log)
+const int kOrderCap = 6000, kOrderTail = 30, kOrderBound = 132;
 /// The explicit node ids (both scenes the same: residentHash is over (node id, card index))
 const NodeId kFirstId = 1ull << 40;
 
