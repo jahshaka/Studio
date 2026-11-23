@@ -27,4 +27,16 @@ var lines = log.tail(200, { category: "iris", minLevel: "warning" }).filter(func
 console.log("iris lines: " + JSON.stringify(lines));
 assert(lines.length === 1, "the document's warning reached the session log's `iris` category once (" + lines.length + ")");
 assert(lines[0].indexOf("iris: Warning: " + TEXT) >= 0, "...as iris: Warning: (the forwarder's level)");
+// THE INFO ARM (the reader's V1): Info -> Log, the level EVERY bake line takes - a slip to Warning would flood a
+// Production log with each mesh's DAG line. The import above baked the model, so the bake's own info line ("mesh bake:
+// cluster DAG <file> (mesh 0): ...") is in `iris` at Log: the record carries NO level label (formatRecord omits Log), and
+// a minLevel 'warning' read does not hold it. (Error -> Error has no irisgl caller today: no iris::log::error exists.)
+var DAG = "mesh bake: cluster DAG ";
+var infos = log.tail(200, { category: "iris" }).filter(function (l) { return l.indexOf(DAG) >= 0; });
+console.log("iris info lines: " + JSON.stringify(infos));
+assert(infos.length >= 1, "the bake's info line reached `iris` (" + infos.length + ")");
+assert(infos.every(function (l) { return l.indexOf("iris: " + DAG) >= 0; }),
+       "...at Log: no level label between the category and the text");
+var warned = log.tail(200, { category: "iris", minLevel: "warning" }).filter(function (l) { return l.indexOf(DAG) >= 0; });
+assert(warned.length === 0, "...and a minLevel 'warning' read does not hold it (" + warned.length + ")");
 console.log("log.iris_forwarded: ALL OK");
