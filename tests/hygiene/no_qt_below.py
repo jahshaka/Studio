@@ -21,7 +21,8 @@ THE Qt-FREE TARGET, IrisCore (irisgl/core/CMakeLists.txt), read from the build:
      headers SYSTEM_HEADERS names (POSIX open/fsync/getpid);
   T4 ONE COPY OF EVERY STATEFUL SYMBOL (the lead's ruling 2026-11-22: IrisCore is SHARED so that the temp serial, the guid
      engine and the log sink exist once in a process on every platform): `nm -C --defined-only` of bin/Jahshaka,
-     bin/libIrisGL*.so, bin/jahengine and bin/jahlab defines no STATEFUL symbol (iris::files::, iris::newGuid, iris::log::) - only
+     bin/libIrisGL*.so, bin/jahengine and bin/jahlab defines no STATEFUL symbol (iris::files::, iris::newGuid, iris::log::, the
+     node-id counter iris::nextNodeId and its sNextNodeId: NOQT-DOCUMENT-1 stage 6) - only
      libIrisCore does (its own count > 0: the control). A static IrisCore pulled into an image is red here.
 THE APP's Qt-CONVERSION HEADER, src/app/qtstd.h: no C++ file under irisgl/ includes it (it lives above the line).
 Run: no_qt_below.py <source-root> <build-dir> [--counts]   (--counts prints the measured lines, never fails: a builder's aid)
@@ -200,7 +201,8 @@ QT_SYMBOL = re.compile(r'\bQ[A-Z][a-z]\w*|\bQ_[A-Z_]+|\bQT_\w+|\bqt_\w+')
 # one copy in a process (T4): the file primitives, the guid engine, and the log - every iris::log:: symbol but its
 # Severity TYPE (a type holds no state, and a sink's std::function handler names Severity in every image that installs a
 # sink; the Sink alias never appears in a demangled name: it is spelled out as the std::function it names)
-STATEFUL = re.compile(r'\biris::files::|\biris::newGuid\b|\biris::log::(?!Severity\b)')
+STATEFUL = re.compile(r'\biris::files::|\biris::newGuid\b|\biris::log::(?!Severity\b)|\biris::nextNodeId\b'
+                      r'|\biris::\(anonymous namespace\)::sNextNodeId\b')
 IMAGES = ('Jahshaka', 'libIrisGL*.so', 'jahengine', 'jahlab')    # under <build>/bin: every image that links IrisCore
 # nm's defined kinds: text, data, bss, read-only, weak, small data/bss, and `u` (GNU unique: a static local of an inline
 # function or template, which a second image would hold its own copy of)
@@ -449,9 +451,12 @@ def self_test():
                                  '0000 T iris::log::info(std::basic_string_view<char, std::char_traits<char> >)\n'
                                  '0000 t iris::log::(anonymous namespace)::state()\n'
                                  # a GNU unique (`u`) static local of an inline stateful function: defined, reds
-                                 '0000 u iris::files::inlineCounter()::sCount\n'}
+                                 '0000 u iris::files::inlineCounter()::sCount\n'
+                                 # the node-id counter (core/ids.h): its function and its state, defined here, red
+                                 '0000 T iris::nextNodeId()\n0000 b iris::(anonymous namespace)::sNextNodeId\n'
+                                 '                 U iris::nextNodeId()\n'}
     got = t4_bad(imgs)
-    if [i for i, _ in got] != ['bin/Jahshaka'] + ['bin/libIrisGLd.so'] * 5 or \
+    if [i for i, _ in got] != ['bin/Jahshaka'] + ['bin/libIrisGLd.so'] * 7 or \
             any(w in l for _, l in got for w in ('newGuidance', 'notify', 'trim', ' U ', '_Function_handler')):
         bad.append('T4 read the images wrong: %r' % got)
     # T3: core/ and the standard library pass; a Qt header, a header outside core/, a missing header each red
