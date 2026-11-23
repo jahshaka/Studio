@@ -358,7 +358,7 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     PrimitiveAssets::clearCache();
     const QStringList seedErrors = PrimitiveAssets::seedAll(db).errors;
     for (const QString &line : seedErrors) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Error, "library reset: primitive seed: " + line);
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "library reset: primitive seed: " + line);
         if (result.error.isEmpty()) result.error = line;
     }
 

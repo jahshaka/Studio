@@ -671,7 +671,7 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 		const auto build = materials::buildDefinition(doc->graph, doc->info.GUID,
 		                                              dataBase, mProject);
 		if (!build.ok()) {
-			JahLog::write(JahLog::legacy, JahLog::Level::Warning, "saveShader: " + build.error);
+			JahLog::write(JahLog::legacy, JahLog::Level::Error, "saveShader: " + build.error);
 			reportSaveRefused(doc, build.error);
 		} else {
 			// WHOSE VERSION (the owner's model, spec 12 Q2): the DRAWER the
@@ -705,7 +705,7 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 			    projectOwns ? MaterialBundle::Scope::Project
 			                : MaterialBundle::Scope::Library);
 			if (!written.ok) {
-				JahLog::write(JahLog::legacy, JahLog::Level::Warning, "saveShader: " + written.error);
+				JahLog::write(JahLog::legacy, JahLog::Level::Error, "saveShader: " + written.error);
 				// A REFUSED SAVE IS TOLD, not logged. This runs on the 1.5 s
 				// autosave, so a refusal the user cannot see means they keep
 				// working on a graph nothing is writing down — an hour of

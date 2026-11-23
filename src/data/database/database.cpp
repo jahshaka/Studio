@@ -1158,7 +1158,7 @@ void Database::createIndexes()
     any.finish();
     if (!empty) {
         mIndexStatementsAtOpen = int(needed.size());
-        JahLog::write(JahLog::legacy, JahLog::Level::Error, QStringLiteral("library: DEFECT — %1 index statement(s) run over an existing library's rows on the "
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("library: DEFECT — %1 index statement(s) run over an existing library's rows on the "
                                                                          "opening thread; the boot builds them before the shell opens it (Database::prepareIndexes)")
                                                               .arg(needed.size()));
     }

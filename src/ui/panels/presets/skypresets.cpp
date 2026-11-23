@@ -72,7 +72,7 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
     // so in the log rather than hand a null (or, before lane DBPTR-1, an
     // uninitialised) handle to the import pipeline.
     if (!db || !project) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Log, "sky preset: no project library open");
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "sky preset: no project library open");
         return;
     }
 

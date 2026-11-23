@@ -2651,7 +2651,7 @@ void AssetView::reportPreviewSweep(int rebuilt, const QStringList &lines, bool a
 	// A FAILURE IS NEVER SILENT: the reasons are what the user needs to act on
 	// (no engine, a model whose bytes are gone, a material with no definition).
 	if (afterUpdate) {
-		JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("thumbnails after the update: %1 of %2 rebuilt; not rebuilt: %3")
+		JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("thumbnails after the update: %1 of %2 rebuilt; not rebuilt: %3")
 		            .arg(rebuilt).arg(attempted).arg(lines.join(QStringLiteral("; "))));
 		libraryToast()->showToast(tr("Thumbnails"),
 		                          tr("Rebuilt %1 of %2 thumbnails after the update; the log lists "

@@ -1151,7 +1151,7 @@ void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
                 QVector<AssetCas::Staged> leftover{ result.staged };
                 AssetCas::discardStaged(leftover);
             }
-            JahLog::write(JahLog::legacy, JahLog::Level::Error, QStringLiteral("mesh bake: %1 bake(s) not committed: %2").arg(jobs.size()).arg(dropped));
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("mesh bake: %1 bake(s) not committed: %2").arg(jobs.size()).arg(dropped));
             QVector<LandedBake> lost = targets;
             for (LandedBake &row : lost) row.ok = false;
             for (int i = 0; i < sListeners.size();) {

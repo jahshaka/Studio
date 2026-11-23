@@ -111,7 +111,7 @@ Database *ShellLifecycle::openLibrary()
     // per row.
     mBoot.seed = PrimitiveAssets::seedAll(mDb);
     if (mBoot.seed.created > 0) JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("primitives: baked %1 shipped meshes").arg(mBoot.seed.created));
-    for (const QString &line : std::as_const(mBoot.seed.errors)) JahLog::write(JahLog::legacy, JahLog::Level::Error, "primitive seed: " + line);
+    for (const QString &line : std::as_const(mBoot.seed.errors)) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "primitive seed: " + line);
     // EVERY SHIPPED MESH THE APP DRAWS IS ONE OF THOSE ROWS (SHIPPED-BAKES-1):
     // the preview docks' subjects, the avatar room's cube and the VR controller
     // models ask for theirs by seed key through IrisGL's seam, and get the bake.

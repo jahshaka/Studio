@@ -780,7 +780,7 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
             sidecarFailure = casError.isEmpty() ? guid : casError;
     }
     if (!sidecarFailure.isEmpty()) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "import post-commit: " + sidecarFailure);
+        JahLog::write(JahLog::legacy, JahLog::Level::Error, "import post-commit: " + sidecarFailure);
         result.error = QStringLiteral("imported, but its record in the store (sidecar) could not "
                                       "be written (%1) — it would not survive Clear Database or "
                                       "an update").arg(sidecarFailure);
@@ -989,7 +989,7 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
     QString casError;
     AssetCas::writeSidecar(conn, root, guid, &casError);
     if (!meshGuid.isEmpty()) AssetCas::writeSidecar(conn, root, meshGuid, &casError);
-    if (!casError.isEmpty()) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "reimport: " + casError);
+    if (!casError.isEmpty()) JahLog::write(JahLog::legacy, JahLog::Level::Error, "reimport: " + casError);
     return out;
 }
 

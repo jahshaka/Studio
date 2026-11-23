@@ -304,7 +304,7 @@ void PreviewService::mint(Project *project, const QString &guid, const char *who
     const bool couldRender = engine && !engine->isHeadless();
     request(project, guid, [door, guid, couldRender, then](const Outcome &outcome) {
         if (!outcome.ok && couldRender)
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("%1: no preview stored for %2 - %3").arg(door, guid, outcome.reason));
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("%1: no preview stored for %2 - %3").arg(door, guid, outcome.reason));
         if (then) then(outcome);
     });
 }
