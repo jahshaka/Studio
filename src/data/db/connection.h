@@ -51,8 +51,11 @@ struct Options
 {
     bool readOnly = false;
     int busyMs = 0;          ///< sqlite3_busy_timeout: how long a locked file is waited for
-    bool wal = false;        ///< journal_mode WAL + synchronous NORMAL
-    std::string name;        ///< the connection's name in every error and holder line
+    bool wal = false;        ///< journal_mode WAL (its ANSWER kept: wal()) + synchronous NORMAL
+    /// With `wal` and WAL answered: PRAGMA wal_autocheckpoint = N when >= 0 (0: no checkpoint ever runs inside a
+    /// commit on this connection - the editor's, whose checkpoints are a worker's). -1: SQLite's own.
+    int walAutocheckpoint = -1;
+    std::string name;        ///< the connection's name in every error and holder line, and its statements' count
     int minimumVersion = kMinimumVersion;   ///< the floor open() refuses below (db.layer raises it to prove the refusal)
 };
 
@@ -81,6 +84,11 @@ public:
 
     bool isOpen() const;
     const std::string &name() const;
+    /// open() asked for WAL (Options.wal) and SQLite ANSWERED "wal": a refused WAL (a filesystem with no shared
+    /// memory, a read-only file) answers the previous mode, and this is false.
+    bool wal() const;
+    /// Opened after observeStatements: its statements reach the observer under its name.
+    bool observed() const;
 
     /// Runs SQL with no binds and no rows (pragmas, DDL; several statements allowed).
     bool exec(std::string_view sql, Error *e);
@@ -106,6 +114,24 @@ public:
 private:
     std::shared_ptr<State> mState;
 };
+
+/// THE STATEMENT OBSERVER (process-wide, NOQT-DATABASE-1 stage 3): set ONCE, before the first open it should see;
+/// every connection opened after it is traced from inside open() - its own pragmas counted - and each statement
+/// it runs reaches `observer` with the connection's Options.name (Connection::trace's rules: once per execution, a
+/// trigger's sub-statements as their `--` text). Called on the connection's own thread. A second call is ignored
+/// (false).
+using StatementObserver = std::function<void(std::string_view name, std::string_view sql)>;
+bool observeStatements(StatementObserver observer);
+
+/// THE PAGER's COUNTS of an open connection (SQLite's db_status, its current values): pages read from the file
+/// (cache misses) and pages written. `ok` false on a connection with no handle or a status SQLite refused.
+struct PagerStats
+{
+    std::int64_t cacheMisses = 0;
+    std::int64_t cacheWrites = 0;
+    bool ok = false;
+};
+PagerStats pagerStats(const Connection &connection);
 
 }   // namespace db
 

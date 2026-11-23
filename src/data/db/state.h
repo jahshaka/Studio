@@ -39,6 +39,8 @@ struct Connection::State
     bool holding = false;           ///< this connection's outermost Transaction holds the write lock
     bool firstWriteNamed = false;   ///< the held transaction's first write is in the holder line
     bool refusing = false;          ///< the outermost Transaction's BEGIN failed: query_only until it ends
+    bool wal = false;               ///< open()'s journal_mode = WAL was answered "wal"
+    bool observed = false;          ///< opened after observeStatements: traced under its name
     std::function<void(std::string_view)> trace;   ///< Connection::trace's callback; SQLite holds `this`
 
     /// A borrowed handle outlives its last borrower: its trace, which points here, is removed first.

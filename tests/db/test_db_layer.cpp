@@ -25,7 +25,11 @@ For more information see the LICENSE file
 //      borrow(); borrow() works on a handle someone else opened and refuses none;
 //   9. the statement trace (stage 2): every statement on its connection, once per execution, none on another;
 //      shared by a handle's borrowers; removed by an empty function and by the last borrower's end;
-//  10. run(): to the end, false with the failing step's error (a later row's included), once per reset().
+//  10. run(): to the end, false with the failing step's error (a later row's included), once per reset();
+//  11. the WAL answer kept: wal() true on a file, false where WAL is refused (':memory:');
+//  12. walAutocheckpoint 0 is 0 on the connection (unset: SQLite's 1000);
+//  13. the process-wide statement observer: per connection NAME, the open's pragmas counted, set once;
+//  14. pagerStats: a cold read's misses, a write's writes, no handle no counts.
 
 #include "data/database/dbqt.h"
 #include "data/db/connection.h"
@@ -39,6 +43,7 @@ For more information see the LICENSE file
 
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -415,6 +420,88 @@ int main()
             const bool afterReset = twice.run(&e);
             check(afterReset && !e, "...and after reset() it runs again");
         }
+    }
+
+    // 11. THE WAL ANSWER IS KEPT (stage 3): a file opened with Options.wal answers "wal" (wal() true); a database
+    //     whose journal cannot be WAL (":memory:" answers "memory") opens, wal() false - a refused WAL is the
+    //     previous mode, never a guess from the option.
+    {
+        db::Connection file = openNamed("walFile");
+        db::Options o;
+        o.name = "walMemory";
+        o.wal = true;
+        db::Error e;
+        db::Connection memory = db::Connection::open(":memory:", o, &e);
+        check(file.wal(), "11: CONTROL: a file opened with WAL answers it: wal() true");
+        check(memory.isOpen() && !e && !memory.wal(), "11: a REFUSED WAL (':memory:' answers 'memory') opens with wal() false"
+                                                          + (e ? ": " + e.message : std::string()));
+    }
+
+    // 12. wal_autocheckpoint (stage 3): 0 asked is 0 on the connection; CONTROL the option unset keeps SQLite's 1000.
+    {
+        const auto autocheckpoint = [](db::Connection &c) {
+            db::Statement s(c, "PRAGMA wal_autocheckpoint");
+            db::Error e;
+            return s.step(&e) ? int(s.int64(0)) : -1;
+        };
+        db::Options o;
+        o.name = "noCheckpoint";
+        o.wal = true;
+        o.walAutocheckpoint = 0;
+        db::Error e;
+        db::Connection none = db::Connection::open(kFile, o, &e);
+        db::Connection plain = openNamed("ownCheckpoint");
+        check(none.wal() && autocheckpoint(none) == 0, "12: walAutocheckpoint 0 is 0 on the connection: "
+                                                             + std::to_string(autocheckpoint(none)));
+        check(autocheckpoint(plain) == 1000, "12: CONTROL: unset, SQLite's own 1000: " + std::to_string(autocheckpoint(plain)));
+    }
+
+    // 13. THE STATEMENT OBSERVER (stage 3, ruled call 5): set ONCE; a connection opened after it is counted under ITS
+    //     name, its open's pragmas included; another connection's statements never reach a name not its own; one
+    //     opened BEFORE it is not observed; a second observer is refused.
+    {
+        db::Connection before = openNamed("beforeObserver");
+        std::map<std::string, int> byName;
+        check(db::observeStatements([&byName](std::string_view name, std::string_view sql) {
+                  if (!(sql.size() >= 2 && sql[0] == '-' && sql[1] == '-')) ++byName[std::string(name)];
+              }),
+              "13: the observer is set");
+        check(!db::observeStatements([](std::string_view, std::string_view) {}), "13: a second observer is refused");
+        db::Connection a = openNamed("obsA");
+        const int aOpen = byName["obsA"];
+        db::Connection b = openNamed("obsB");
+        countOf(a, "kept");
+        countOf(a, "kept");
+        countOf(b, "kept");
+        countOf(before, "kept");
+        check(aOpen == 2, "13: an observed open's own pragmas count under its name (journal_mode, synchronous): "
+                              + std::to_string(aOpen));
+        check(byName["obsA"] == aOpen + 2 && byName["obsB"] == aOpen + 1,
+              "13: each connection's statements count under ITS name (obsA " + std::to_string(byName["obsA"]) + ", obsB "
+                  + std::to_string(byName["obsB"]) + ")");
+        check(a.observed() && !before.observed() && byName.count("beforeObserver") == 0,
+              "13: a connection opened before the observer is not observed");
+    }
+
+    // 14. THE PAGER's COUNTS (stage 3: databasereads' page reads and the suites' page writes, through the layer): a
+    //     cold read misses pages, a write writes pages; a connection with no handle answers no counts.
+    {
+        db::Connection cold = openNamed("cold");
+        const db::PagerStats start = db::pagerStats(cold);
+        countOf(cold, "kept");
+        const db::PagerStats read = db::pagerStats(cold);
+        db::Error e;
+        {
+            db::Transaction tx(cold, "pager writes");
+            insert(cold, "paged", &e);
+            tx.commit(&e);
+        }
+        const db::PagerStats wrote = db::pagerStats(cold);
+        check(start.ok && read.cacheMisses > start.cacheMisses, "14: a cold read misses pages: " + std::to_string(start.cacheMisses)
+                                                                     + " -> " + std::to_string(read.cacheMisses));
+        check(wrote.cacheWrites > read.cacheWrites, "14: a committed write writes pages: " + std::to_string(read.cacheWrites)
+                                                        + " -> " + std::to_string(wrote.cacheWrites));
+        check(!db::pagerStats(db::Connection()).ok, "14: no handle answers no counts");
     }
 
     removeFile();

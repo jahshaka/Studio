@@ -11,8 +11,10 @@ For more information see the LICENSE file
 
 #include "data/db/connection.h"
 #include "data/db/state.h"
+#include "data/db/statement.h"
 
 #include <cassert>
+#include <cctype>
 #include <map>
 #include <mutex>
 #include <utility>
@@ -28,6 +30,16 @@ std::map<std::string, std::string> gHolders;
 // THE BORROWED HANDLES: one state per handle, shared by every borrower while any of them lives.
 std::mutex gBorrowedMutex;
 std::map<sqlite3 *, std::weak_ptr<Connection::State>> gBorrowed;
+
+// THE STATEMENT OBSERVER (observeStatements): set once; read by every open() after it.
+std::mutex gObserverMutex;
+StatementObserver gObserver;
+
+StatementObserver currentObserver()
+{
+    std::lock_guard<std::mutex> lock(gObserverMutex);
+    return gObserver;
+}
 
 std::string fileOf(sqlite3 *handle)
 {
@@ -181,7 +193,32 @@ Connection Connection::open(const std::string &path, const Options &options, Err
     c.mState->file = fileOf(handle);
     sqlite3_extended_result_codes(handle, 1);
     sqlite3_busy_timeout(handle, options.busyMs);
-    if (options.wal && !c.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL", e)) return Connection();
+    // THE OBSERVER FIRST, so the open's own pragmas are counted under the connection's name.
+    if (const StatementObserver observer = currentObserver()) {
+        c.mState->observed = true;
+        const std::string name = options.name;
+        c.trace([observer, name](std::string_view sql) { observer(name, sql); });
+    }
+    if (options.wal) {
+        // SQLite reports a REFUSED journal mode by its ANSWER, not by an error (a filesystem with no shared memory, a
+        // read-only file: it answers the previous mode) - so the answer is read and kept (wal()).
+        std::string mode;
+        {
+            Statement journal(c, "PRAGMA journal_mode = WAL");
+            Error failed;
+            if (journal.step(&failed)) mode = journal.text(0);
+            else if (failed.code) {
+                if (e) *e = failed;
+                return Connection();
+            }
+        }
+        for (char &ch : mode) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+        c.mState->wal = mode == "wal";
+        std::string pragmas = "PRAGMA synchronous = NORMAL";
+        if (c.mState->wal && options.walAutocheckpoint >= 0)
+            pragmas += "; PRAGMA wal_autocheckpoint = " + std::to_string(options.walAutocheckpoint);
+        if (!c.exec(pragmas, e)) return Connection();
+    }
     if (e) *e = Error();
     return c;
 }
@@ -215,6 +252,32 @@ Connection Connection::borrow(sqlite3 *handle, std::string name, Error *e, int m
 }
 
 bool Connection::isOpen() const { return mState && mState->handle; }
+
+bool Connection::wal() const { return isOpen() && mState->wal; }
+
+bool Connection::observed() const { return isOpen() && mState->observed; }
+
+bool observeStatements(StatementObserver observer)
+{
+    std::lock_guard<std::mutex> lock(gObserverMutex);
+    if (gObserver || !observer) return false;
+    gObserver = std::move(observer);
+    return true;
+}
+
+PagerStats pagerStats(const Connection &connection)
+{
+    PagerStats out;
+    if (!connection.isOpen()) return out;
+    sqlite3 *handle = connection.state()->handle;
+    int current = 0, highwater = 0;
+    if (sqlite3_db_status(handle, SQLITE_DBSTATUS_CACHE_MISS, &current, &highwater, 0) != SQLITE_OK) return out;
+    out.cacheMisses = current;
+    if (sqlite3_db_status(handle, SQLITE_DBSTATUS_CACHE_WRITE, &current, &highwater, 0) != SQLITE_OK) return out;
+    out.cacheWrites = current;
+    out.ok = true;
+    return out;
+}
 
 const std::string &Connection::name() const
 {
