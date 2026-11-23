@@ -12,11 +12,15 @@
 // increasing, none after the reply. THE TRANSPORT (mcp/stdio.h): a line far past the cap is delivered `overlong` while the
 // reader's own counter of bytes held never passes kLineCap; and in a FORKED server whose command printf()s, every line
 // on the protocol fd is one JSON-RPC message and stdin's end exits 0 - the control: the same child WITHOUT the fd claim
-// reads foreign lines there.
+// reads foreign lines there. THE PICTURE TOOL (stage 3, over a fake engine.picture.png): one image item per handle in
+// order, then the one text; atomic (a failure at handle k sends no image, naming pictures[k] and its handle); the 1 MiB a
+// PNG and the 2 MiB an answer carry, each passing at exactly its cap and refused one byte over, by name; a cancel between
+// handles writes no line; its maxEdge range is the real command's.
 #include "jahshaka/engine/Script.h"
 #include "irisgl/core/json.h"
 #include "mcp/session.h"
 #include "mcp/stdio.h"
+#include "mcp/schema.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -52,6 +56,22 @@ static std::string toolCall(const std::string &id, const std::string &tool, cons
     if (!progressToken.empty()) meta.insert(meta.size() - 1, ",\"progressToken\":" + progressToken);
     return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"method\":\"tools/call\",\"params\":{\"name\":\"" + tool +
            "\",\"arguments\":" + args + "," + meta + "}}";
+}
+
+/// The fake engine.picture.png's PNG bytes for a handle (its sizes: the fake's comment in Rig).
+static Value::Bytes fakePng(std::int64_t handle)
+{
+    static const std::size_t sizes[] = {0, 100, 200, 786432, 1048577, 0, 1048576, 1};
+    Value::Bytes b(sizes[handle]);
+    for (std::size_t i = 0; i < b.size(); ++i) b[i] = std::uint8_t((i * 31 + std::size_t(handle)) & 255);
+    return b;
+}
+/// The codec's base64 of `bytes`: its documented {"$bytes": "..."} text, cut (the test's one helper that calls the codec).
+static std::string base64Of(const Value::Bytes &bytes)
+{
+    std::string text, why;
+    toJson(Value::bytes(bytes), text, why);
+    return text.substr(11, text.size() - 13);
 }
 
 /// One session over the synthetic hosts, every line it sends kept (text and parsed).
@@ -91,6 +111,18 @@ struct Rig {
                 hp->print("said");
                 return Value();
             });
+            // THE PICTURE TOOL's ONE COMMAND (L5: the adapter names engine.picture.png, so the fake answers THAT name):
+            // handle 1 -> 100 bytes, 2 -> 200, 3 -> 786,432 (0.75 MiB), 4 -> 1,048,577 (one byte past the 1 MiB a value
+            // carries), 5 FAILS "not a picture", 6 -> 1,048,576 (exactly the 1 MiB), 7 -> 1; byte i = (i * 31 + handle) & 255
+            r.add({"engine.picture.png",
+                   {Access::Reads, {target(arg("picture", Kind::Int)), arg("maxEdge", Kind::Int, Value(1024))}, Kind::Object},
+                   "The fake picture's PNG bytes."},
+                  [](Call &c) -> Value {
+                      const std::int64_t h = c[0].asInt();
+                      if (h < 1 || h > 7 || h == 5) return c.fail("not a picture");
+                      return Value(Value::Object{{"png", Value::bytes(fakePng(h))}, {"width", Value(h)},
+                                                 {"height", Value(1)}});
+                  });
             if (faulty) r.add({"test.bare", {Access::Reads, {}, Kind::Null}, ""}, [](Call &) { return Value(); });
             return h;
         };
@@ -120,6 +152,13 @@ struct Rig {
     }
 };
 
+/// A tool result's structured error text; "" when it carries none (a case that passed where it should fail reads as a FAIL,
+/// never as a crash on the wrong kind).
+static std::string errorOf(const Value &m)
+{
+    const Value &e = m["result"]["structuredContent"]["error"];
+    return e.kind() == Kind::String ? e.asString() : std::string();
+}
 static std::int64_t code(const Value &m) { return m["error"]["code"].kind() == Kind::Int ? m["error"]["code"].asInt() : 0; }
 
 int main()
@@ -225,8 +264,6 @@ int main()
                   e.completionBounds && e.completionBounds->bytes == mcp::kCompletionBounds.bytes && !e.documentationOnly,
               "the session STATES its engine host's options: a fresh realm, an outside client (engine.arm refused), the "
               "32 MiB heap limit and the completion bounds");
-        const Value pic = g.one(toolCall("10", "picture", "{\"pictures\":[1]}"));
-        check(pic["result"]["isError"] == Value(true), "picture is an error result until stage 3");
         // AN ANSWER JSON CANNOT CARRY (the codec refuses NaN by name: core/json.h): through the SESSION, a clean error result
         // naming the value's path - never a `null` in place of a number, never a broken line on the wire
         const Value nan = g.one(toolCall("11", "run_script", "{\"script\":\"0 / 0\"}"));
@@ -300,6 +337,88 @@ int main()
         const std::size_t atEof = g.sent.size();
         g.s->receive({toolCall("30", "call", "{\"command\":\"test.loop\",\"args\":{\"n\":1000}}"), false});
         check(g.s->ended() && g.sent.size() == atEof, "stdin's end mid-call cancels it (no line) and ends the session");
+    }
+
+    // 3b. THE PICTURE TOOL (stage 3): images in order then the one text; atomic; the two caps by name, each passing at
+    //     exactly its cap; a cancel between handles; its maxEdge range IS the real command's
+    {
+        Rig g;
+        const Value two = g.one(toolCall("12", "picture", "{\"pictures\":[1,2]}"));
+        const Value::Array &content = two["result"]["content"].asArray();
+        int images = 0;
+        for (const Value &c : content) images += c["type"] == Value("image");
+        const Value &listed = two["result"]["structuredContent"]["pictures"];
+        check(content.size() == 3 && content[0]["type"] == Value("image") && content[1]["type"] == Value("image") &&
+                  content[2]["type"] == Value("text") && content[0]["mimeType"] == Value("image/png") &&
+                  content[0]["data"] == Value(base64Of(fakePng(1))) && content[1]["data"] == Value(base64Of(fakePng(2))) &&
+                  !two["result"].find("isError") && listed.kind() == Kind::Array && listed.asArray().size() == 2 &&
+                  listed.asArray()[0]["picture"] == Value(1) && listed.asArray()[0]["pngBytes"] == Value(100) &&
+                  listed.asArray()[1]["picture"] == Value(2) && listed.asArray()[1]["pngBytes"] == Value(200),
+              "(a) picture [1, 2]: image, image, text in that order, each image the codec's base64 of its PNG, the structured "
+              "sizes 100 and 200 (THE CONTROL: " + std::to_string(images) + " image items, > 0)");
+        const auto noImage = [](const Value &m) {
+            for (const Value &c : m["result"]["content"].asArray())
+                if (c["type"] == Value("image")) return false;
+            return true;
+        };
+        const Value bad = g.one(toolCall("13", "picture", "{\"pictures\":[1,5]}"));
+        check(bad["result"]["isError"] == Value(true) && noImage(bad) &&
+                  bad["result"]["structuredContent"]["error"] ==
+                      Value("picture: pictures[1] (handle 5): engine.picture.png: not a picture"),
+              "(b) picture [1, 5]: an error naming pictures[1] and handle 5 (" +
+                  errorOf(bad) + "), NO image item (atomic)");
+        const Value big = g.one(toolCall("14", "picture", "{\"pictures\":[4]}"));
+        const std::string bigWhy = errorOf(big);
+        check(big["result"]["isError"] == Value(true) && noImage(big) &&
+                  bigWhy.find("1048577 bytes: over the 1 MiB (1048576) a value carries as bytes") != std::string::npos,
+              "(c) a PNG of 1,048,577 bytes is refused at the carriage in the codec's words: " + bigWhy);
+        const Value sum = g.one(toolCall("15", "picture", "{\"pictures\":[3,3,3]}"));
+        const std::string sumWhy = errorOf(sum);
+        check(sum["result"]["isError"] == Value(true) && noImage(sum) &&
+                  sumWhy == "picture: the answer would carry 2359296 bytes of PNG, over the 2 MiB (2097152) one answer "
+                            "carries: ask for fewer pictures or a smaller maxEdge",
+              "(d) three 0.75 MiB PNGs (2,359,296 bytes) are over the answer's 2 MiB: refused by name, no image: " + sumWhy);
+        // THE CAPS AT EXACTLY THE CAP PASS, ONE BYTE OVER IS REFUSED: a PNG of exactly 1,048,576 bytes rides; two of them
+        // (exactly 2,097,152) ride; with one byte more (handle 7: 2,097,153) the answer is refused by name
+        const Value atCap = g.one(toolCall("18", "picture", "{\"pictures\":[6]}"));
+        const Value atSum = g.one(toolCall("19", "picture", "{\"pictures\":[6,6]}"));
+        const Value overSum = g.one(toolCall("20", "picture", "{\"pictures\":[6,6,7]}"));
+        const std::string overWhy = errorOf(overSum);
+        check(!atCap["result"].find("isError") && atCap["result"]["content"].asArray().size() == 2 &&
+                  !atSum["result"].find("isError") && atSum["result"]["content"].asArray().size() == 3 &&
+                  atSum["result"]["content"].asArray()[1]["data"] == Value(base64Of(fakePng(6))) &&
+                  overSum["result"]["isError"] == Value(true) && noImage(overSum) &&
+                  overWhy.find("2097153 bytes of PNG, over the 2 MiB (2097152)") != std::string::npos,
+              "the caps at EXACTLY the cap: one PNG of 1,048,576 bytes and two summing 2,097,152 ride; 2,097,153 is "
+              "refused: " + overWhy);
+        // (e) a cancel arriving at the poll before the SECOND handle: no line for the request
+        g.polls = 0;
+        g.arriving = {{2, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":16}}"}};
+        const std::size_t before = g.sent.size();
+        g.s->receive({toolCall("16", "picture", "{\"pictures\":[1,2]}"), false});
+        check(g.sent.size() == before && g.polls == 2,
+              "(e) a cancel at the poll before the second handle: no line for the request (" +
+                  std::to_string(g.sent.size() - before) + " sent, " + std::to_string(g.polls) + " polls)");
+        g.arriving.clear();
+        // (f) THE RANGE IS ONE: tools/list's picture maxEdge {minimum, maximum, default} == the REAL command's
+        Host::Options docsOnly;
+        docsOnly.documentationOnly = true;
+        Host real(docsOnly);
+        registerEngineCommands(real, nullptr, "no engine: the declared range", false);
+        Value schema;
+        std::string why;
+        const CommandInfo *png = real.registry().find("engine.picture.png");
+        const bool mapped = png && mcp::argumentSchema(*png, schema, why);
+        const Value &declared = schema["properties"]["maxEdge"];
+        const Value list = g.one(req("17", "tools/list"));
+        Value tool;
+        for (const Value &t : list["result"]["tools"].asArray())
+            if (t["name"] == Value("picture")) tool = t["inputSchema"]["properties"]["maxEdge"];
+        check(mapped && declared["minimum"] == tool["minimum"] && declared["maximum"] == tool["maximum"] &&
+                  declared["default"] == tool["default"] && declared["minimum"] == Value(16) &&
+                  declared["maximum"] == Value(2048) && declared["default"] == Value(1024),
+              "(f) the picture tool's maxEdge {minimum, maximum, default} equals engine.picture.png's declared range and "
+              "default (16..2048, 1024): ONE range " + why);
     }
 
     // 4. THE TRANSPORT
