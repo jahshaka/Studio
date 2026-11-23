@@ -15,9 +15,9 @@ lines Config.h 219
 fanout Config.h 6
 lines Culling.h 167
 fanout Culling.h 0
-lines Engine.h 3247
+lines Engine.h 3265
 fanout Engine.h 1
-lines EngineInspect.h 246
+lines EngineInspect.h 245
 fanout EngineInspect.h 0
 lines Fog.h 111
 fanout Fog.h 2
@@ -33,7 +33,7 @@ lines GiModes.h 161
 fanout GiModes.h 7
 lines GiParams.h 1273
 fanout GiParams.h 4
-lines GiStatus.h 801
+lines GiStatus.h 805
 fanout GiStatus.h 2
 lines GiVoxels.h 212
 fanout GiVoxels.h 0
