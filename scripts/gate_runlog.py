@@ -22,6 +22,7 @@ past the output cap), `coldRow` (the row is declared COLD: tests/test-cold-rows.
 $JAH_LOADAVG_FILE a toy's) and `ncpu` (our CPUs: this process's affinity). The lead's `spec.sh reprice` refuses such a run.
 """
 import argparse
+import collections
 import datetime
 import json
 import math
@@ -57,6 +58,10 @@ _ARM_BEGIN = re.compile(r"^\s*ARM-BEGIN\s+(\S+)\s*$")
 _FAILLINE = re.compile(r"^\s*(?:\|\s*)*(FAIL(?:[:(!]|\s+\S).*|\[\s+FAILED\s+\].*)$")
 _SCRIPTFAIL = re.compile(r"([^/\s]+\.js:\d+: Error: .*)$")
 OUTPUT_CAP = 262144
+# THE ROW's LAST LINES IN ITS RECORD (the errors audit 2026-11-23 B7; CORRECTIONS 96: "show me the number" of a PASSING row needed a
+# re-run - its log was a red's only): every record carries `tail`, the row's last TAIL_LINES lines (each cut at 400 chars), green
+# or red, past OUTPUT_CAP too
+TAIL_LINES = 40
 # THE LAW LINE (tests/support/lawline.h): `LAW <name> <value> <unit> [<op> <bar>]` - collected past OUTPUT_CAP too
 _LAW = re.compile(r"^\s*LAW\s+([A-Za-z0-9_.:+\-]+)\s+(\S+)\s+(\S+)(?:\s+(<=|<|>=|>|==)\s+(\S+))?\s*$")
 _NONFINITE = ("nan", "inf", "infinity")
@@ -595,6 +600,7 @@ def run_ctest(cmd, build, tier, lane, echo=True):
     p = subprocess.Popen(vcmd, cwd=build, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                          errors="replace")
     buf, size, pre, reds, lawbuf, late, armbuf = {}, {}, {}, [], {}, {}, {}
+    tails = collections.defaultdict(lambda: collections.deque(maxlen=TAIL_LINES))   # every row's last lines, past the cap too
     inframe, cold = {}, _cold_rows(build)
     ncpu = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
     loads, started, last = [], {}, 0.0    # (monotonic, load) samples of the whole call; a row's start index by name
@@ -625,6 +631,7 @@ def run_ctest(cmd, build, tier, lane, echo=True):
                 if st == "env" and txt.startswith(" "):
                     continue
                 pre[i] = False
+            tails[i].append(txt[:400])
             if txt.lstrip().startswith("LAW"):
                 lawbuf.setdefault(i, []).append(txt)
             if _INFRAME.search(txt):                        # past the output cap too (DEV_ERRORS 49)
@@ -674,6 +681,8 @@ def run_ctest(cmd, build, tier, lane, echo=True):
                    load=round(sum(mine) / len(mine), 2) if mine else None, ncpu=ncpu)
         if name in cold:
             row["coldRow"] = True
+        if i in tails:   # B7: every row's last lines, green or red - a passing row's own figures readable after
+            row["tail"] = list(tails.pop(i))
         # NOT RUN BEHIND ITS FIXTURE (URGENT #123): a row ctest did not run because a row it needs is red is RECORDED so,
         # the rows it waited on named - ci_gate_check.py serve reads it served-red while they stay red at this tree, so a
         # plan never lists it to run again for nothing (8B's master check re-ran its part seven times: ~25 min of card)
