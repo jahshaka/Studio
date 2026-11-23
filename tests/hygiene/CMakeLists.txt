@@ -954,5 +954,7 @@ jah_builds(JahStartupPassId ROWS source.startup_pass_closure)                  #
 jah_builds(JahshakaEngine JahshakaScript Jahshaka IrisGL jahengine ROWS source.script_neutral)   # nm on each
 jah_builds(IrisCore ROWS source.no_qt_below)                                   # nm on IrisCore's archive (+ build.ninja)
 jah_builds(JahshakaEngineBuildId ROWS source.script_build_id)                  # the build's generated build-id header (its B3)
+jah_builds(JahshakaEngineBuildId ROWS source.ray_spirv_id)   # the build-id header, and the ray *_spv.h its edge makes first (+ build.ninja)
+jah_builds(none ROWS source.compute_pace_one_place)            # the engine's sources only
 # the whole default build: every test binary ctest runs (readelf), the build's whole dependency graph (its deps log)
 jah_builds(all ROWS source.display_guard_linked gate.selection gate.reach_cache source.gate_scope_rules)

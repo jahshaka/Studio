@@ -148,6 +148,9 @@ add_test(NAME shadercache.identity_print
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "$<$<TARGET_EXISTS:jahlab>:$<TARGET_FILE:jahlab>>" "${CMAKE_BINARY_DIR}")
 set_tests_properties(shadercache.identity_print PROPERTIES TIMEOUT 60 LABELS "shadercache")
 jah_no_display(shadercache.identity_print)
+# what it reads of the build beyond the two binaries it is handed: the two generated id headers it compares, the staged media
+# the binaries digest
+jah_builds(JahshakaEngineBuildId JahStartupPassId JahshakaEngineMedia ROWS shadercache.identity_print)
 
 # THE SHIPPED MICROCODE SEED (COLD-BOOT-1 S1; EngineConfig::shaderCacheSeedDir, <exe dir>/shadercache-seed): a build's
 # own warm microcode layer, read only when a launch's cache holds none at this build's key, never written.
