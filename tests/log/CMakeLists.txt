@@ -61,6 +61,25 @@ if(TEST log.engine)
     set_property(TEST log.engine APPEND PROPERTY FIXTURES_REQUIRED logEngineFreshHome)
 endif()
 
+# log.iris_forwarded (NOQT-CORE-1 stage 2) — IrisCore's log reaches the session log: the document's own warning (a
+# model asset bound as a map: texture2d's image probe refuses it) lands in the category `iris` at Warning
+# (iris_forwarded.js.in says the trigger and the law). One --headless launch: the NULL render system, a fresh home (no shader cache, no warm-up product).
+set(_ifHome ${CMAKE_CURRENT_BINARY_DIR}/log-iris-forwarded-home)
+jah_fresh_home_fixture(log.iris_forwarded.fresh_home logIrisForwardedHome "${_ifHome}" LABELS "log")
+file(MAKE_DIRECTORY ${_ifHome}/run)
+set(IRIS_FWD_STL ${CMAKE_SOURCE_DIR}/tests/importer/fixtures/tetra_normals.stl)
+configure_file(iris_forwarded.js.in ${CMAKE_CURRENT_BINARY_DIR}/iris_forwarded.js @ONLY)
+add_test(NAME log.iris_forwarded
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/iris_forwarded.js --headless
+         WORKING_DIRECTORY ${_ifHome}/run)
+set_tests_properties(log.iris_forwarded PROPERTIES
+    ENVIRONMENT "HOME=${_ifHome};JAHSHAKA_DATA_ROOT=${_ifHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED logIrisForwardedHome
+    LABELS "log"
+    TIMEOUT 60
+    JAHSHAKA_TEST_FRAMES 1)
+jah_no_display(log.iris_forwarded)
+
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
 # the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its

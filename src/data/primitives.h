@@ -99,12 +99,12 @@ struct Def
     /// The shipped mesh file the asset is baked FROM, and the key a document
     /// names it by: a Qt resource (":/...", compiled into the binary) or a path
     /// under the app folder ("app/...", resolved with
-    /// IrisUtils::getAbsoluteAssetPath). A saved scene stores this string in a
+    /// AppPaths::shipped). A saved scene stores this string in a
     /// mesh node's `mesh` field exactly as it always did — it is a SEED KEY
     /// now, resolved to the baked asset, never parsed at run time.
     const char *mesh = nullptr;
-    /// The tile's icon, relative to the app folder (IrisUtils::
-    /// getAbsoluteAssetPath), or nullptr when there is no tile.
+    /// The tile's icon, relative to the app folder (AppPaths::
+    /// shipped), or nullptr when there is no tile.
     const char *icon = nullptr;
     Kind kind = Kind::Primitive;
 };

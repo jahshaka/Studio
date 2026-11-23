@@ -1,0 +1,30 @@
+// log.iris_forwarded — IrisCore's LOG REACHES THE SESSION LOG (NOQT-CORE-1 stage 2): the forwarder JahLog::absorbIrisLog
+// (src/services/jahlog.cpp) installs IrisCore's sink (irisgl/core/log.h) into the category `iris`. If it breaks, every
+// failure the document and the importer report vanishes from the session log, silently, in Production.
+// THE TRIGGER, the fewest steps reachable on the NULL render system: a MODEL asset bound as a cube's base-colour map.
+// material.set takes any asset guid for a map row (src/modules/materials/api/materialsapi.cpp, the asset branch: no
+// type check), PbrMaterial::setValue loads the row (irisgl/document/materials/pbrmaterial.cpp loadTexture), and
+// Texture2D::load asks the host's image probe (src/services/imagedecode.h, installed at boot), which refuses a model
+// file: texture2d.cpp WARNS "error loading image: <path>". (Play's third-person fallback is NOT reachable here: on the
+// NULL render system the editor viewport holds no scene, so editor.play() leaves editor.playing() false.)
+// THE LAW: `iris` is a registered category (log.categories()), and log.tail in `iris` at Warning holds exactly that line,
+// at Warning (the forwarder's Warning -> Warning). THE CONTROL: the line's own text found (one record, not zero).
+var STL = "@IRIS_FWD_STL@";   // tests/importer/fixtures/tetra_normals.stl (configured)
+function assert(c, m) { if (!c) throw new Error("assert failed: " + m); console.log("ok: " + m); }
+
+var names = log.categories().map(function (c) { return c.name; });
+assert(names.indexOf("iris") >= 0, "the category `iris` is registered (" + names.join(" ") + ")");
+
+project.create("Iris Forwarded " + Date.now());
+var cube = scene.addPrimitive("cube");
+var model = assets.importFile(STL);
+assert(model && model.length > 10, "a model imports (" + model + ")");
+material.set(cube, { baseColorMap: model });   // its answer is not the law: the line in the log is
+var TEXT = "error loading image: ";
+var lines = log.tail(200, { category: "iris", minLevel: "warning" }).filter(function (l) {
+    return l.indexOf(TEXT) >= 0;
+});
+console.log("iris lines: " + JSON.stringify(lines));
+assert(lines.length === 1, "the document's warning reached the session log's `iris` category once (" + lines.length + ")");
+assert(lines[0].indexOf("iris: Warning: " + TEXT) >= 0, "...as iris: Warning: (the forwarder's level)");
+console.log("log.iris_forwarded: ALL OK");
