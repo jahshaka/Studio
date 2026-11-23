@@ -56,7 +56,7 @@ enum class Outcome
 struct Result
 {
     Outcome outcome = Outcome::NoLibrary;
-    int generationOnDisk = 0;   ///< PRAGMA user_version found (0 = none)
+    int generationOnDisk = 0;   ///< PRAGMA user_version found (0 = none, or a reset that did not finish)
     QString reason;             ///< why it was wiped / refused / failed
     int keptRows = 0;           ///< storage rows rebuilt from their sidecars
     int unreadable = 0;         ///< sidecars a rebuild could not read or place (kept in the store, not in the library)

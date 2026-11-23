@@ -1036,6 +1036,11 @@ void WorldSettingsWidget::configureDatabaseWidget()
 		QMessageBox::warning(this, "Reset your library",
 		                     why.isEmpty() ? QStringLiteral("The library could not be reset.")
 		                                   : why);
+		// A RESET THAT DID NOT FINISH ENDS THE SESSION (the verb's `sessionEnds`; its message already says the app
+		// closes and finishes it at the next start): this modal dialog closes so the verb's deferred window close
+		// lands on the main loop, as on the restart above.
+		if (result.value(QStringLiteral("sessionEnds")).toBool())
+			if (QWidget *dialog = this->window()) dialog->close();
 	});
 
 	layout->addWidget(l1, 0, 0);

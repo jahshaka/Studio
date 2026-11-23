@@ -35,6 +35,11 @@ namespace processexit {
 /// the engine's last reference drops (the window's teardown) — after it, any engine destroyed keeps its Root.
 int takeFastExit(int rc);
 
+/// THE CODE THIS SESSION MUST END WITH, whatever its own run answers (NOQT-DATABASE-1 stage 2, the third confirm's
+/// finding 2: a failed library reset ends the session with the library's code, 4, as the boot's refusal does).
+/// takeFastExit then records it in place of its `rc`.
+void requireExitCode(int rc);
+
 /// Declared first in main, so it is destroyed last: when takeFastExit ran, its destructor runs the exit handlers
 /// by name (the settings writer's drain + join, the main-thread watchdog's stop), flushes stdio and _Exits with the
 /// recorded code. Otherwise it does nothing and main returns as it always did.

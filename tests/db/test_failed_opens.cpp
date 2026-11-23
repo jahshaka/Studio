@@ -30,7 +30,10 @@ For more information see the LICENSE file
 //   5. A REFUSED CLEAR DATABASE (a current library, a kept storage, a rebuild refused for a row it could not write)
 //      seeds NOTHING after the refusal and is left NOT this build's: the kept sidecar and its object survive the
 //      reset's own forced sweep (it never ran) and an ordinary sweep after it (the empty catalog's refusal holds);
-//      beside a store with no sidecar folder at all, whose reset is whole (a retry after a crash finishes).
+//      beside a store with no sidecar folder at all, whose reset is whole (a retry after a crash finishes);
+//   6. the reset's mark (generation 0) is COMMITTED before step 2 even inside a script run's open gesture batch;
+//   7. a failed reset over a pending library answers `pending` - the session ends - with the one sentence, on every
+//      failing step.
 //
 // THE LINK, test-side only: libraryreset::reset is a RECORDER that runs the reset's REAL catalog steps
 // (libraryreset::finishCatalog, libraryresetkeep.cpp: the wipe, the real rebuild, keepAfterRebuild, the real sweep,
@@ -47,8 +50,11 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSqlDatabase>
+#include <QSqlDriver>
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 #include <sqlite3.h>
@@ -157,6 +163,24 @@ int poisonOnOpen(sqlite3 *handle, char **, const sqlite3_api_routines *)
 {
     sqlite3_exec(handle, "CREATE TEMP TRIGGER poison BEFORE INSERT ON main.assets WHEN NEW.guid = 'cd-poisoned' "
                          "BEGIN SELECT RAISE(ABORT, 'injected: this row is refused'); END", nullptr, nullptr, nullptr);
+    return SQLITE_OK;
+}
+
+/// The library's raw handle (the editor's connection is still Qt's default one until stage 3): the test's authorizer.
+sqlite3 *libraryHandle()
+{
+    return *static_cast<sqlite3 *const *>(QSqlDatabase::database().driver()->handle().constData());
+}
+
+/// THE TEST's REFUSALS on the library's own handle (case 7): 1 = every DROP TABLE (the wipe); 2 = a WRITE of
+/// `user_version` other than 0 (the stamp - the reset's own mark, 0, still lands).
+int gRefuse = 0;
+int refuseOnLibrary(void *, int action, const char *arg1, const char *arg2, const char *, const char *)
+{
+    if (gRefuse == 1 && action == SQLITE_DROP_TABLE) return SQLITE_DENY;
+    if (gRefuse == 2 && action == SQLITE_PRAGMA && arg1 && std::strcmp(arg1, "user_version") == 0 && arg2
+        && std::strcmp(arg2, "0") != 0)
+        return SQLITE_DENY;
     return SQLITE_OK;
 }
 
@@ -454,6 +478,90 @@ int main(int argc, char **argv)
                   .arg(swept.ok).arg(swept.error).arg(QFile::exists(stray)));
         bareLibrary.closeDatabase();
         removeLibrary(path5b);
+    }
+
+
+    // =======================================================================
+    // 6. THE RESET's MARK IS DURABLE BEFORE STEP 2, A SCRIPT RUN's BATCH OPEN (the third confirm's finding 1): a write
+    //    inside the editor's gesture batch, then the reset's first write - its 0 read back from a SECOND connection
+    //    before step 2 could run, and the batch's own write committed with it (the control).
+    // =======================================================================
+    {
+        const QString path = QDir(here).filePath(QStringLiteral("failed_opens_batch.db"));
+        makeLibrary(path);
+        Database library;
+        library.initializeDatabase(path);
+        library.beginBatch();
+        const bool wrote = library.createProject(QStringLiteral("p6"), QStringLiteral("p6"));
+        const bool batchLive = library.batchTransactionLive();
+        check(wrote && batchLive, QStringLiteral("6: CONTROL: a write inside the batch, the batch holding its transaction "
+                                                 "(wrote %1, live %2)").arg(wrote).arg(batchLive));
+        libraryreset::Result marked;
+        const bool ok = libraryreset::markPending(&library, marked);
+        const int seen = generationOf(path);
+        int projects = -1;
+        {
+            db::Options o;
+            o.name = "failed-opens-second";
+            db::Error e;
+            db::Connection second = db::Connection::open(path.toStdString(), o, &e);
+            db::Statement count(second, "SELECT COUNT(*) FROM projects WHERE guid = 'p6'");
+            if (count.step(&e)) projects = int(count.int64(0));
+        }
+        check(ok && marked.pending && seen == 0,
+              QStringLiteral("6: the reset's mark is COMMITTED before step 2, a batch open (marked %1, pending %2, "
+                             "generation read by a second connection %3, want 0)").arg(ok).arg(marked.pending).arg(seen));
+        check(projects == 1, QStringLiteral("6: CONTROL: the batch's own write was committed first (%1)").arg(projects));
+        library.endBatch();
+        library.closeDatabase();
+        removeLibrary(path);
+    }
+
+    // =======================================================================
+    // 7. A FAILED RESET OVER A PENDING LIBRARY ENDS THE SESSION, SAID ONE WAY (the third confirm's finding 2): on EVERY
+    //    failing step - an earlier step's error (a project folder not removed), the wipe refused, the rebuild refused,
+    //    the bootstrap's seed, the stamp refused - the reset answers `pending` (app.resetLibrary ends the session on
+    //    it) and its error ends with the one sentence; a whole reset is not pending (the control).
+    // =======================================================================
+    {
+        const QString root = QDir(here).filePath(QStringLiteral("failed_opens_store7"));
+        const auto attempt = [&](const QString &name, const QString &earlier, int refuse, bool poison, bool seedError) {
+            freshStore(root, /*withSidecars*/ true);
+            keptAsset(root, QStringLiteral("cd-kept7"), QStringLiteral("ff70000000000000000000000000000000000000"));
+            if (poison) keptAsset(root, QStringLiteral("cd-poisoned"), QStringLiteral("ff71000000000000000000000000000000000000"));
+            const QString path = QDir(here).filePath(QStringLiteral("failed_opens_end.db"));
+            makeLibrary(path);
+            Database library;
+            library.initializeDatabase(path);
+            libraryreset::Keep keep;
+            keep.assets = true;
+            keep.materials = true;
+            libraryreset::Result result;
+            result.error = earlier;
+            gRefuse = refuse;
+            gBootstrapError = seedError;
+            sqlite3_set_authorizer(libraryHandle(), refuseOnLibrary, nullptr);
+            if (poison) sqlite3_auto_extension(reinterpret_cast<void (*)()>(poisonOnOpen));
+            catalogSteps(&library, root, keep, result);
+            if (poison) sqlite3_cancel_auto_extension(reinterpret_cast<void (*)()>(poisonOnOpen));
+            sqlite3_set_authorizer(libraryHandle(), nullptr, nullptr);
+            gRefuse = 0;
+            gBootstrapError = false;
+            library.closeDatabase();
+            removeLibrary(path);
+            check(name.isEmpty() ? (result.ok && !result.pending)
+                                 : (!result.ok && result.pending && result.error.endsWith(libraryreset::unfinishedText())),
+                  QStringLiteral("7: %1: ok %2, pending (the session ends) %3, '%4'")
+                      .arg(name.isEmpty() ? QStringLiteral("CONTROL: a whole reset") : name)
+                      .arg(result.ok).arg(result.pending).arg(result.error));
+        };
+        attempt(QStringLiteral("a step before the catalog failed"), QStringLiteral("a project folder could not be removed"),
+                0, false, false);
+        attempt(QStringLiteral("the wipe refused"), QString(), 1, false, false);
+        attempt(QStringLiteral("the rebuild refused"), QString(), 0, true, false);
+        attempt(QStringLiteral("the bootstrap's seed failed"), QString(), 0, false, true);
+        attempt(QStringLiteral("the stamp refused"), QString(), 2, false, false);
+        attempt(QString(), QString(), 0, false, false);
     }
 
     std::printf(failures ? "\n%d FAILURES\n" : "\nall failed-open assertions passed\n", failures);

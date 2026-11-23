@@ -23,14 +23,20 @@ namespace processexit {
 namespace {
 bool gTaken = false;
 int gCode = 0;
+int gRequired = -1;   // requireExitCode's, when a session must end with it
 }   // namespace
+
+void requireExitCode(int rc)
+{
+    gRequired = rc;
+}
 
 int takeFastExit(int rc)
 {
     jahshaka::engine::markProcessExit();
     gTaken = true;
-    gCode = rc;
-    return rc;
+    gCode = gRequired >= 0 ? gRequired : rc;
+    return gCode;
 }
 
 End::~End()

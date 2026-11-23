@@ -88,7 +88,9 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
         sLast = result;
         return result;
     }
-    result.reason = columnsMatch
+    result.reason = result.generationOnDisk == 0
+        ? QStringLiteral("a library reset that did not finish (generation 0)")
+        : columnsMatch
         ? QStringLiteral("library generation %1, this build reads %2")
               .arg(result.generationOnDisk).arg(generation())
         : QStringLiteral("the library's tables are not this build's");
@@ -157,13 +159,27 @@ bool wipedAtStartup() { return sLast.outcome == Outcome::Wiped; }
 QString refusalText(const Result &result)
 {
     if (result.outcome == Outcome::Failed)
-        return QStringLiteral("Your library from the previous build could not be reset, so "
-                              "Jahshaka cannot start on it:\n%1").arg(result.reason);
+        return (result.generationOnDisk == 0
+                    ? QStringLiteral("A library reset that did not finish could not be completed, so Jahshaka cannot "
+                                     "start on it:\n%1")
+                    : QStringLiteral("Your library from the previous build could not be reset, so "
+                                     "Jahshaka cannot start on it:\n%1")).arg(result.reason);
     return QStringLiteral("Jahshaka cannot open this library:\n%1").arg(result.reason);
 }
 
 QString noticeText(const Result &result)
 {
+    // A RESET THAT DID NOT FINISH, FINISHED HERE (the third confirm's finding 2): generation 0 is the reset's own mark
+    // (libraryreset::markPending) - the same build's library, not a previous build's.
+    if (result.generationOnDisk == 0) {
+        QString text = QStringLiteral("A library reset that did not finish was completed: the projects in the library "
+                                      "were removed, and your Assets, Materials and Avatars that were still in the store "
+                                      "were kept (%1 items rebuilt).").arg(result.keptRows);
+        if (result.unreadable > 0)
+            text += QStringLiteral(" %1 stored item(s) could not be read; they were left in the store, not in your "
+                                   "library, and the session log names each file.").arg(result.unreadable);
+        return text;
+    }
     // ONE LINE FOR WHAT HAPPENED TO THE USER'S STORAGES (the lead, 2026-10-05):
     // what was cleared, and that a later update keeps them.
     QString storages = QStringLiteral("Your Assets, Materials and Avatars were kept (%1 items "

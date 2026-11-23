@@ -120,6 +120,11 @@ struct Result
 {
     bool ok = false;
     QString error;        ///< empty when ok
+    /// THE LIBRARY IS NOT THIS BUILD's UNTIL THIS RESET IS WHOLE (the third confirm's finding 2): set by the reset's
+    /// first write (markPending), cleared by its stamp. A reset that fails with it set leaves a library the next
+    /// start finishes - so THE SESSION ENDS (app.resetLibrary): no work is ever made on a pending library, and
+    /// `error` ends with unfinishedText().
+    bool pending = false;
     Removed removed;
     Kept kept;
 };
@@ -143,9 +148,19 @@ void keepAfterRebuild(Database *db, const QString &storeRoot, const AssetMigrati
                       const AssetMigration::RebuildOptions &options, Result &result);
 
 /// THE RESET's FIRST WRITE (libraryresetkeep.cpp; the second confirm's finding 1): the library's generation set to 0,
-/// so a reset cut short anywhere after it is read as not this build's at the next boot and finished there. False,
-/// with `result.error`, when it could not be written - the reset then removes nothing.
+/// so a reset cut short anywhere after it is read as not this build's at the next boot and finished there. DURABLE
+/// BEFORE STEP 2 (the third confirm's finding 1): a script run's gesture batch is committed first (refused by name
+/// when it cannot be), then the 0 is written in a unit of its own and committed. False, with `result.error`, when it
+/// could not be - the reset then removes nothing. Sets `result.pending`.
 bool markPending(Database *db, Result &result);
+
+/// The exit code of a session a failed reset ends (app.resetLibrary): the library's code, the one the boot's refusal
+/// returns (app/main.cpp, "library refused, exit code 4").
+constexpr int kExitCode = 4;
+
+/// THE ONE SENTENCE every failed reset ends with once its library is pending (finishCatalog appends it): what the
+/// user sees, the verb answers and a driven run prints.
+QString unfinishedText();
 
 /// THE RESET's CATALOG STEPS, after its file steps (libraryresetkeep.cpp, so db.failed_opens runs them in their real
 /// order): 4. the tables dropped and created again, unstamped; 4b. the kept storages rebuilt unstamped from their

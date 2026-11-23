@@ -30,12 +30,29 @@ QSet<assethome::Kind> Keep::homes() const
     return out;
 }
 
+QString unfinishedText()
+{
+    return QStringLiteral("the reset did not finish: Jahshaka will close and finish it at the next start");
+}
+
 bool markPending(Database *db, Result &result)
 {
-    if (db->clearGeneration()) return true;
-    result.error = QStringLiteral("the library could not be marked for its reset (the log says why) - nothing was "
-                                  "removed");
-    return false;
+    // DURABLE BEFORE ANYTHING IS REMOVED (the third confirm's finding 1): a script run's gesture batch is an open
+    // transaction on this connection - a 0 written inside it would sit uncommitted while steps 2-3 delete, and roll
+    // back with a failed batch. So the batch commits first (its answer read), and the 0 is its own committed unit.
+    if (!db->commitBatchNow()) {
+        result.error = QStringLiteral("the session's own library writes could not be committed (the log says why) - "
+                                      "the reset did not start, nothing was removed");
+        return false;
+    }
+    DbTransaction unit(db->connection());
+    if (!db->clearGeneration() || !unit.commit()) {
+        result.error = QStringLiteral("the library could not be marked for its reset (the log says why) - the reset "
+                                      "did not start, nothing was removed");
+        return false;
+    }
+    result.pending = true;
+    return true;
 }
 
 void finishCatalog(Database *db, SettingsManager *settings, const QString &storeRoot, const Keep &keep,
@@ -47,39 +64,42 @@ void finishCatalog(Database *db, SettingsManager *settings, const QString &store
     if (!db->wipeDatabase() || !db->createAllTables(/*stampGeneration*/ false)) {
         if (result.error.isEmpty())
             result.error = QStringLiteral("the library's tables could not be dropped and created again (the log says "
-                                          "why) - the next start resets it again");
-        result.ok = false;
-        return;
+                                          "why)");
+    } else {
+        // ---- 4b. THE KEPT STORAGES, REBUILT FROM THEIR SIDECARS, UNSTAMPED ----------
+        // Never from the old tables (forward-only): the content-addressed objects and their sidecars ARE the storage.
+        // Then the collector takes what no kept row names, ONLY after a whole rebuild (keepAfterRebuild). A store with
+        // NO sidecar folder holds no record to rebuild: nothing kept is no failure (a Clear Database that kept nothing
+        // and was cut short is finished by the next boot, which keeps both storages).
+        // ON THE CALLING (UI) THREAD, deliberately: the button's reset is followed by a restart and the bump's runs
+        // before any window exists, so nothing is waiting on a frame while it works.
+        if (keep.any() && !storeRoot.isEmpty() && QDir(QDir(storeRoot).filePath(QStringLiteral("sidecar"))).exists()) {
+            // The rebuild writes through its OWN connection: the main one must hold no transaction (a script run's
+            // gesture batch would hold the write lock) - the batch commits and stands down.
+            db->commitBatchNow();
+            AssetMigration::RebuildOptions options;
+            options.homes = keep.homes();
+            options.dropDerived = keep.dropDerived;
+            options.stampGeneration = false;
+            keepAfterRebuild(db, storeRoot, AssetMigration::rebuildCatalog(db->filePath(), storeRoot, options), options,
+                             result);
+        }
+
+        // ---- 5. A REFUSED RESET SEEDS NOTHING (the second confirm's finding 1) ----------
+        // After any failure the store stays exactly as the failure left it: primitives seeded into a catalog a
+        // refused rebuild left empty would make the store's sweep take every kept sidecar as garbage.
+        if (result.error.isEmpty()) bootstrap(db, settings, storeRoot, seedPresets, result);
+
+        // ---- 6. ONLY A WHOLE RESET IS STAMPED THIS BUILD's ----------
+        if (result.error.isEmpty()) {
+            if (db->stampGeneration()) result.pending = false;
+            else result.error = QStringLiteral("the library was reset, but its generation could not be stamped (the log "
+                                               "says why)");
+        }
     }
-
-    // ---- 4b. THE KEPT STORAGES, REBUILT FROM THEIR SIDECARS, UNSTAMPED ----------
-    // Never from the old tables (forward-only): the content-addressed objects and their sidecars ARE the storage.
-    // Then the collector takes what no kept row names, ONLY after a whole rebuild (keepAfterRebuild). A store with NO
-    // sidecar folder holds no record to rebuild: nothing kept is no failure (a Clear Database that kept nothing and
-    // was cut short is finished by the next boot, which keeps both storages).
-    // ON THE CALLING (UI) THREAD, deliberately: the button's reset is followed by a restart and the bump's runs
-    // before any window exists, so nothing is waiting on a frame while it works.
-    if (keep.any() && !storeRoot.isEmpty() && QDir(QDir(storeRoot).filePath(QStringLiteral("sidecar"))).exists()) {
-        // The rebuild writes through its OWN connection: the main one must hold no transaction (a script run's
-        // gesture batch would hold the write lock) - the batch commits and stands down.
-        db->commitBatchNow();
-        AssetMigration::RebuildOptions options;
-        options.homes = keep.homes();
-        options.dropDerived = keep.dropDerived;
-        options.stampGeneration = false;
-        keepAfterRebuild(db, storeRoot, AssetMigration::rebuildCatalog(db->filePath(), storeRoot, options), options,
-                         result);
-    }
-
-    // ---- 5. A REFUSED RESET SEEDS NOTHING (the second confirm's finding 1) ----------
-    // After any failure the store stays exactly as the failure left it: primitives seeded into a catalog a refused
-    // rebuild left empty would make the store's sweep take every kept sidecar as garbage.
-    if (result.error.isEmpty()) bootstrap(db, settings, storeRoot, seedPresets, result);
-
-    // ---- 6. ONLY A WHOLE RESET IS STAMPED THIS BUILD's ----------
-    if (result.error.isEmpty() && !db->stampGeneration())
-        result.error = QStringLiteral("the library was reset, but its generation could not be stamped (the log says "
-                                      "why) - the next start resets it again");
+    // A FAILED RESET OVER A PENDING LIBRARY SAYS SO, in one sentence from one place (the third confirm's finding 2).
+    if (!result.error.isEmpty() && result.pending)
+        result.error = QStringLiteral("%1 - %2").arg(result.error, unfinishedText());
     result.ok = result.error.isEmpty();
 }
 

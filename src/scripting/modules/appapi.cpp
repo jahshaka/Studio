@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <thread>
 
 #include "services/livecompiles.h"
@@ -63,6 +64,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "app/firstrun.h"
 #include "services/libraryreset.h"
+#include "services/processexit.h"
 #include "services/librarygeneration.h"
 #include "data/constants.h"
 #include "services/ogresamples.h"
@@ -1507,9 +1509,28 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     out.insert(QStringLiteral("removed"), result.removed.toMap());
     out.insert(QStringLiteral("kept"), result.kept.toMap());
     out.insert(QStringLiteral("restarted"), false);
+    out.insert(QStringLiteral("sessionEnds"), !result.ok && result.pending);
+
+    // THE SESSION ENDS - the window closes, deferred through the host's afterRun hook (app.quit's reason): a plain
+    // queued close is delivered BETWEEN TWO VERBS now that a script runs off the UI thread. The one way out for a
+    // restart below and for a failed reset here.
+    const auto endSession = [this]() {
+        auto close = [w = host.shell->window()]() { w->close(); };
+        if (host.afterRun) host.afterRun(close);
+        else QMetaObject::invokeMethod(host.shell->window(), close, Qt::QueuedConnection);
+    };
     if (!result.ok) {
         // A PARTIAL RESET IS STILL REPORTED: the catalog may already be empty,
         // and a caller that got nothing back could not tell what happened.
+        // AND A RESET THAT FAILED OVER A PENDING LIBRARY ENDS THE SESSION (NOQT-DATABASE-1 stage 2, the third
+        // confirm's finding 2): the next start finishes the reset and removes every project, so no work may be made
+        // here meanwhile. Its error already ends with libraryreset::unfinishedText(); a driven run reads it on stderr
+        // and in this answer, and the process ends with the library's code (the boot's refusal's).
+        if (result.pending) {
+            std::fprintf(stderr, "Jahshaka: the library reset failed: %s\n", qUtf8Printable(result.error));
+            processexit::requireExitCode(libraryreset::kExitCode);
+            if (host.shell) endSession();
+        }
         refuse(QStringLiteral("app.resetLibrary: %1").arg(result.error));
         return out;
     }
@@ -1541,13 +1562,7 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
                "again — close and reopen Jahshaka");
         return out;
     }
-    // Deferred through the host's afterRun hook for the same reason app.quit()
-    // is: a plain queued close is delivered BETWEEN TWO VERBS now that a script
-    // runs off the UI thread, which would close the window underneath the run
-    // that asked for it.
-    auto close = [w = host.shell->window()]() { w->close(); };
-    if (host.afterRun) host.afterRun(close);
-    else QMetaObject::invokeMethod(host.shell->window(), close, Qt::QueuedConnection);
+    endSession();
     return out;
 }
 
