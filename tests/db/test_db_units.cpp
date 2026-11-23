@@ -26,7 +26,9 @@ For more information see the LICENSE file
 //   8. an import's archive that cannot be opened read-only is refused by name before any read, and never created;
 //   9. ...nor a step inside the NEXT unit at the same depth (the unit's serial, not its depth: the audit's W1);
 //  10. an import whose insert failed answers false and leaves nothing (its unit rolls back: the audit's W3);
-//  11. "is it pinned here" that could not be read (a failed probe, a closed library) is no answer: readOk cleared.
+//  11. "is it pinned here" that could not be read (a failed probe, a closed library) is no answer: readOk cleared;
+//  12. an import's archive whose PROJECT ROW cannot be read is refused by name - never an empty, unnamed world;
+//  13. "does it have dependencies" that could not be read is no answer: readOk cleared.
 
 #include <QApplication>
 #include <QFile>
@@ -421,6 +423,59 @@ int main(int argc, char **argv)
         const bool probed = database.isAssetPinnedBy(QStringLiteral("p11"), QStringLiteral("a11"), &read);
         sqlite3_set_authorizer(raw, nullptr, nullptr);
         check(!probed && !read, QStringLiteral("11: a FAILED probe answers no read (pinned %1, read %2)").arg(probed).arg(read));
+    }
+
+    // 12. AN ARCHIVE WHOSE PROJECT ROW CANNOT BE READ IS REFUSED BY NAME (the confirm's F5) - never an empty, unnamed
+    //     world: its `projects` is a view raising "integer overflow" on its row; every other table reads (empty).
+    {
+        const QString archive = QStringLiteral("db_units_f5_archive");
+        QFile::remove(archive + QStringLiteral(".db"));
+        {
+            db::Options o;
+            o.name = "f5-archive";
+            db::Error e;
+            db::Connection a = db::Connection::open((archive + QStringLiteral(".db")).toStdString(), o, &e);
+            a.exec("CREATE VIEW projects AS SELECT 'F5' AS name, NULL AS scene, NULL AS thumbnail, '0.9' AS version, "
+                   "abs(-9223372036854775807 - 1) AS guid;"
+                   "CREATE TABLE assets (guid TEXT, type INTEGER, name TEXT, collection INTEGER, times_used INTEGER, "
+                   "project_guid TEXT, date_created TEXT, last_updated TEXT, author TEXT, license TEXT, hash TEXT, "
+                   "version TEXT, parent TEXT, tags BLOB, properties BLOB, asset BLOB, thumbnail BLOB);"
+                   "CREATE TABLE dependencies (depender_type INTEGER, dependee_type INTEGER, project_guid TEXT, "
+                   "depender TEXT, dependee TEXT, id TEXT);"
+                   "CREATE TABLE folders (guid TEXT, name TEXT, parent TEXT, count INTEGER, project_guid TEXT, "
+                   "date_created TEXT, last_updated TEXT, visible INTEGER)",
+                   &e);
+            check(!e, QStringLiteral("12: the archive is written %1").arg(QString::fromStdString(e.message)));
+        }
+        QString world, why;
+        QMap<QString, QString> guids;
+        const bool imported = database.importProject(archive, QStringLiteral("f5-import"), world, guids, nullptr, &why);
+        check(!imported && why.contains(QStringLiteral("could not be read")),
+              QStringLiteral("12: an archive whose project row could not be read is REFUSED by name (answer %1, world '%2', "
+                             "why '%3')").arg(imported).arg(world, why));
+        QFile::remove(archive + QStringLiteral(".db"));
+    }
+
+    // 13. "DOES IT HAVE DEPENDENCIES" THAT COULD NOT BE READ IS NO ANSWER (the confirm's F3: the panel's legacy delete
+    //     picks the branch that deletes the whole closure on "no"): the dependencies read denied by an authorizer.
+    {
+        db::Error e;
+        database.connection().exec("INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
+                                   "VALUES (1, 2, NULL, 'f3-depender', 'f3-dependee', 'f3-edge')", &e);
+        check(database.hasDependencies(QStringLiteral("f3-depender")),
+              QStringLiteral("13: CONTROL: an asset with an edge has dependencies"));
+        sqlite3 *raw = *static_cast<sqlite3 *const *>(QSqlDatabase::database().driver()->handle().constData());
+        sqlite3_set_authorizer(raw, [](void *, int action, const char *table, const char *, const char *, const char *) {
+            return action == SQLITE_READ && table && std::strcmp(table, "dependencies") == 0 ? SQLITE_DENY : SQLITE_OK;
+        }, nullptr);
+        bool read = true;
+        const bool unread = database.hasDependencies(QStringLiteral("f3-depender"), &read);
+        sqlite3_set_authorizer(raw, nullptr, nullptr);
+        check(!read, QStringLiteral("13: a FAILED read is no answer, never 'no dependencies' (answer %1, read %2)")
+                         .arg(unread).arg(read));
+        read = true;
+        database.hasDependencies(QStringLiteral("f3-depender"), &read);
+        check(read, QStringLiteral("13: CONTROL: a read that ran keeps readOk"));
     }
 
     database.closeDatabase();

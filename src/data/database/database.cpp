@@ -4088,7 +4088,7 @@ QStringList Database::hasMultipleDependers(const QString &guid, bool *readOk)
     return dependers;
 }
 
-bool Database::hasDependencies(const QString &guid)
+bool Database::hasDependencies(const QString &guid, bool *readOk)
 {
     // ONE EXEC, not two. This ran the COUNT twice — executeAndCheckQuery execs
     // it, and then `if (query.exec())` execed the very same prepared statement
@@ -4097,8 +4097,11 @@ bool Database::hasDependencies(const QString &guid)
     // asset panels call per item while populating a drawer.
     DbQuery query(connection(), "SELECT COUNT(*) FROM dependencies WHERE depender = ?");
     dbqt::bindText(query, 1, guid);
-    if (!executeAndCheckQuery(query, "HasDependencies")) return false;
-    if (!query.next()) return false;
+    // A COUNT ALWAYS ANSWERS A ROW: no row is a FAILED read, never "no dependencies" (the confirm's F3).
+    if (!executeAndCheckQuery(query, "HasDependencies") || !query.next()) {
+        if (readOk) *readOk = false;
+        return false;
+    }
     return (query.int64(0) != 0);
 }
 
@@ -4144,9 +4147,13 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
             sceneVersion = dbqt::text(query, 3);
             oldSceneGuid = dbqt::text(query, 4);
         } else if (error) {
+            // A PROJECT ROW THAT COULD NOT BE READ IS NO EMPTY, UNNAMED WORLD (the confirm's F5): refused by name,
+            // as every other archive read of this function, before the first write.
             JahLog::write(JahLog::legacy, JahLog::Level::Warning,
                 "There was an error fetching a record to be imported " + dbqt::describe(error)
             );
+            if (whyOut) *whyOut = QStringLiteral("the archive's project row could not be read (%1)").arg(dbqt::describe(error));
+            return false;
         }
     }
     worldName = sceneName;

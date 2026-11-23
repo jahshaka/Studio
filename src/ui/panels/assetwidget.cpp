@@ -1520,10 +1520,13 @@ void AssetWidget::deleteItem()
             return;
         }
 
+        // ...and "does it have dependencies" picks the dialog whose Delete Selected takes the WHOLE closure: a read
+        // that failed is no "no" (the confirm's F3) - the click is refused, as above.
+        const bool assetHasDependencies = db->hasDependencies(item->data(MODEL_GUID_ROLE).toString(), &read);
+        if (!read) { refusedOnRead(); return; }
+
 		QListWidget *assetsToRemove = new QListWidget;
 
-        bool assetHasDependencies = db->hasDependencies(item->data(MODEL_GUID_ROLE).toString());
-		
         if (assetHasDependencies) {
             QStringListIterator it(dependentAssets);
             int iter = 0;

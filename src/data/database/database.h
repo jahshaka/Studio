@@ -861,7 +861,8 @@ public:
     /// `readOk` (optional) is CLEARED when its users could not be read: an empty answer is then no answer
     /// (a delete that depends on it is refused - never "nobody uses it").
     QStringList hasMultipleDependers(const QString &guid, bool *readOk = nullptr);
-    bool hasDependencies(const QString &guid);
+    /// `readOk` (optional) is CLEARED when the count could not be read: false is then no answer.
+    bool hasDependencies(const QString &guid, bool *readOk = nullptr);
 
     // IMPORT ===============================================================================
     /// The PROJECT archive (.jaf) is the last .jaf reader/writer; JAF-READER-1 replaces it with manifest v2 + the envelope.
