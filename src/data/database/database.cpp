@@ -729,7 +729,7 @@ bool Database::initializeDatabase(const QString &pathToBlob)
             return false;
         }
         // At the open, before the pragmas: the boot's statements are counted too.
-        if (db.isOpen() && traceStatements && !databasereads::installStatementTrace(db))
+        if (db.isOpen() && traceStatements && !databasereads::installStatementTrace(*mConnection))
             JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("JAH_DB_STATEMENT_TRACE=1, but the statement trace could not be registered "
                                                                              "(app.databaseReads says why)"));
         if (db.isOpen() && applyDurabilityPragmas(db)) startCheckpointer(this, pathToBlob);

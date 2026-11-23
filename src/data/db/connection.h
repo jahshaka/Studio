@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "data/db/error.h"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -89,6 +90,12 @@ public:
     int guards() const;
     /// The outermost Transaction's BEGIN failed and its scope still stands: writes are refused.
     bool refusesWrites() const;
+    /// THE STATEMENT TRACE (stage 2; the library.statements counts): `onStatement` is called with the text of
+    /// EVERY statement run on this connection, once per execution, at its first step (SQLite's
+    /// SQLITE_TRACE_STMT; a trigger's sub-statements arrive as their `--` comment text). The trace is the
+    /// handle's: every borrower of one handle shares it. An empty function removes it; so does the end of
+    /// the connection (the last borrower's, for a borrowed handle).
+    void trace(std::function<void(std::string_view sql)> onStatement);
 
     struct State;   // the layer's own (connection.cpp, statement.cpp, transaction.cpp)
     State *state() const { return mState.get(); }

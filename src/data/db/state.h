@@ -19,6 +19,7 @@ For more information see the LICENSE file
 
 #include <sqlite3.h>
 
+#include <functional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -36,6 +37,14 @@ struct Connection::State
     bool holding = false;           ///< this connection's outermost Transaction holds the write lock
     bool firstWriteNamed = false;   ///< the held transaction's first write is in the holder line
     bool refusing = false;          ///< the outermost Transaction's BEGIN failed: query_only until it ends
+    std::function<void(std::string_view)> trace;   ///< Connection::trace's callback; SQLite holds `this`
+
+    /// A borrowed handle outlives its last borrower: its trace, which points here, is removed first.
+    /// (An owned handle is closed, and `handle` cleared, by the Connection before this runs.)
+    ~State()
+    {
+        if (handle && trace) sqlite3_trace_v2(handle, 0, nullptr, nullptr);
+    }
 };
 
 namespace detail {

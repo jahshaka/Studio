@@ -118,12 +118,24 @@ bool checkVersion(int minimum, Error *e)
     return false;
 }
 
+/// An owned handle is closed and forgotten (its State must not touch it again); a borrowed one is its owner's.
+static void closeOwned(Connection::State *s)
+{
+    if (!s || !s->owned || !s->handle) return;
+    sqlite3_close_v2(s->handle);
+    s->handle = nullptr;
+}
+
+static int traceStatement(unsigned type, void *context, void *, void *sql)
+{
+    const auto *s = static_cast<const Connection::State *>(context);
+    if (type == SQLITE_TRACE_STMT && s->trace) s->trace(sql ? std::string_view(static_cast<const char *>(sql)) : std::string_view());
+    return 0;
+}
+
 Connection::Connection() : mState(std::make_shared<State>()) {}
 
-Connection::~Connection()
-{
-    if (mState && mState->owned && mState->handle) sqlite3_close_v2(mState->handle);
-}
+Connection::~Connection() { closeOwned(mState.get()); }
 
 Connection::Connection(Connection &&other) noexcept : mState(std::move(other.mState))
 {
@@ -133,7 +145,7 @@ Connection::Connection(Connection &&other) noexcept : mState(std::move(other.mSt
 Connection &Connection::operator=(Connection &&other) noexcept
 {
     if (this == &other) return *this;
-    if (mState && mState->owned && mState->handle) sqlite3_close_v2(mState->handle);
+    closeOwned(mState.get());
     mState = std::move(other.mState);
     other.mState = std::make_shared<State>();
     return *this;
@@ -244,5 +256,14 @@ int Connection::changes() const { return isOpen() ? sqlite3_changes(mState->hand
 int Connection::guards() const { return mState ? mState->depth : 0; }
 
 bool Connection::refusesWrites() const { return mState && mState->refusing; }
+
+void Connection::trace(std::function<void(std::string_view sql)> onStatement)
+{
+    detail::assertOwner(mState.get());
+    if (!isOpen()) return;
+    mState->trace = std::move(onStatement);
+    if (mState->trace) sqlite3_trace_v2(mState->handle, SQLITE_TRACE_STMT, traceStatement, mState.get());
+    else sqlite3_trace_v2(mState->handle, 0, nullptr, nullptr);
+}
 
 }   // namespace db

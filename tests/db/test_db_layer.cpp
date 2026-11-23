@@ -22,7 +22,9 @@ For more information see the LICENSE file
 //   7. A CRASH MID-TRANSACTION: a child begins, writes and _exits; the file is whole and the write absent,
 //      beside a committed child's write that is present;
 //   8. the version floor (ruling 8): a minimum above the library's is refused by name, THROUGH open() and THROUGH
-//      borrow(); borrow() works on a handle someone else opened and refuses none.
+//      borrow(); borrow() works on a handle someone else opened and refuses none;
+//   9. the statement trace (stage 2): every statement on its connection, once per execution, none on another;
+//      shared by a handle's borrowers; removed by an empty function and by the last borrower's end.
 
 #include "data/database/dbqt.h"
 #include "data/db/connection.h"
@@ -37,6 +39,8 @@ For more information see the LICENSE file
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace {
 
@@ -319,6 +323,50 @@ int main()
         const bool ran = s.step(&e);
         check(!ran && contains(e.message, "no handle"), "a statement on no handle answers a named error: " + e.message);
         check(sqlite3_close(raw) == SQLITE_OK, "the borrowed handle is still its owner's to close");
+    }
+
+    // 9. THE STATEMENT TRACE (stage 2): it sees every statement run on the connection it is installed on, once per
+    //    execution, and none run on another connection; a borrower of the same handle shares it; removed, it sees
+    //    nothing more; the last borrower's end removes it from a handle that lives on.
+    {
+        db::Connection a = openNamed("A");
+        db::Connection b = openNamed("B");
+        std::vector<std::string> seen;
+        a.trace([&seen](std::string_view sql) { seen.emplace_back(sql); });
+        db::Error e;
+        countOf(a, "kept");
+        insert(a, "traced", &e);
+        countOf(b, "kept");   // another connection: never seen
+        insert(b, "untraced", &e);
+        check(seen.size() == 2, "CONTROL: the trace saw ABOVE zero statements: " + std::to_string(seen.size())
+                                    + " (2 run on A; 2 on B not seen)");
+        check(seen.size() == 2 && contains(seen[0], "SELECT count(*)") && contains(seen[1], "INSERT INTO t"),
+              "the trace names each statement A ran, in order" + (seen.empty() ? std::string() : ": " + seen[0]));
+        {
+            db::Statement twice(a, "SELECT count(*) FROM t WHERE v = ?");
+            twice.bindText(1, "kept");
+            twice.step(&e);
+            twice.reset();
+            twice.step(&e);
+        }
+        check(seen.size() == 4, "a statement run twice is seen twice (once per execution): " + std::to_string(seen.size()));
+        a.trace({});
+        countOf(a, "kept");
+        check(seen.size() == 4, "a removed trace sees nothing more: " + std::to_string(seen.size()));
+
+        sqlite3 *raw = nullptr;
+        sqlite3_open(kFile, &raw);
+        std::size_t lent = 0;
+        {
+            db::Connection first = db::Connection::borrow(raw, "first", &e);
+            db::Connection second = db::Connection::borrow(raw, "second", &e);
+            first.trace([&lent](std::string_view) { ++lent; });
+            countOf(second, "kept");
+            check(lent == 1, "a trace installed through one borrower sees the other's statement: " + std::to_string(lent));
+        }
+        sqlite3_exec(raw, "SELECT 1", nullptr, nullptr, nullptr);   // the State is gone: its trace must be too
+        check(lent == 1, "the last borrower's end removes its trace from the live handle: " + std::to_string(lent));
+        sqlite3_close(raw);
     }
 
     removeFile();

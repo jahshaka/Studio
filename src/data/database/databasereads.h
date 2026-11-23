@@ -30,9 +30,9 @@ For more information see the LICENSE file
 //
 // THE STATEMENT TRACE (LARGE-LIBRARY-1). The query log (Database::setQueryLog) sees only the statements
 // that pass `executeAndCheckQuery`; raw SQL — `checkIfTableExists`, a service's own QSqlQuery — and the
-// boot are invisible to it. SQLite's statement trace (sqlite3_trace_v2, SQLITE_TRACE_STMT) fires once per
+// boot are invisible to it. The layer's statement trace (db::Connection::trace) fires once per
 // statement EXECUTION on its connection, whoever runs it: `installStatementTrace` registers it on a
-// connection's handle, and `read` reports the count of every statement the traced connections ran
+// connection, and `read` reports the count of every statement the traced connections ran
 // (`statements`; a trigger's sub-statements — text starting `--` — are not counted, and `read`'s own
 // `PRAGMA page_size` is not either). Database::initializeDatabase calls it ONLY when the process was
 // started with JAH_DB_STATEMENT_TRACE=1 (read once): unset, no callback is registered and nothing is
@@ -43,8 +43,8 @@ For more information see the LICENSE file
 #include <QVariant>
 #include <QtGlobal>
 
-class QSqlDatabase;
 struct sqlite3;
+namespace db { class Connection; }
 
 namespace databasereads {
 
@@ -59,9 +59,9 @@ struct Stats {
 
 Stats read();
 
-/// Registers the statement trace on `connection`'s handle; false (nothing registered) where `read`
-/// would answer unavailable.
-bool installStatementTrace(const QSqlDatabase &connection);
+/// Registers the statement trace on `connection` (the Database's own); false (nothing registered) when it is
+/// not open.
+bool installStatementTrace(db::Connection &connection);
 
 /// An open connection's driver handle (its driver()->handle(); invalid when not open) as the sqlite3*
 /// it is when it belongs to the system SQLite this build links (the plugin's own DT_NEEDED, read

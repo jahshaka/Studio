@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "data/database/databasereads.h"
+#include "data/db/connection.h"
 
 #include <QSqlDatabase>
 #include <QSqlDriver>
@@ -18,6 +19,7 @@ For more information see the LICENSE file
 
 #include <atomic>
 #include <cstring>
+#include <string_view>
 
 #if defined(JAH_HAVE_SQLITE3)
 #include <sqlite3.h>
@@ -54,20 +56,16 @@ int scanObject(struct dl_phdr_info *info, size_t, void *data)
 }
 #endif
 
-#if defined(JAH_HAVE_SQLITE3) && defined(__linux__)
 std::atomic<qint64> gStatements{0};
-std::atomic<sqlite3 *> gTracedHandle{nullptr};
+std::atomic<bool> gTraced{false};
 bool gOwnStatement = false;   // `read`'s own PRAGMA, on the UI thread that runs it
 
-int onStatement(unsigned type, void *, void *, void *sql)
+void onStatement(std::string_view sql)
 {
-    if (type != SQLITE_TRACE_STMT || gOwnStatement) return 0;
-    const char *text = static_cast<const char *>(sql);
-    if (text && text[0] == '-' && text[1] == '-') return 0;   // a trigger's sub-statement
+    if (gOwnStatement) return;
+    if (sql.size() >= 2 && sql[0] == '-' && sql[1] == '-') return;   // a trigger's sub-statement
     gStatements.fetch_add(1, std::memory_order_relaxed);
-    return 0;
 }
-#endif
 
 }   // namespace
 
@@ -116,7 +114,7 @@ Stats read()
     }
     out.available = true;
     out.pages = cur;
-    out.traced = gTracedHandle.load() == db;
+    out.traced = gTraced.load();
     out.statements = gStatements.load();
     gOwnStatement = true;
     QSqlQuery q(main);
@@ -126,18 +124,12 @@ Stats read()
 #endif
 }
 
-bool installStatementTrace(const QSqlDatabase &connection)
+bool installStatementTrace(db::Connection &connection)
 {
-#if defined(JAH_HAVE_SQLITE3) && defined(__linux__)
-    QString why;
-    sqlite3 *db = systemHandle(connection.isOpen() && connection.driver() ? connection.driver()->handle() : QVariant(), &why);
-    if (!db || sqlite3_trace_v2(db, SQLITE_TRACE_STMT, onStatement, nullptr) != SQLITE_OK) return false;
-    gTracedHandle.store(db);
+    if (!connection.isOpen()) return false;
+    connection.trace(onStatement);
+    gTraced.store(true);
     return true;
-#else
-    Q_UNUSED(connection);
-    return false;
-#endif
 }
 
 }   // namespace databasereads
