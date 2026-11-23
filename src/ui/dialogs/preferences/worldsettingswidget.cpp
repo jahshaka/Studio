@@ -1017,7 +1017,14 @@ void WorldSettingsWidget::configureDatabaseWidget()
 		AppApi api(*host);
 		QVariantMap options = confirm.options();
 		options.insert(QStringLiteral("restart"), true);
+		// THE VERB's WINDOW CLOSE IS HELD HERE (NOQT-DATABASE-1 confirm 4) and queued only once nothing
+		// of ours still runs a loop: queued by the verb, it would land inside the warning box's own
+		// event loop below, and the app would close before the box was read.
+		std::function<void()> sessionClose;
+		const auto afterRun = host->afterRun;
+		if (afterRun) host->afterRun = [&sessionClose](std::function<void()> fn) { sessionClose = std::move(fn); };
 		const QVariantMap result = api.quietly([&] { return api.resetLibrary(options); });
+		host->afterRun = afterRun;
 		if (result.value(QStringLiteral("ok")).toBool()
 		    && result.value(QStringLiteral("restarted")).toBool()) {
 			// THE PREFERENCES DIALOG IS MODAL (MainWindow shows it with exec()),
@@ -1025,6 +1032,7 @@ void WorldSettingsWidget::configureDatabaseWidget()
 			// deferred to the next turn of whichever loop is running. Closing
 			// this dialog HERE lets the nested loop end first, so the close
 			// lands on the main one and the process really goes.
+			if (sessionClose) afterRun(std::move(sessionClose));
 			if (QWidget *dialog = this->window()) dialog->close();
 			return;   // the new process is already starting
 		}
@@ -1033,14 +1041,15 @@ void WorldSettingsWidget::configureDatabaseWidget()
 		// (the script-facing app.lastError()) which hides the shell-caller
 		// convention's accessor.
 		const QString why = api.ApiModule::lastError();
+		// A RESET THAT DID NOT FINISH ENDS THE SESSION (the verb's `sessionEnds`; its message already says the app
+		// closes and finishes it at the next start): this modal dialog closes ITSELF first, the box is read, and
+		// only then is the held window close queued - it lands on the main loop, as on the restart above.
+		if (result.value(QStringLiteral("sessionEnds")).toBool())
+			if (QWidget *dialog = this->window()) dialog->close();
 		QMessageBox::warning(this, "Reset your library",
 		                     why.isEmpty() ? QStringLiteral("The library could not be reset.")
 		                                   : why);
-		// A RESET THAT DID NOT FINISH ENDS THE SESSION (the verb's `sessionEnds`; its message already says the app
-		// closes and finishes it at the next start): this modal dialog closes so the verb's deferred window close
-		// lands on the main loop, as on the restart above.
-		if (result.value(QStringLiteral("sessionEnds")).toBool())
-			if (QWidget *dialog = this->window()) dialog->close();
+		if (sessionClose) afterRun(std::move(sessionClose));
 	});
 
 	layout->addWidget(l1, 0, 0);
