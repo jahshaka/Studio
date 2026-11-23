@@ -128,7 +128,9 @@ void casesEffects(Fixture &f)
         const auto quads = [&](Value::Object o) { return call("engine.billboards.set", obj(std::move(o))); };
         const auto planar = [&](Value::Object o) { return f.none.call("engine.planar.set", {scene, obj(std::move(o))}); };
         const struct { Result r; const char *text; } refused[] = {
-            {decal({{"width", Value(0.0)}}), "decal.width 0 is outside > 0 m"},
+            {decal({{"width", Value(0.0005)}}), "decal.width 0.0005 is outside >= 0.001 m"},
+            {decal({{"height", Value(0.0)}}), "decal.height 0 is outside >= 0.001 m"},
+            {decal({{"depth", Value(-1.0)}}), "decal.depth -1 is outside >= 0.001 m"},
             {decal({{"metalness", Value(2.0)}}), "decal.metalness 2 is outside 0..1"},
             {decal({{"roughness", Value(-1.0)}}), "decal.roughness -1 is outside 0..1"},
             {system({{"quota", Value(0)}}), "system.quota 0 is outside 1..16000"},
@@ -141,10 +143,31 @@ void casesEffects(Fixture &f)
             {emitterWith({{"rate", Value(-1.0)}}), "system.emitters[0].rate -1 is outside >= 0 /s"},
             {emitterWith({{"colourStart", nums({200, 0, 0, 1})}}), "system.emitters[0].colourStart[0] 200 is outside -4..120"},
             {emitterWith({{"colourStart", nums({1, 1, 1})}}), "system.emitters[0].colourStart must hold 4 elements (it holds 3)"},
+            {emitterWith({{"colourEnd", nums({0, -5, 0, 1})}}), "system.emitters[0].colourEnd[1] -5 is outside -4..120"},
+            {emitterWith({{"velocityMin", Value(-1.0)}}), "system.emitters[0].velocityMin -1 is outside >= 0 m/s"},
+            {emitterWith({{"velocityMax", Value(-1.0)}}), "system.emitters[0].velocityMax -1 is outside >= 0 m/s"},
+            {emitterWith({{"ttlMin", Value(0.005)}}), "system.emitters[0].ttlMin 0.005 is outside >= 0.01 s"},
+            {emitterWith({{"ttlMax", Value(0.0)}}), "system.emitters[0].ttlMax 0 is outside >= 0.01 s"},
+            {emitterWith({{"sizeWidth", Value(-1.0)}}), "system.emitters[0].sizeWidth -1 is outside >= 0 m"},
+            {emitterWith({{"sizeHeight", Value(-1.0)}}), "system.emitters[0].sizeHeight -1 is outside >= 0 m"},
+            {emitterWith({{"extents", nums({1, -1, 1})}}), "system.emitters[0].extents[1] -1 is outside >= 0 m"},
+            {emitterWith({{"innerExtents", nums({1, 0, 0})}}), "system.emitters[0].innerExtents[0] 1 is outside 0..0.999"},
+            {emitterWith({{"innerExtents", nums({0, -0.5, 0})}}), "system.emitters[0].innerExtents[1] -0.5 is outside 0..0.999"},
+            {emitterWith({{"duration", Value(-1.0)}}), "system.emitters[0].duration -1 is outside >= 0 s"},
+            {emitterWith({{"repeatDelay", Value(-1.0)}}), "system.emitters[0].repeatDelay -1 is outside >= 0 s"},
+            {emitterWith({{"startTime", Value(-1.0)}}), "system.emitters[0].startTime -1 is outside >= 0 s"},
             {affector({{"kind", Value("gravity")}}), "system.affectors[0].kind 'gravity' is not one of"},
             {affector({{"keyCount", Value(7)}}), "system.affectors[0].keyCount 7 is outside 0..6"},
             {affector({{"colourKeyTimes", nums({0, 1.5, 0, 0, 0, 0})}}), "system.affectors[0].colourKeyTimes[1] 1.5 is outside 0..1"},
             {affector({{"scope", Value(2.0)}}), "system.affectors[0].scope 2 is outside 0..1"},
+            {affector({{"colourKeys", Value(Value::Array(24, Value(200.0)))}}), "system.affectors[0].colourKeys[0] 200 is outside -4..120"},
+            {affector({{"scaleKeys", nums({1, -1, 1, 1, 1, 1})}}), "system.affectors[0].scaleKeys[1] -1 is outside >= 0"},
+            {affector({{"scaleKeyTimes", nums({0, 0, 1.5, 0, 0, 0})}}), "system.affectors[0].scaleKeyTimes[2] 1.5 is outside 0..1"},
+            {affector({{"randomness", Value(-1.0)}}), "system.affectors[0].randomness -1 is outside >= 0"},
+            {affector({{"bounce", Value(-1.0)}}), "system.affectors[0].bounce -1 is outside >= 0"},
+            {affector({{"colourSwitchAt", Value(-1.0)}}), "system.affectors[0].colourSwitchAt -1 is outside >= 0 s"},
+            {affector({{"colourMin", nums({-5, 0, 0, 0})}}), "system.affectors[0].colourMin[0] -5 is outside -4..120"},
+            {affector({{"colourMax", nums({0, 0, 0, 121})}}), "system.affectors[0].colourMax[3] 121 is outside -4..120"},
             {call("engine.particles.setColourRamp", obj({{"affector", Value(16)}, {"path", Value("")}})),
              "ramp.affector 16 is outside 0..15"},
             {call("engine.billboards.create", obj({{"capacity", Value(0)}})), "set.capacity 0 is outside 1..65536"},
@@ -196,6 +219,15 @@ void casesEffects(Fixture &f)
                          if (!Record<DecalDesc>::table().fromValue(c[1], d, "decal", why)) return c.fail(why);
                          return Record<DecalDesc>::table().toValue(d, &c);
                      });
+    const Result noSystem0 = h.call("engine.particles.remove", {s, n});
+    check(failedWith(noSystem0, "engine.particles.remove: node " + std::to_string(Call::idOf(n)) +
+                                    " carries no particle system this host set"),
+          "engine.particles.remove on a node this host set no system on FAILS by name (" + noSystem0.message + ")");
+    const Result noDecal = h.call("engine.decal.remove", {s, n});
+    check(noDecal.status == Status::Refused && noDecal.message == "engine.decal.remove: node " + std::to_string(Call::idOf(n)) +
+                                                                       " carries no decal",
+          "engine.decal.remove on a node with no decal is REFUSED with its own reason, never the sink's leftover (" +
+              noDecal.message + ")");
     const Result echo = h.call("test.q.decalEcho", {s, obj({{"diffuse", img}, {"width", Value(2.0)}})});
     const Result texAsImage = h.call("engine.decal.set", {s, n, obj({{"diffuse", tex}})});
     const Result set = h.call("engine.decal.set", {s, n, obj({{"diffuse", img}, {"width", Value(2.0)}})});
@@ -220,6 +252,18 @@ void casesEffects(Fixture &f)
              "engine.particles.set: system.affectors[0].colourRampPath is a path: engine.particles.setColourRamp sets it"},
             {h.call("engine.billboards.set", {s, n, obj({{"positions", nums({0, 0, 0, 1, 1, 1})}, {"sizes", nums({1})}})}),
              "engine.billboards.set: quads.sizes holds 1 numbers, not 1 x 2 quads"},
+            {h.call("engine.particles.set", {s, n, obj({{"emitters", Value(Value::Array{obj({{"velocityMin", Value(3.0)}, {"velocityMax", Value(1.0)}})})}})}),
+             "engine.particles.set: system.emitters[0].velocityMin 3 is above velocityMax 1"},
+            {h.call("engine.particles.set", {s, n, obj({{"emitters", Value(Value::Array{obj({{"ttlMin", Value(2.0)}, {"ttlMax", Value(1.0)}})})}})}),
+             "engine.particles.set: system.emitters[0].ttlMin 2 is above ttlMax 1"},
+            {h.call("engine.particles.set", {s, n, obj({{"emitters", one},
+                                                        {"affectors", Value(Value::Array{obj({{"kind", Value("colourKeys")}, {"keyCount", Value(3)},
+                                                                                              {"colourKeyTimes", nums({0, 0.5, 0.5, 0, 0, 0})}})})}})}),
+             "engine.particles.set: system.affectors[0].colourKeyTimes[2] 0.5 is not after key 1's 0.5 (the keys run in ascending time)"},
+            {h.call("engine.particles.set", {s, n, obj({{"emitters", one},
+                                                        {"affectors", Value(Value::Array{obj({{"kind", Value("scaleKeys")}, {"keyCount", Value(2)},
+                                                                                              {"scaleKeyTimes", nums({0.5, 0.25, 0, 0, 0, 0})}})})}})}),
+             "engine.particles.set: system.affectors[0].scaleKeyTimes[1] 0.25 is not after key 0's 0.5"},
         };
         std::string missed;
         for (const auto &x : refused)

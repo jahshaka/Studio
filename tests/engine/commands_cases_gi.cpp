@@ -102,6 +102,11 @@ void casesGi(Fixture &f)
             {gi({{"quality", Value("ultra")}}), "params.quality 'ultra' is not one of"},
             {gi({{"pccProbesX", Value(9)}}), "params.pccProbesX 9 is outside 1..8"},
             {gi({{"pccProbesZ", Value(0)}}), "params.pccProbesZ 0 is outside 1..8"},
+            {gi({{"pccProbesY", Value(9)}}), "params.pccProbesY 9 is outside 1..8"},
+            {gi({{"probeShadows", Value("maybe")}}), "params.probeShadows 'maybe' is not one of"},
+            {gi({{"ddgi", Value("maybe")}}), "params.ddgi 'maybe' is not one of"},
+            {gi({{"probeSnapDeviation", Value(-1.0)}}), "params.probeSnapDeviation -1 is outside >= 0"},
+            {gi({{"probeSnapSidesMin", Value(-1.0)}}), "params.probeSnapSidesMin -1 is outside >= 0"},
             {gi({{"probeHdr", Value("yes")}}), "params.probeHdr 'yes' is not one of"},
             {gi({{"probeCaptureSize", Value(2048)}}), "params.probeCaptureSize 2048 is outside 0..1024 px"},
             {gi({{"probeCaptureSize", Value(100)}}), "params.probeCaptureSize 100 is neither 0 nor a power of two in 64..1024"},
@@ -122,7 +127,8 @@ void casesGi(Fixture &f)
             {pin({{"cascadeFree", Value(Value::Array{Value(2)})}}), "pin.cascadeFree[0] 2 is outside 0..1"},
             {pin({{"cascadeBuiltCam", nums({0, 0, 0, 1})}}), "pin.cascadeBuiltCam holds 4 numbers, not a multiple of 3"},
             {pin({{"cascadeBuiltCam", nums({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})}}), "pin.cascadeBuiltCam holds 15 elements, at most 12"},
-            {sun({{"range", Value(0.0)}}), "contact.range 0 is outside > 0 m"},
+            {sun({{"range", Value(0.01)}}), "contact.range 0.01 is outside 0.05..50 m"},
+            {sun({{"range", Value(500.0)}}), "contact.range 500 is outside 0.05..50 m"},
             {sun({{"resolution", Value("quarter")}}), "contact.resolution 'quarter' is not one of"},
         };
         std::string missed;

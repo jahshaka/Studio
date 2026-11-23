@@ -4,6 +4,7 @@
 // and round-tripping, and what the headless engine answers (each case prints what it read).
 #include "script_commands.h"
 #include "script/records_engine.h"
+#include "jahshaka/engine/Lights.h"
 
 #include <cstdio>
 
@@ -54,7 +55,8 @@ void casesEngine(Fixture &f)
     //    same call in a host that serves no outside client reaches the engine (absent here: "did not start")
     {
         const struct { const char *name; Value::Array args; } wide[] = {
-            {"engine.shaders.saveCache", {}}, {"engine.shaders.flushCache", {Value(0)}}, {"engine.shaders.prepareRays", {}},
+            {"engine.shaders.wait", {}}, {"engine.shaders.saveCache", {}}, {"engine.shaders.flushCache", {Value(0)}},
+            {"engine.shaders.prepareRays", {}},
             {"engine.display.setPeriod", {Value(1.0 / 60.0)}}, {"engine.takeLastError", {}},
             {"engine.publishRenderStats", {Value(2)}}, {"engine.publishShadowStatus", {Value(2)}}};
         std::string missed;
@@ -68,6 +70,19 @@ void casesEngine(Fixture &f)
         check(missed.empty() && reached == int(sizeof wide / sizeof wide[0]),
               "every engine-wide setter (" + std::to_string(refusedHere) + ") is refused for an outside client; THE CONTROL: "
               "each reaches the engine in a host that serves none (" + std::to_string(reached) + ")" + missed);
+    }
+
+    // 3b. THE PLACEHOLDERS' DOOR: a TEST door AND engine-wide - an outside client is refused it with the doors open
+    //     (Options::outsideClient and the test doors are independent); a door-open host's own call acts (below)
+    {
+        Host::Options o;
+        o.outsideClient = true;
+        Host outsideDoors(o);
+        outsideDoors.setConsole([](const std::string &) {});
+        registerEngineCommands(outsideDoors, nullptr, "no engine: an outside client with the test doors open", true);
+        const Result r = outsideDoors.call("engine.shaders.placeholdersOnly", {Value(true)});
+        check(failedWith(r, "engine.shaders.placeholdersOnly: engine-wide: this host serves an outside client"),
+              "engine.shaders.placeholdersOnly is refused for an outside client WITH the test doors open (" + r.message + ")");
     }
 
     // 4. ON THE HEADLESS ENGINE
@@ -101,14 +116,26 @@ void casesEngine(Fixture &f)
           "the engine-wide commands act on the headless engine: the shaders' wait, progress {compiled, fromCache, expected}, "
           "save, an idle writer's flush (true), the ray pipelines (a no-op), the display period, both subscriptions; the "
           "NULL render system traces no rays and runs no validation layer (both false)");
-    // THE SINK IS TAKEN AND CLEARED: an engine refusal fills it, the take answers its words, a second take answers ""
+    // THE SINK IS TAKEN AND CLEARED: drained first (whatever an earlier case left), then a refusal that WRITES it
+    // (OgreDecals.cpp:418, "setDecal: unknown node"): the take answers exactly its words, a second take answers ""
     Scene *sc = f.engine->createScene("q-engine-sink");
-    const bool refusedNow = !sc->destroyTexture(TextureId(0xFFFFFF));
+    h.call("engine.takeLastError", {});
+    const bool refusedNow = !sc->setDecal(NodeId(0xFFFFFF), DecalDesc{});
     const Result take1 = h.call("engine.takeLastError", {}), take2 = h.call("engine.takeLastError", {});
     f.engine->destroyScene(sc);
-    check(refusedNow && take1.value.kind() == Kind::String && !take1.value.asString().empty() && take2.value == Value(""),
-          "engine.takeLastError answers the engine's last refusal (" + (take1.value.kind() == Kind::String ? take1.value.asString() : take1.message) +
-              ") and clears it: the second take answers \"\" (THE CONTROL: the first is not empty)");
+    const std::string said = take1.value.kind() == Kind::String ? take1.value.asString() : take1.message;
+    check(refusedNow && said.find("setDecal: unknown node") != std::string::npos && take2.value == Value(""),
+          "engine.takeLastError answers the engine's last refusal (" + said + ") and clears it: the second take answers \"\"");
+    // THE PLACEHOLDERS' DOOR ACTS in a door-open host (on, then back off: it is engine-wide and outlives the host)
+    {
+        Host run;
+        run.setConsole([](const std::string &) {});
+        makeEngineCommands(run, f.engine, "", true);
+        const Result on = run.call("engine.shaders.placeholdersOnly", {Value(true)});
+        const Result off = run.call("engine.shaders.placeholdersOnly", {Value(false)});
+        check(on.status == Status::Ok && off.status == Status::Ok,
+              "engine.shaders.placeholdersOnly acts in a host with the test doors open (on, then off): " + on.message + off.message);
+    }
 }
 
 }  // namespace scriptcommands

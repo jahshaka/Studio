@@ -239,10 +239,19 @@ int main()
     if (!redTex) { std::printf("   lastError: %s\n", engine->lastError().c_str()); return 1; }
     enginetest::frames(engine, 1);   // the snapshot reads the atlas as the frame closed it (U3 stage 2b)
     CHECK(s->published().decalAtlasUsed[int(DecalMap::Diffuse)] == 1, "one image consumes exactly one atlas slice");
-    const bool reused = s->loadDecalTexture("decal_red.tga", DecalMap::Diffuse) == redTex;
+    // THE SAME PATH LOADED TWICE: TWO IDS OF ONE SLICE (re-derived 2026-11-23, SCRIPT-IN-ENGINE-1 2c's reverse alias:
+    // every load answers its OWN id - a second loader given the first's id lost its image to the first's destroy).
+    // The law it keeps: one image is one atlas slice - the used count stays 1; and the slice is refcounted: destroying
+    // one id keeps it, destroying both frees it (the count back to 0).
+    const TextureId redTex2 = s->loadDecalTexture("decal_red.tga", DecalMap::Diffuse);
     enginetest::frames(engine, 1);   // the snapshot reads the atlas as the frame closed it (U3 stage 2b)
-    CHECK(reused && s->published().decalAtlasUsed[int(DecalMap::Diffuse)] == 1,
-          "the same path loaded twice reuses one slice");
+    const unsigned usedTwice = s->published().decalAtlasUsed[int(DecalMap::Diffuse)];
+    const bool dropOne = s->destroyTexture(redTex2);
+    enginetest::frames(engine, 1);
+    const unsigned usedOne = s->published().decalAtlasUsed[int(DecalMap::Diffuse)];
+    const bool keptOne = s->decalTexturePresence(redTex) == Scene::Presence::Present;
+    CHECK(redTex2 != 0 && redTex2 != redTex && usedTwice == 1 && dropOne && usedOne == 1 && keptOne,
+          "the same path loaded twice is two ids of ONE slice (used 1), and destroying one id keeps the slice");
 
     // ---- the decal projects ---------------------------------------------
     NodeId decal = s->createNode();
