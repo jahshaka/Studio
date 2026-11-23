@@ -429,6 +429,59 @@ def never_compiled_case(source):
         shutil.rmtree(w, ignore_errors=True)
 
 
+def through_library_case(source):
+    """28. AN ARCHIVE MEMBER REACHED ONLY THROUGH A MIDDLE LIBRARY's CODE (NOQT-DOCUMENT-1 stage 6: libIrisGL over
+    libIrisDocument, Bullet's archives in the latter): a toy build - archive libbt.a (bt_fn), libdoc.so (doc_fn calls bt_fn;
+    libbt.a linked in), libgl.so (gl_fn calls doc_fn; links libdoc.so), and three executables linking all three: exe_through
+    calls gl_fn alone (it runs bt_fn ONLY through libgl's code), exe_direct calls doc_fn, exe_none calls nothing of ours.
+    A change of libbt.a's member reaches exe_through and exe_direct. Red before: exe_through was judged by its OWN references
+    into libdoc only (none) and was not selected - a row not run."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("gate_graph_tl", os.path.join(source, "scripts", "gate_graph.py"))
+    gg = importlib.util.module_from_spec(spec)
+    sys.modules["gate_graph_tl"] = gg   # (the graph pickles its cache: its class must be importable by name)
+    spec.loader.exec_module(gg)
+    w = tempfile.mkdtemp(prefix="gate-graph-through-")
+    try:
+        src, b = os.path.join(w, "src"), os.path.join(w, "build")
+        os.makedirs(src)
+        os.makedirs(b)
+        files = {"bt.c": "int bt_fn(void) { return 7; }\n",
+                 "doc.c": "int bt_fn(void);\nint doc_fn(void) { return bt_fn(); }\n",
+                 "gl.c": "int doc_fn(void);\nint gl_fn(void) { return doc_fn(); }\n",
+                 "through.c": "int gl_fn(void);\nint main(void) { return gl_fn() - 7; }\n",
+                 "direct.c": "int doc_fn(void);\nint main(void) { return doc_fn() - 7; }\n",
+                 "none.c": "int main(void) { return 0; }\n"}
+        for f, t in files.items():
+            open(os.path.join(src, f), "w").write(t)
+        objs = [("%s.dir/%s.o" % (f[:-2], f), f) for f in sorted(files)]
+        o = dict((s, ob) for ob, s in objs)
+        libs = "libgl.so libdoc.so libbt.a"
+        open(os.path.join(b, "build.ninja"), "w").write(
+            "rule C_COMPILER__toy\n  command = cc -fPIC -MD -MT $out -MF $out.d -c $in -o $out\n  depfile = $out.d\n  deps = gcc\n"
+            "rule C_STATIC_LIBRARY_LINKER__toy\n  command = rm -f $out && ar qc $out $in\n"
+            "rule C_SHARED_LIBRARY_LINKER__toy\n  command = cc -shared $in -o $out\n"
+            "rule C_EXECUTABLE_LINKER__toy\n  command = cc $in -o $out\n"
+            + "".join("build %s: C_COMPILER__toy %s/%s\n" % (ob, src, s) for ob, s in objs)
+            + "build libbt.a: C_STATIC_LIBRARY_LINKER__toy %s\n" % o["bt.c"]
+            + "build libdoc.so: C_SHARED_LIBRARY_LINKER__toy %s libbt.a\n" % o["doc.c"]
+            + "build libgl.so: C_SHARED_LIBRARY_LINKER__toy %s libdoc.so\n" % o["gl.c"]
+            + "".join("build exe_%s: C_EXECUTABLE_LINKER__toy %s %s\n" % (n, o[n + ".c"], libs)
+                      for n in ("through", "direct", "none"))
+            + "build all: phony exe_through exe_direct exe_none\ndefault all\n")
+        p = subprocess.run(["ninja", "-C", b], capture_output=True, text=True)
+        if p.returncode != 0:
+            check(False, "28. the toy build ran (ninja: %s)" % (p.stdout + p.stderr).strip()[-200:])
+            return
+        g = gg.NinjaGraph.load(b)
+        reached = sorted(os.path.basename(e) for e in g.reach_objects(g.members(os.path.join(b, "libbt.a"))))
+        check({"exe_through", "exe_direct"} <= set(reached),
+              "28. an archive member reached ONLY through a middle library's code (exe -> libgl -> libdoc -> libbt.a's "
+              "member) selects its executable, and the direct caller's (%s)" % reached)
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
 def main(source, build):
     tool = os.path.join(source, "scripts", "gate-scope.py")
     if not os.path.isfile(os.path.join(build, "CTestTestfile.cmake")):
@@ -465,6 +518,7 @@ def main(source, build):
         check(code == 2 and "registers no ctest suite" in err, "3. an unconfigured --build dir exits 2 and says so (%d)" % code)
     speed_cases(source, build)
     never_compiled_case(source)
+    through_library_case(source)
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
         return 1

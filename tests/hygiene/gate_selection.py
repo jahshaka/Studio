@@ -325,6 +325,7 @@ def main(source, build):
         return 2
     gs = load_tool(source)
     gg = gs.gate_graph
+    start_seeds(source, build)   # the hash-order guard's processes (seed_cases), beside every case below
     identifier_cases(gg)
 
     graph = gg.NinjaGraph.load(build)
@@ -479,6 +480,7 @@ def main(source, build):
     arm_cases(gs, graph, build, inv0)
     gone_cases(gs, graph, build, inv0)
     hunk_cases(gs, graph, build, inv0, cases)
+    seed_cases(source, build)
     if FAILURES:
         print("gate.selection: FAILED (%d)" % len(FAILURES))
         return 1
@@ -486,7 +488,67 @@ def main(source, build):
     return 0
 
 
+SEEDS = range(8)
+_SEED_PROCS = {}
+
+
+def start_seeds(source, build):
+    """the --lane-digest processes, one per seed, started (seed_cases collects them)"""
+    for s in SEEDS:
+        _SEED_PROCS[s] = subprocess.Popen([sys.executable, os.path.abspath(__file__), "--lane-digest", source, build],
+                                          env=dict(os.environ, PYTHONHASHSEED=str(s)), stdout=subprocess.PIPE,
+                                          stderr=subprocess.STDOUT, text=True)
+    return _SEED_PROCS
+
+
+def lane_digest(source, build):
+    """`--lane-digest`: every lane case's selection in THIS process (its string-hash order), one line a lane: the lane,
+    the row count, a sha1 of the sorted rows - what seed_cases compares across processes."""
+    import hashlib
+    gs = load_tool(source)
+    graph = gs.gate_graph.NinjaGraph.load(build)
+    inv0 = gs.load_inventory(build)
+    cases = json.load(open(os.path.join(source, "tests", "hygiene", "gate_selection_cases.json")))
+    for c in cases["lanes"]:
+        base, tip = c["range"].split("..")
+        if not (have(source, base) and have(source, tip)):
+            print("%s\tunreadable" % c["lane"]); continue
+        paths = [p_ for p_ in gs.touched_paths(c["range"]) if p_ not in set(c.get("archived_paths", ()))]
+        S = gs.select(paths, c["range"], build, graph=graph, inv=fresh_inv(inv0), quiet_graph=True)
+        rows = sorted(S.selected)
+        print("%s\t%d\t%s" % (c["lane"], len(rows), hashlib.sha1("\n".join(rows).encode()).hexdigest()[:12]), flush=True)
+    return 0
+
+
+def seed_cases(source, build):
+    """THE ANSWER DOES NOT MOVE WITH THE STRING-HASH ORDER (NOQT-DOCUMENT-1 stage 6, the audit's guard): every lane re-selected
+    in SEPARATE processes under PYTHONHASHSEED 0..7 (Python orders every set and dict of str by a per-process hash) must give
+    ONE answer per lane. Red before (spikes/noqt-document-1/s6/gate-selection/seeds-tip.txt): an order-dependent walk of the
+    graph (gate_graph._reach_objects) selected BULLET-BATCHING-1's 365 rows under seeds 0, 3, 4 and 326 under 1, 2, 5 - one
+    run of this row could pass by luck."""
+    print("\nthe hash order (every lane under PYTHONHASHSEED %d..%d, separate processes):" % (SEEDS[0], SEEDS[-1]))
+    procs = _SEED_PROCS or start_seeds(source, build)   # (main starts them first: they run beside the other cases)
+    outs = {s: p.communicate()[0] for s, p in procs.items()}
+    bad_exit = sorted(s for s, p in procs.items() if p.returncode != 0)
+    check(not bad_exit, "every seed's process ran (failed: %s %s)" % (bad_exit, outs[bad_exit[0]][-300:] if bad_exit else ""))
+    if bad_exit:
+        return
+    lanes = {}
+    for s, out in outs.items():
+        for line in out.splitlines():
+            if "\t" in line:
+                lane, rest = line.split("\t", 1)
+                lanes.setdefault(lane, {}).setdefault(rest, []).append(s)
+    check(len(lanes) > 0, "the seeds' processes answered %d lane(s) (the control: > 0)" % len(lanes))
+    for lane, answers in sorted(lanes.items()):
+        check(len(answers) == 1, "%s: ONE answer under %d seeds (%s)" % (
+            lane[:42], len(SEEDS), "; ".join("%s under seeds %s" % (a.replace("\t", " rows, sha "), sd)
+                                              for a, sd in sorted(answers.items()))))
+
+
 if __name__ == "__main__":
+    if len(sys.argv) == 4 and sys.argv[1] == "--lane-digest":
+        sys.exit(lane_digest(os.path.abspath(sys.argv[2]), os.path.abspath(sys.argv[3])))
     if len(sys.argv) < 3:
         print(__doc__)
         sys.exit(2)

@@ -583,9 +583,13 @@ class NinjaGraph:
                                         # was added unchecked - and only when the archive's consumers came in the order
                                         # that met `c` before `e` (a set's, by Python's per-process string hash): a Bullet
                                         # flag change selected 365 rows under some hash seeds, 326 under others
-                                        # (spikes/noqt-document-1/s6/gate-selection/).
+                                        # (spikes/noqt-document-1/s6/gate-selection/). AND by e's OWN references into c
+                                        # (the stage's audit): an executable that runs the member only THROUGH e's code
+                                        # (exe -> libIrisGL -> libIrisDocument -> Bullet) is reached - conservatively, as
+                                        # every executable of e (source.gate_scope_rules case 28).
+                                        through = o in self.closure(e, c)
                                         for ex in self.rev.get(e, ()):
-                                            if ex in self.exes and o in self.closure(ex, c): exes.add(ex)
+                                            if ex in self.exes and (through or o in self.closure(ex, c)): exes.add(ex)
                                     elif e not in seen:
                                         seen.add(e); stack.append(e)
                             else:
