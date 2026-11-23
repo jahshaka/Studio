@@ -48,6 +48,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/assetmetadata.h"
 #include "services/assetstore.h"
+#include "services/imagedecode.h"
 #include "services/meshbakestore.h"
 #include "data/settingsmanager.h"
 #include "app/cli/scriptrunner.h"
@@ -253,6 +254,9 @@ int main(int argc, char *argv[])
     // THE ONE CORE BUDGET (THREADING-1): this thread becomes the game thread (Bullet's index 0, its foreground share
     // fixed for the run) and Qt's global pool is capped at the background tier — before any scene or QtConcurrent job.
     processbudget::apply();
+    // THE DOCUMENT's READABLE-IMAGE PROBE (services/imagedecode.h), installed ONCE, here: after the QApplication (Qt's
+    // image plugins) and before any scene, importer or worker thread exists - every boot after this line loads with it.
+    imagedecode::installProbe();
 
     // WHERE THIS RUN KEEPS ITS DATA (services/apppaths.h), resolved BEFORE
     // anything reads a path. Everything downstream — the session log's release

@@ -9,6 +9,7 @@
 #include "irisgl/document/scenegraph/cameralens.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "jahshaka/engine/Engine.h"
+#include "services/imagedecode.h"
 
 namespace previewenv {
 
@@ -293,7 +294,7 @@ void apply(const iris::ScenePtr &scene)
         sky = iris::LiveTextures::create(QString::fromLatin1(kSkyGuid),
                                          QStringLiteral("Preview studio environment"),
                                          kWidth, kHeight, false);
-        if (sky) sky->writeLive(image());
+        if (sky) sky->writeLive(imagedecode::toImage(image()));
     }
     if (sky) {
         scene->setSkyTexture(sky);

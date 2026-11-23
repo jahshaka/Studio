@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "irisgl/document/assets/texture2d.h"
+#include "services/imagedecode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/core/geometry/boundingsphere.h"
@@ -3787,7 +3788,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         if (!resolveTexture(params.value("texture"), guid, path))
             return fail("world.sky: 'texture' must be a texture asset guid with stored bytes "
                         "(assets.list({type:\"texture\"}) lists them)");
-        scene->setSkyTexture(iris::Texture2D::load(path, false));
+        scene->setSkyTexture(iris::Texture2D::load(path));
         QJsonObject def;
         def.insert("equiSkyGuid", guid);
         scene->skyData.insert("Equirectangular", def);
@@ -3819,11 +3820,10 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         }
         if (paths.isEmpty())
             return fail("world.sky: cubemap needs at least one face texture (front/back/left/right/top/bottom)");
-        QImage info(paths.first());
-        scene->setSkyTexture(iris::Texture2D::createCubeMap(
+        scene->setSkyTexture(imagedecode::loadCubeMap(
             paths.value("front"), paths.value("back"),
             paths.value("top"), paths.value("bottom"),
-            paths.value("left"), paths.value("right"), &info));
+            paths.value("left"), paths.value("right")));
         QJsonObject def;
         for (const char *face : faces) def.insert(face, guids.value(face));
         scene->skyData.insert("Cubemap", def);

@@ -39,6 +39,7 @@
 
 #include "irisgl/core/color.h"
 #include "irisgl/document/assets/texture2d.h"
+#include "services/imagedecode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
@@ -213,12 +214,11 @@ int main(int argc, char **argv) {
             paths[i] = QDir(dir).filePath(QStringLiteral("face%1.png").arg(i));
             face.save(paths[i]);
         }
-        QImage info(paths[0]);
         doc->skyColor = kSky;
         skyLight->intensity = 1.0f;
         skyLight->skySource = iris::SkyLightSource::Cubemap;
-        skyLight->skyCubeTexture = iris::Texture2D::createCubeMap(paths[0], paths[1], paths[2], paths[3], paths[4],
-                                                                  paths[5], &info);
+        skyLight->skyCubeTexture = imagedecode::loadCubeMap(paths[0], paths[1], paths[2], paths[3], paths[4],
+                                                            paths[5]);
         doc->getRootNode()->addChild(skyLight);
         Reading dome;
         const bool s4 = settle(dome);

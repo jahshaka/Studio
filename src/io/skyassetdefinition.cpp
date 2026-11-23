@@ -13,10 +13,10 @@ For more information see the LICENSE file
 #include "irisgl/document/qt/colorjson.h"
 
 #include <QFileInfo>
-#include <QImage>
 
 #include "io/assetiobase.h"
 #include "irisgl/document/assets/texture2d.h"
+#include "services/imagedecode.h"
 
 namespace skyassets
 {
@@ -77,7 +77,7 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
             }
         }
         if (image.isEmpty()) return false;
-        scene->setSkyTexture(iris::Texture2D::load(image, false));
+        scene->setSkyTexture(iris::Texture2D::load(image));
         return true;
     }
 
@@ -97,11 +97,8 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
             if (sides[i].isEmpty()) return false;
         }
 
-        QImage info(sides[0]);
-        if (info.isNull()) return false;
-
-        auto cube = iris::Texture2D::createCubeMap(sides[0], sides[1], sides[2],
-                                                   sides[3], sides[4], sides[5], &info);
+        auto cube = imagedecode::loadCubeMap(sides[0], sides[1], sides[2],
+                                             sides[3], sides[4], sides[5]);
         if (!cube) return false;
         scene->setSkyTexture(cube);
         return true;

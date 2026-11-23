@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/imagedecode.h"
 #include "services/lightbindings.h"
 #include "services/loadtimeline.h"
 #include <QSqlQuery>
@@ -354,7 +355,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	if (!scene->clouds.weatherMapGuid.isEmpty()) {
 		const QString weather = resolveAssetPath(scene->clouds.weatherMapGuid);
 		if (QFileInfo(weather).isFile())
-			scene->cloudWeatherMap = iris::Texture2D::load(weather, false);
+			scene->cloudWeatherMap = iris::Texture2D::load(weather);
 	}
 	// The music is DATA here; the editor's AmbienceService starts it once the
 	// opened scene is the live one (audit D8) — a reader plays nothing.
@@ -400,7 +401,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		case iris::SkyType::EQUIRECTANGULAR: {
 			QString textureGuid = scene->skyData.value("Equirectangular").value("equiSkyGuid").toString();
 			auto image = resolveAssetPath(textureGuid);
-			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image, false));
+			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image));
 			break;
 		}
 
@@ -418,19 +419,17 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 				sides[i] = QFileInfo(sides[i]).isFile() ? sides[i] : QString();
 			}
 
-			// We need at least one valid image to get some metadata from
-			QImage* info;
+			// At least one face file must exist (loadCubeMap refuses a set with a face that does not decode).
 			bool useTex = false;
-			for (const auto image : sides) {
+			for (const auto &image : sides) {
 				if (!image.isEmpty()) {
-					info = new QImage(image);
 					useTex = true;
 					break;
 				}
 			}
 
 			if (useTex) {
-				scene->setSkyTexture(iris::Texture2D::createCubeMap(sides[0], sides[1], sides[2], sides[3], sides[4], sides[5], info));
+				scene->setSkyTexture(imagedecode::loadCubeMap(sides[0], sides[1], sides[2], sides[3], sides[4], sides[5]));
 			}
 
 			break;

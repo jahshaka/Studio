@@ -122,7 +122,7 @@ QVector<sceneprops::Field> buildFields()
             if (s->clouds.weatherMapGuid.isEmpty() || path.isEmpty())
                 s->cloudWeatherMap.reset();
             else if (!s->cloudWeatherMap || s->cloudWeatherMap->source != path)
-                s->cloudWeatherMap = iris::Texture2D::load(path, false);
+                s->cloudWeatherMap = iris::Texture2D::load(path);
         });
     // THE HEIGHT FOG (SKY-DEFAULTS-1), whole — one gesture or one
     // world.heightFog call is one step.

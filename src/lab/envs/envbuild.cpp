@@ -17,7 +17,6 @@
 #include "irisgl/import/meshbake.h"
 
 #include <QColor>
-#include <QImage>
 #include <QHash>
 
 #include <algorithm>
@@ -297,8 +296,7 @@ iris::PbrMaterialPtr Builder::cutout(float r, float g, float b, float roughness,
     if (!tex) {
         tex = iris::LiveTextures::create(guid, QStringLiteral("leaf mask"), res, res, true);
         if (tex) {
-            QImage img(res, res, QImage::Format_RGBA8888);
-            img.fill(QColor(255, 255, 255, 0));
+            iris::Image img = iris::Image::filled(res, res, 255, 255, 255, 0);
             Lcg rng(0x1eafu + unsigned(cells));
             const float cell = float(res) / float(cells);
             for (int cy = 0; cy < cells; ++cy)
@@ -311,7 +309,7 @@ iris::PbrMaterialPtr Builder::cutout(float r, float g, float b, float roughness,
                         for (int x = std::max(0, x0); x <= std::min(res - 1, x1); ++x) {
                             const float dx = x + 0.5f - ox, dy = y + 0.5f - oy;
                             const float u = (dx * cs + dy * sn) / ax, v = (-dx * sn + dy * cs) / ay;
-                            if (u * u + v * v <= 1.0f) img.setPixelColor(x, y, QColor(255, 255, 255, 255));
+                            if (u * u + v * v <= 1.0f) img.rgba[(size_t(y) * size_t(res) + size_t(x)) * 4u + 3u] = 255;
                         }
                 }
             tex->writeLive(img);

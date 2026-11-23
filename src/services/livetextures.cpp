@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "irisgl/document/assets/livetextures.h"
 #include "irisgl/document/assets/texture2d.h"
+#include "services/imagedecode.h"
 
 QVector<LiveTextureCatalog::Record> &LiveTextureCatalog::rows()
 {
@@ -66,7 +67,7 @@ bool LiveTextureCatalog::write(const QString &guid, const QImage &rgba, QString 
                                      "destroy it and create a %4x%5 one instead")
                           .arg(guid).arg(tex->getWidth()).arg(tex->getHeight())
                           .arg(rgba.width()).arg(rgba.height()));
-    if (!tex->writeLive(rgba)) return refuse(QStringLiteral("the write was refused"));
+    if (!tex->writeLive(imagedecode::toImage(rgba))) return refuse(QStringLiteral("the write was refused"));
     return true;
 }
 

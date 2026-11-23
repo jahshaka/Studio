@@ -59,6 +59,7 @@
 #include "commands/reparentscenenodecommand.h"
 // The scene FILE format's retired-node-type table (header-only, no reader).
 #include "io/sceneformat.h"
+#include "services/imagedecode.h"
 
 #include "../support/documentgraph.h"
 static int failures = 0;
@@ -104,15 +105,24 @@ int main(int argc, char **argv)
     CHECK(!!mat, "PbrMaterial constructed without GL");
     meshNode->setMaterial(mat);
 
-    // --- Texture2D::load: previously qFatal("Failed to get QOpenGLFunctions_3_2_Core")
-    QImage img(8, 8, QImage::Format_RGBA8888); img.fill(Qt::red);
-    auto tex = iris::Texture2D::create(img);
-    CHECK(!!tex, "Texture2D::create(QImage) without GL returns an object");
-    CHECK(tex->getWidth() == 8 && tex->getHeight() == 8, "texture asset reports image size");
+    // --- Texture2D::load WITH NO PROBE INSTALLED (texture2d.h's stated contract for a Qt-free process): the path is
+    // recorded as it is - the engine's own load is the verdict. (The installed arm is checked at the end of main.)
+    CHECK(iris::Texture2D::readableProbe() == nullptr, "no readable-image probe is installed in this process yet");
+    const QString notAFile = QStringLiteral("/nowhere/not-a-file.png");
+    auto tex = iris::Texture2D::load(notAFile);
+    CHECK(tex && tex->source == notAFile, "uninstalled probe: load() records the path, even of no file");
 
-    // --- Cubemap: previously returned null with no context (silently dropping the sky)
-    auto cube = iris::Texture2D::createCubeMap(":assets/models/sky.obj", ":x", ":x", ":x", ":x", ":x");
-    CHECK(!cube, "cubemap with unreadable faces still returns null (validation kept)");
+    // --- Cubemap from six held faces (Studio's imagedecode.h decodes the files): the document checks the faces
+    iris::Image faces[6];
+    for (int i = 0; i < 6; ++i) faces[i] = iris::Image::filled(8, 8, std::uint8_t(40 * i), 20, 20, 255);
+    auto cube = iris::Texture2D::createCubeMap(faces);
+    CHECK(cube && cube->isCubeMap() && cube->getWidth() == 8 && cube->cubeFaces() &&
+          cube->cubeFaces()[5].rgba[0] == 200,
+          "cubemap: six held 8x8 faces make a cube that keeps them, in order");
+    faces[3] = iris::Image();
+    CHECK(!iris::Texture2D::createCubeMap(faces), "cubemap: a null face refuses the cube (validation kept)");
+    faces[3] = iris::Image::filled(4, 4, 0, 0, 0, 255);
+    CHECK(!iris::Texture2D::createCubeMap(faces), "cubemap: faces of different sizes refuse the cube");
 
     // --- Document traversal works: this is what SceneMirror will walk
     int count = 0;
@@ -1062,6 +1072,35 @@ int main(int argc, char **argv)
         auto bare = iris::MeshNode::create();
         auto bareCopy = std::dynamic_pointer_cast<iris::MeshNode>(bare->duplicate());
         CHECK(bareCopy && !bareCopy->getMaterial(), "dup: a mesh node with no material duplicates to one with none");
+    }
+
+    // --- THE INSTALLED PROBE (Studio's, src/services/imagedecode.h; the app installs it once at boot): load()
+    // answers NULL for a file that is no readable image - the contract Studio's callers and PbrMaterial::loadTexture
+    // keep - and records a real image's path. Checked LAST: the probe is never uninstalled.
+    {
+        QTemporaryDir probeDir;
+        const QString textPng = probeDir.filePath(QStringLiteral("not-an-image.png"));
+        const QString realPng = probeDir.filePath(QStringLiteral("real.png"));
+        QFile text(textPng);
+        CHECK(text.open(QIODevice::WriteOnly) && text.write("this is text, not a picture\n") > 0,
+              "probe: a text file named .png is written");
+        text.close();
+        QImage px(4, 4, QImage::Format_RGBA8888);
+        px.fill(Qt::red);
+        CHECK(px.save(realPng), "probe: a real 4x4 png is written");
+        CHECK(iris::Texture2D::load(textPng) != nullptr,
+              "probe: BEFORE the install, the text file's path is recorded (the uninstalled arm)");
+        CHECK(imagedecode::installProbe(), "probe: Studio's probe installs");
+        CHECK(iris::Texture2D::readableProbe() == &imagedecode::readable, "probe: it is the installed probe");
+        CHECK(imagedecode::installProbe(), "probe: installing the SAME probe again is accepted (a no-op)");
+        CHECK(iris::Texture2D::load(textPng) == nullptr,
+              "probe: a text file named .png answers NULL (no readable image)");
+        auto real = iris::Texture2D::load(realPng);
+        CHECK(real && real->source == realPng, "probe: a real png's path is recorded");
+        auto pbrProbe = iris::PbrMaterial::create();
+        pbrProbe->setValue(QStringLiteral("baseColorMap"), textPng);
+        CHECK(!pbrProbe->textures.value(QStringLiteral("u_baseColorMap")),
+              "probe: PbrMaterial::loadTexture keeps its null for an unreadable file (ruling 1b)");
     }
 
     // --- Teardown with no GL must not crash either

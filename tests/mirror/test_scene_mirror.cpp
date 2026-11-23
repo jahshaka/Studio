@@ -14,6 +14,7 @@
 #include <QJsonObject>
 #include <QThread>
 #include "irisgl/document/assets/texture2d.h"
+#include "services/imagedecode.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -400,8 +401,8 @@ int main(int argc, char **argv)
             QImage f(8, 8, QImage::Format_RGBA8888); f.fill(QColor(235, 235, 235));
             facePaths[i] = skyDir + QString("/f%1.png").arg(i); f.save(facePaths[i]);
         }
-        doc->setSkyTexture(iris::Texture2D::createCubeMap(facePaths[0], facePaths[1], facePaths[2],
-                                                          facePaths[3], facePaths[4], facePaths[5]));
+        doc->setSkyTexture(imagedecode::loadCubeMap(facePaths[0], facePaths[1], facePaths[2],
+                                                    facePaths[3], facePaths[4], facePaths[5]));
         doc->skyType = iris::SkyType::CUBEMAP;
         mirror.sync(mirrorframe::sky(view));
         auto glassMat = iris::PbrMaterial::create();
@@ -1035,8 +1036,8 @@ int main(int argc, char **argv)
         const char *names[6] = { "posx", "negx", "posy", "negy", "posz", "negz" };
         QString paths[6];
         for (int i = 0; i < 6; ++i) { QImage f(8, 8, QImage::Format_RGBA8888); f.fill(faceCols[i]); paths[i] = dir + "/" + names[i] + ".png"; f.save(paths[i]); }
-        // createCubeMap(negZ, posZ, posY, negY, negX, posX) — the scene reader's order
-        doc->setSkyTexture(iris::Texture2D::createCubeMap(paths[5], paths[4], paths[2], paths[3], paths[1], paths[0]));
+        // loadCubeMap(negZ, posZ, posY, negY, negX, posX) — the scene reader's order
+        doc->setSkyTexture(imagedecode::loadCubeMap(paths[5], paths[4], paths[2], paths[3], paths[1], paths[0]));
         doc->skyType = iris::SkyType::CUBEMAP;
         CHECK(doc->skyTexture && doc->skyTexture->isCubeMap(), "document cubemap keeps its six faces without GL");
         mirror.sync(mirrorframe::sky(view));

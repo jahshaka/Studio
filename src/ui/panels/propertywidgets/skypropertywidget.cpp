@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/imagedecode.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
 #include "services/services.h"
 #include "services/selectionservice.h"
@@ -545,7 +546,7 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
 	equiSkyDefinition.insert("equiSkyGuid", guid);
     auto image = resolveSkyAssetFile(project, guid);
     if (equiTexture) equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
-    if (auto live = liveScene()) live->setSkyTexture(iris::Texture2D::load(image, false));
+    if (auto live = liveScene()) live->setSkyTexture(iris::Texture2D::load(image));
 	updateAssetAndKeys();
 }
 
@@ -567,13 +568,11 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 
 	if (cubeMapWidget) cubeMapWidget->addCubeMapImages(top, bottom, left, front, right, back);
 
-	// We need at least one valid image to get some metadata from
-	QImage *info = nullptr;
+	// At least one face file must exist (loadCubeMap refuses a set with a face that does not decode).
 	bool useTex = false;
 	QVector<QString> sides = { front, back, left, right, top, bottom };
 	for (const auto &image : sides) {
 		if (!image.isEmpty() && QFileInfo(image).isFile()) {
-			info = new QImage(image);
 			useTex = true;
 			break;
 		}
@@ -581,10 +580,9 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 
 	if (useTex) {
 		if (auto live = liveScene())
-			live->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
+			live->setSkyTexture(imagedecode::loadCubeMap(front, back, top, bottom, left, right));
 		updateAssetAndKeys();
 	}
-	delete info;
 }
 
 void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)

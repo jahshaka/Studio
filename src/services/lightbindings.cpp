@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include "services/projectassets.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/assets/texture2d.h"
-#include <QImage>
+#include "services/imagedecode.h"
 
 namespace {
 
@@ -118,9 +118,7 @@ std::shared_ptr<iris::Texture2D> LightBindings::loadSkyCube(const QJsonObject &f
         sides[i] = guid.isEmpty() ? QString() : resolve(guid);
         if (sides[i].isEmpty() || !QFileInfo::exists(sides[i])) return std::shared_ptr<iris::Texture2D>();
     }
-    QImage info(sides[0]);
-    if (info.isNull()) return std::shared_ptr<iris::Texture2D>();
-    return iris::Texture2D::createCubeMap(sides[0], sides[1], sides[2], sides[3], sides[4], sides[5], &info);
+    return imagedecode::loadCubeMap(sides[0], sides[1], sides[2], sides[3], sides[4], sides[5]);
 }
 
 bool LightBindings::bindSkyCube(const iris::LightNodePtr &light, const QJsonObject &faces, Database *db,

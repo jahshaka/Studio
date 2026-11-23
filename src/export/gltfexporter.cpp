@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "export/gltfexporter.h"
+#include "services/imagedecode.h"
 
 #include "irisgl/core/color.h"
 
@@ -837,7 +838,10 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
         sky["source"] = "cubemap";
         QImage stitched;
         if (scene->skyTexture && scene->skyTexture->isCubeMap() && scene->skyTexture->cubeFaces()) {
-            stitched = stitchCubemapToEquirect(scene->skyTexture->cubeFaces());
+            const iris::Image *held = scene->skyTexture->cubeFaces();
+            QImage faces[6];
+            for (int i = 0; i < 6; ++i) faces[i] = imagedecode::toQImage(held[i]);
+            stitched = stitchCubemapToEquirect(faces);
         } else {
             QImage faces[6];
             bool ok = true;
