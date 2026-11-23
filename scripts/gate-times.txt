@@ -707,3 +707,4 @@ bake.round_trip 0.39  solo 2026-11-23 at 216507f6b (spec.sh reprice, run 2026112
 db.layer_guard 0.07  solo 2026-11-23 at 216507f6b (spec.sh reprice, run 20261123T235744-216507f6b-p1150552)
 source.db_error_looks 0.03  solo 2026-11-23 at 216507f6b (spec.sh reprice, run 20261123T235824-216507f6b-p1151924)
 source.sqlite_one_door 0.36  solo 2026-11-23 at 216507f6b (spec.sh reprice, run 20261123T235825-216507f6b-p1151957)
+document.standalone 0.00  solo 2026-11-23 at 365b90f19 (spec.sh reprice, run 20261123T231303-365b90f19-p182407)
