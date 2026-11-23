@@ -149,6 +149,9 @@ void casesView(Fixture &f)
          {view, Value(false)}},
         {"engine.view.setAsyncShaders", {lent, Value(true)},
          "this view was handed in by the host's owner: its asynchronous shaders is the owner's to set", {view, Value(true)}},
+        // ...AND ITS SHADOWS (the tail, the lead's ruling 2026-11-23: the lab's mirror re-asserts them every frame)
+        {"engine.view.setShadows", {lent, Value(true)}, "this view was handed in by the host's owner: its shadows is the owner's to set",
+         {view, Value(true)}},
         {"engine.view.requestFrameCapture", {view, obj({{"presented", Value(true)}})}, "capture has no member 'presented'",
          {view, obj({{"alsoPresented", Value(true)}})}},
         {"engine.view.takeFrameCapture", {view, obj({{"wait", Value(2)}})}, "take.wait must be bool (it is int)", {view, obj({})}},
@@ -168,12 +171,12 @@ void casesView(Fixture &f)
               std::string("THE DOMAIN of ") + d.name + " refused by name (" + bad.message + "); THE CONTROL: in its domain "
                   "the call reaches the body (" + good.message + ")");
     }
-    // the reads and the take carry no domain beyond the view - and a lent view is the script's to drive (Script.h)
+    // the reads and the take carry no domain beyond the view - and a lent view is the script's to drive (Script.h: bind a
+    // scene, place, post-fx, declare, read)
     check(reached(call("engine.view.isOffscreen", {view})) && reached(call("engine.view.frameCaptureState", {view})) &&
-              reached(call("engine.view.setShadows", {lent, Value(true)})) &&
               reached(call("engine.view.setPostFx", {lent, obj({})})),
-          "engine.view.isOffscreen and frameCaptureState reach their body; a LENT view's shadows and post chain are the "
-          "script's to set (they reach the body)");
+          "engine.view.isOffscreen and frameCaptureState reach their body; a LENT view's post chain is the script's to "
+          "set (it reaches the body)");
 
     // THE MEASURING ARMS' TEST DOOR: closed without --test-doors; with them, 1..7 steps FAIL by name, 64 reaches the body
     {
