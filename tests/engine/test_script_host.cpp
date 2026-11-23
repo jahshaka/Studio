@@ -1747,8 +1747,12 @@ int main()
     //     ran in the JS engine's C, where no cancel reaches): (a) THE LAWS KEPT EXACTLY - the trap's ORDER is the
     //     result's; a duplicate is a TypeError (at 3 keys, and at index 50,000 repeating index 7); a non-configurable
     //     target key the trap leaves out, and an extra key on a non-extensible target, are TypeErrors; both accepted
-    //     when right; (b) THE SCALING LAW, in this thread's CPU time (never the wall), the key list prebuilt: listing 4n
-    //     keys costs under 8x listing n (linear: ~4x; the quadratic scan ~16x - a 2x margin each side), n = 32,768
+    //     when right; two DIFFERENT duplicates are one TypeError of the same text (the message names no key: which
+    //     pair is "first" is not observable); (b) THE SCALING LAW, in this thread's CPU time (never the wall), the key
+    //     lists prebuilt: listing 4n keys costs under 8x listing n (n log n: ~4.5x; a quadratic cost ~16x - a ~1.8x
+    //     margin each side) - for ORDINARY keys (n = 32,768) AND for keys whose atoms a script CHOSE (integer-like
+    //     strings are atoms n | 1 << 31): every key in one low-bit residue (String(i * 65536)), and pairs of keys on
+    //     adjacent residues of a power-of-two table (n = 8,192) - a structure whose worst case the input cannot reach
     {
         Host::Options o;
         o.completionBounds = ValueBounds{8, 4, 4096};
@@ -1773,6 +1777,10 @@ int main()
                                              "let a, b; try { Reflect.ownKeys(new Proxy(t, {ownKeys: () => ['a', 'b']})); a = 'no' }"
                                              " catch (e) { a = String(e instanceof TypeError) }\n"
                                              "b = Reflect.ownKeys(new Proxy(t, {ownKeys: () => ['a']})).join(); a + ' ' + b\n");
+        const std::string dupTwo = text("try { Reflect.ownKeys(new Proxy({}, {ownKeys: () => ['a', 'b', 'b', 'a']})); 'no' }"
+                                        " catch (e) { (e instanceof TypeError) + ' ' + e.message }\n");
+        check(dupTwo == "true proxy: duplicate property",
+              "two different duplicates in one list are one TypeError of the same text (" + dupTwo + ")");
         check(order == "z,a,m" && dupSmall == "true proxy: duplicate property" && dupLarge == "true proxy: duplicate property" &&
                   fixedOut == "true other,fixed" && sealedExtra == "true a",
               "THE OWN-KEY LAWS KEPT: the trap's order (" + order + "); a duplicate a TypeError at 3 keys (" + dupSmall +
@@ -1782,8 +1790,14 @@ int main()
         plain.completionBounds = ValueBounds{8, 4, 4096};
         Host t(plain);   // one realm across its runs: the key lists are built once, outside the measured runs
         t.setConsole([](const std::string &) {});
-        const Result built = t.run("globalThis.lists = [32768, 131072].map(n => { const k = []; for (let i = 0; i < n; ++i)"
-                                   " k.push('p' + i); return k; }); 0\n", "build.js");
+        const Result built = t.run(
+            "const plain = n => { const k = []; for (let i = 0; i < n; ++i) k.push('p' + i); return k; };\n"
+            "const residue = n => { const k = []; for (let i = 0; i < n; ++i) k.push(String(i * 65536)); return k; };\n"
+            "const adjacent = n => { let size = 16; while (size < 2 * n) size *= 2; const k = [];\n"
+            "  for (let j = 0; j < n; ++j) k.push(String((Math.imul(j >> 1, 244002641) & (size - 1)) + (j & 1) * size));\n"
+            "  return k; };\n"
+            "globalThis.lists = [plain(32768), plain(131072), residue(8192), residue(32768), adjacent(8192), adjacent(32768)];"
+            " 0\n", "build.js");
         const auto cpu = [&t](int which) {
             double best = 1e300;
             for (int rep = 0; rep < 3; ++rep) {   // the least of three: the run's own cost, never a neighbour's
@@ -1797,12 +1811,16 @@ int main()
             }
             return best;
         };
-        const double small = cpu(0), large = cpu(1);
-        const double ratio = small > 0 ? large / small : 1e9;
-        check(built.status == Status::Ok && small > 0 && large > 0 && ratio < 8.0,
-              "THE SCALING LAW: listing 131,072 keys of a Proxy costs " + std::to_string(ratio) + "x listing 32,768 (under 8: "
-              "linear ~4, the quadratic scan ~16), in this thread's CPU time (" + std::to_string(small) + " s, " +
-              std::to_string(large) + " s)");
+        const char *families[] = {"ordinary keys (32,768 / 131,072)", "one low-bit residue, String(i * 65536) (8,192 / 32,768)",
+                                  "adjacent residues in pairs (8,192 / 32,768)"};
+        for (int f = 0; f < 3; ++f) {
+            const double small = cpu(2 * f), large = cpu(2 * f + 1);
+            const double ratio = small > 0 ? large / small : 1e9;
+            check(built.status == Status::Ok && small > 0 && large > 0 && ratio < 8.0,
+                  std::string("THE SCALING LAW, ") + families[f] + ": listing 4x the keys of a Proxy costs " +
+                      std::to_string(ratio) + "x (under 8: n log n ~4.5, a quadratic cost ~16), in this thread's CPU time (" +
+                      std::to_string(small) + " s, " + std::to_string(large) + " s)");
+        }
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
