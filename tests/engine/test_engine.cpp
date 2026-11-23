@@ -2964,14 +2964,22 @@ void texture_cache_keys_on_colour_space() {
     // its OWN id - a second loader given the first's id lost its texture to the first's destroy): a reload is a NEW
     // id of the SAME GPU texture - the texture manager's count (Engine::textureMemory, one entry a GPU texture) does
     // not move, so there is still no duplicate upload; destroying one id keeps the other alive.
-    std::vector<TextureMemoryEntry> before, after;
-    REQUIRE(fx.e->textureMemory(before));
+    // THE COUNT IS THIS PATH's (the confirm: a total would hide a regression that reuses the name): the textures the
+    // texture manager holds whose resource is this file - its two colour spaces, 2 - before and after the reloads.
+    const auto ofPath = [&]() {
+        std::vector<TextureMemoryEntry> all;
+        if (!fx.e->textureMemory(all)) return size_t(0);   // (0: the CONTROL below reads red)
+        size_t n = 0;
+        for (const TextureMemoryEntry &t : all) n += t.resource.find(path) != std::string::npos;
+        return n;
+    };
+    const size_t before = ofPath();
     const TextureId srgbAgain = s->loadTexture(path, true), linearAgain = s->loadTexture(path, false);
-    REQUIRE(fx.e->textureMemory(after));
-    CHECK_MSG(srgbAgain != 0 && srgbAgain != srgb && linearAgain != 0 && linearAgain != linear &&
-                  after.size() == before.size(),
-              "a reload in each colour space is a NEW id (%u, %u) of the SAME texture (%zu GPU textures before, %zu after)",
-              srgbAgain, linearAgain, before.size(), after.size());
+    const size_t after = ofPath();
+    CHECK_MSG(srgbAgain != 0 && srgbAgain != srgb && linearAgain != 0 && linearAgain != linear && before > 0 &&
+                  after == before,
+              "a reload in each colour space is a NEW id (%u, %u) of the SAME texture (%zu GPU textures of this file before, "
+              "%zu after; THE CONTROL: before > 0)", srgbAgain, linearAgain, before, after);
     // And the index stays in step: destroying one leaves the other alive and findable.
     CHECK(s->destroyTexture(srgb));
     CHECK(s->destroyTexture(linearAgain));

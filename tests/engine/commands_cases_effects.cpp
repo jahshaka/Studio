@@ -185,6 +185,19 @@ void casesEffects(Fixture &f)
             if (!failedWith(x.r, x.text)) missed += "\n      " + std::string(x.text) + " <- " + x.r.message;
         check(missed.empty(), "the effects commands refuse every declared domain by name (" +
                                   std::to_string(sizeof refused / sizeof refused[0]) + " cases)" + missed);
+        // EVERY RANGE's EXACT ENDS that are no whole number PASS (the confirm's C2): a decal's 0.001 m, a time to live's
+        // 0.01 s, the hole's 0.999, the planar maxDistance's 0.01 m - the arguments pass and the call reaches the node's
+        // existence (no engine here: "the node's scene is gone")
+        const Result ends[] = {
+            decal({{"width", Value(0.001)}, {"height", Value(0.001)}, {"depth", Value(0.001)}}),
+            emitterWith({{"ttlMin", Value(0.01)}, {"ttlMax", Value(0.01)}, {"innerExtents", nums({0.999, 0.999, 0})}}),
+        };
+        bool endsPass = true;
+        for (const Result &r : ends) endsPass = endsPass && r.message.find("the node's scene is gone") != std::string::npos;
+        const Result planarEnd = planar({{"maxDistance", Value(0.01)}});
+        check(endsPass && planarEnd.message.find("the engine did not start") != std::string::npos,
+              "every range's exact end that is no whole number passes its bound: decal extents 0.001, ttl 0.01, innerExtents "
+              "0.999, planar maxDistance 0.01 (" + ends[0].message + "; " + planarEnd.message + ")");
         const Result ok = planar({{"budget", Value(2)}, {"resolution", Value(1024)}});
         check(ok.status == Status::Failed && ok.message.find("the engine did not start") != std::string::npos,
               "THE CONTROL: planar params inside every bound pass them (" + ok.message + ")");

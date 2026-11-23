@@ -137,7 +137,14 @@ void casesGi(Fixture &f)
         check(missed.empty(), "the GI commands refuse every declared domain by name, the test levers and the pin shut without "
                               "--test-doors (" + std::to_string(sizeof refused / sizeof refused[0]) + " cases)" + missed);
         // THE CONTROLS: inside every bound the call reaches the engine (absent here); the levers and the pin pass with doors
-        const Result inside = gi({{"mode", Value("vct")}, {"probeCaptureSize", Value(256)}, {"updateBudget", Value(0)}});
+        const Result inside = gi({{"mode", Value("vct")}, {"probeCaptureSize", Value(256)}, {"updateBudget", Value(0)},
+                                  {"probeOverlap", Value(0.01)}});
+        // EVERY RANGE's EXACT ENDS that are no whole number PASS (the confirm's C2: a float constant as a bound widens and
+        // refuses the engine's own end): the sun contact's 0.05 and 50, the probe overlap's 0.01 (above)
+        const Result sunMin = sun({{"range", Value(0.05)}}), sunMax = sun({{"range", Value(50.0)}});
+        check(sunMin.message.find("the engine did not start") != std::string::npos &&
+                  sunMax.message.find("the engine did not start") != std::string::npos,
+              "the sun contact's range at exactly its ends, 0.05 and 50 m, passes its bound (" + sunMin.message + ")");
         const Result lever = doors.call("engine.gi.set", {doorScene, obj({{"testProbeGridFitMax", Value(10.0)}, {"cascadeVoxelLod", Value(false)}})});
         const Result pinOpen = pin({{"on", Value(true)}, {"cascadeBuiltCam", nums({1, 2, 3})}, {"cascadeFree", Value(Value::Array{Value(1)})}});
         check(inside.message.find("the engine did not start") != std::string::npos &&
