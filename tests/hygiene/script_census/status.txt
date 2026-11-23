@@ -1,0 +1,9 @@
+engine.published Engine::published
+engine.view.published View::published
+engine.monitor.set Engine::setFrameMonitor
+engine.monitor.popRecords Engine::popMonitorRecords
+engine.monitor.popEvents Engine::popMonitorEvents
+engine.frameSubmitStatus Engine::frameSubmitStatus
+engine.shaderCacheStats Engine::shaderCacheStats
+engine.scene.atomDrawStatus Scene::atomDrawStatus
+engine.view.exposureScale View::measuredExposureScale
