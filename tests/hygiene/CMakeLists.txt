@@ -905,6 +905,15 @@ add_test(NAME source.script_build_id
 set_tests_properties(source.script_build_id PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.script_build_id)
 
+# source.script_names (SCRIPT-IN-ENGINE-1, the tail; the lead's ruling 2026-11-23): THE SCRIPT's NAMES ARE THE ENGINE's
+# TOKENS, BY CONSTRUCTION - no fields_<family>.cpp of irisgl/engine/src/script/ holds a hand-typed `field("` (JAH_FIELD)
+# and no records_*.h a hand-typed `{E::V, "` pair (JAH_ENUMERATOR); the control counts the macros' uses (script_names.py
+# says the rules). Its self-test first, on its own toy copies.
+add_test(NAME source.script_names
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/script_names.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.script_names PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.script_names)
+
 # source.brick_list_bounded (NONDET-1 fix items D; READ-8 R8-1..R8-3): THE FEEDBACK'S DATA-DRIVEN READS ARE BOUNDED IN THE
 # SHADER - every read of the GPU-written brick list by the group index (the bounce, the copy-back, the directional steps
 # 0 and 1, the ray tier's sides gather) returns at or past the list's length and at a brick (or texel) past the volume;
@@ -945,7 +954,7 @@ jah_builds(none ROWS source.no_glsl_path source.fork_stamp source.no_raw_transac
     source.rough_lobe_transport source.gate_pace source.test_arms_unreachable source.webgpu_census source.ray_seam
     source.display_guard_toy source.on_demand_rows source.on_demand_toy source.no_box_paths source.brick_list_bounded
     source.scene_time_one_meaning source.ray_views_cached source.card_report_layout source.ray_loops_bounded
-    source.view_ray_origin source.engine_headers)
+    source.view_ray_origin source.engine_headers source.script_names)
 # the warm-up's key of this build (scripts/warm-app-cache.sh --key: the staged media and the engine's build id):
 jah_builds(JahshakaEngineMedia JahshakaEngineBuildId ROWS tooling.warm_app_cache tooling.warm_short tooling.warm_cold_rows
     tooling.warm_cold_calls tooling.warm_key tooling.warm_inherit tooling.warm_store source.display_guard)
