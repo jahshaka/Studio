@@ -226,17 +226,17 @@ if(TEST samples.mirror_room_boots.boot1)
 endif()
 
 # samples.resave_bytes — THE SHIPPED SAMPLES' SAVED BYTES (NOQT-DOCUMENT-1 stage 3's first item): every archive under
-# scenes/ (21) imported, opened and saved headless, then opened and saved again: the two blobs are byte-identical AND
-# the first equals its line in resave_bytes.sha256 (taken before the document's Qt types are replaced: no stored byte
-# moves). Two --headless processes (the NULL render system); the blobs read from the library's projects row between
-# them (resave_bytes.py says the law). It runs at every NOQT-DOCUMENT-1 stage end.
+# scenes/ (21) imported, opened and saved headless, then opened and saved again: the two blobs are byte-identical (the
+# fixed point; forward-only: no record of an older build's bytes, NOQT-DOCUMENT-1 stage 5). Two --headless processes
+# (the NULL render system); the blobs read from the library's projects row between them (resave_bytes.py says the law).
+# It runs at every NOQT-DOCUMENT-1 stage end.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/samples-home-resave)
 jah_fresh_home_fixture(samples.resave_bytes.fresh_home samplesResaveHome "${_home}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME samples.resave_bytes
          COMMAND python3 -I ${CMAKE_CURRENT_SOURCE_DIR}/resave_bytes.py
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}/scripts/resave_bytes.js
-                 ${CMAKE_SOURCE_DIR}/scenes ${CMAKE_CURRENT_SOURCE_DIR}/resave_bytes.sha256
+                 ${CMAKE_SOURCE_DIR}/scenes
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(samples.resave_bytes PROPERTIES
     JAHSHAKA_HEADLESS TRUE   # resave_bytes.py runs the app --headless only: the NULL render system (testing_rules R13)
