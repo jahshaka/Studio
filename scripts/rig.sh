@@ -204,7 +204,7 @@ cmd_run() {
     # every run - the command below always had the rig's)
     # (the CALLER a short hold's overrun is charged to: rig.sh's own caller - a loop of runs loses the class together)
     DISPLAY="$rdisp" JAH_GPU_CALLER="${JAH_GPU_CALLER:-$PPID}" "$here/gpu-exclusive.sh" "${lockopts[@]}" --label "$label" \
-        env DISPLAY="$rdisp" HOME="$data/home" JAHSHAKA_VR=0 JAH_CPUS="$c" JAH_RIG_DATA="$data" \
+        env -u DEBUGINFOD_URLS DISPLAY="$rdisp" HOME="$data/home" JAHSHAKA_VR=0 JAH_CPUS="$c" JAH_RIG_DATA="$data" \
         taskset -c "$c" nice -n 10 "${cmd[@]}"
     rc=$?
     JAH_RIG_USER=$$ cmd_down release > /dev/null

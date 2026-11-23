@@ -109,6 +109,9 @@
 # box's own cache, #97) - and what it PASSES of its own variables is the list on the next line:
 # A HOLD's COMMAND SEES: JAH_GPU_LOCK_HELD JAH_GPU_HOLD JAH_GPU_LOCK JAH_GPU_HOLD_LOG JAH_GPU_RESERVE_S JAH_GPU_PLACE_S JAH_GPU_MEM_MAX JAH_GPU_SWAP_MAX JAH_GPU_NO_SCOPE JAH_GPU_SWEEP_GRACE
 export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
+# NO OUTSIDE CALL FROM A HOLD (2026-11-23): the box's login shells name a debuginfod server (/etc/profile.d/debuginfod.sh);
+# a profiler under the card fetched symbol files through it. No hold's command reaches it.
+unset DEBUGINFOD_URLS
 export __GL_SHADER_DISK_CACHE_SIZE="${__GL_SHADER_DISK_CACHE_SIZE:-8589934592}"
 _ph=$(getent passwd "$(id -u)" | cut -d: -f6)
 export __GL_SHADER_DISK_CACHE_PATH="${__GL_SHADER_DISK_CACHE_PATH:-${_ph:-$HOME}/.cache/nvidia}"
