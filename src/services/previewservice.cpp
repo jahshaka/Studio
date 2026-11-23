@@ -179,8 +179,8 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
             loaded = AvatarAssets::load(guid, AvatarAssets::Scope::Project, mDb, project);
         if (!loaded.ok())
             return say(QStringLiteral("the avatar definition could not be read: %1").arg(loaded.error));
-        if (loaded.definition.modelAsset.isEmpty()) return say(QStringLiteral("this avatar names no model to draw"));
-        const QImage image = renderModel(loaded.definition.modelAsset);
+        if (loaded.definition.modelAsset.empty()) return say(QStringLiteral("this avatar names no model to draw"));
+        const QImage image = renderModel(QString::fromStdString(loaded.definition.modelAsset));
         if (image.isNull()) out->reason = QStringLiteral("the avatar's model could not be rendered: %1").arg(out->reason);
         return image;
     }

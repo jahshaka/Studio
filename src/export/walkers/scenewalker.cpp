@@ -113,7 +113,7 @@ SceneInventory collectInventory(const iris::ScenePtr &scene)
         case NodeKind::ParticleSystem: {
             ++inv.particleSystems;
             auto *ps = static_cast<iris::ParticleSystemNode *>(node.get());
-            if (ps->texture) addTextureSource(ps->texture->source);
+            if (ps->texture) addTextureSource(QString::fromStdString(ps->texture->source));
             break;
         }
         case NodeKind::Decal: {
@@ -134,7 +134,7 @@ SceneInventory collectInventory(const iris::ScenePtr &scene)
 
     // File-backed skies count as texture dependencies too.
     if (scene->skyType == iris::SkyType::EQUIRECTANGULAR && scene->skyTexture)
-        addTextureSource(scene->skyTexture->source);
+        addTextureSource(QString::fromStdString(scene->skyTexture->source));
     if (scene->skyType == iris::SkyType::CUBEMAP)
         for (int i = 0; i < 6; ++i) addTextureSource(QString::fromStdString(scene->skyBoxTextures[i]));
 

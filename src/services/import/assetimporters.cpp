@@ -723,7 +723,7 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
     if (materialName.isEmpty()) materialName = QStringLiteral("Default");
     const QJsonObject &normalised = materialDefinition;
     auto material = iris::PbrMaterial::create();
-    material->setName(materialName);
+    material->setName(materialName.toStdString());
 
     struct TexEntry { QString fileName, guid, path; };
     QVector<TexEntry> textures;

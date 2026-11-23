@@ -117,8 +117,8 @@ static void stampPieceSource(const iris::MaterialPtr &mat, const QString &assetG
 {
     auto pbr = std::dynamic_pointer_cast<iris::PbrMaterial>(mat);
     if (!pbr || assetGuid.isEmpty()) return;
-    if (pbr->customPiecePixel.isEmpty() && pbr->customPieceVertex.isEmpty()) return;
-    pbr->setGuid(assetGuid);
+    if (pbr->customPiecePixel.empty() && pbr->customPieceVertex.empty()) return;
+    pbr->setGuid(assetGuid.toStdString());
 }
 
 SceneEditService::SceneEditService(Database *db,
@@ -524,7 +524,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     if (!image.guid.isEmpty()) setParticleTexture(node, image.guid);
     // No project to pin into: the emitter draws the shipped file, which has no
     // asset identity — nothing is saved, as the comment above says.
-    else if (!image.path.isEmpty()) node->setTexture(iris::Texture2D::load(image.path), QString().toStdString());
+    else if (!image.path.isEmpty()) node->setTexture(iris::Texture2D::load(image.path.toStdString()), QString().toStdString());
     if (!image.error.isEmpty())
         JahLog::write(JahLog::legacy, JahLog::Level::Warning, "addParticleSystem: the default particle image was not bound - " + image.error);
 
@@ -870,7 +870,7 @@ bool SceneEditService::setParticleTexture(const iris::ParticleSystemNodePtr &emi
         db->connection(), AssetStorePaths::root(),
         project->getProjectGuid(), textureGuid);
     if (path.isEmpty()) return false;
-    emitter->setTexture(iris::Texture2D::load(path), textureGuid.toStdString());
+    emitter->setTexture(iris::Texture2D::load(path.toStdString()), textureGuid.toStdString());
     return !!emitter->texture;
 }
 
@@ -909,7 +909,7 @@ void SceneEditService::addAssetParticleSystem(bool ignore, iris::Vec3 position, 
                 db->connection(), AssetStorePaths::root(),
                 project->getProjectGuid(), textureGuid);
             particleNode->setTexture(texPath.isEmpty() ? iris::Texture2DPtr()
-                                                       : iris::Texture2D::load(texPath),
+                                                       : iris::Texture2D::load(texPath.toStdString()),
                                      textureGuid.toStdString());
         }
     }

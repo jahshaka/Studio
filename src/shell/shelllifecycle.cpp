@@ -113,8 +113,8 @@ Database *ShellLifecycle::openLibrary()
     // EVERY SHIPPED MESH THE APP DRAWS IS ONE OF THOSE ROWS (SHIPPED-BAKES-1):
     // the preview docks' subjects, the avatar room's cube and the VR controller
     // models ask for theirs by seed key through IrisGL's seam, and get the bake.
-    iris::ShippedMeshes::setResolver([db](const QString &seedKey) {
-        return PrimitiveAssets::mesh(seedKey, db);
+    iris::ShippedMeshes::setResolver([db](const std::string &seedKey) {
+        return PrimitiveAssets::mesh(QString::fromStdString(seedKey), db);
     });
     // STALE BAKES, IN THE BACKGROUND (FORWARD-ONLY-1 D1): a build that changed
     // the bake's producer rebuilds every stale bake from its own source, at the

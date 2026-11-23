@@ -293,9 +293,9 @@ iris::PbrMaterialPtr Builder::cutout(float r, float g, float b, float roughness,
     // THE LEAF MASK: one session texture per cell count (the pixels are a function of it alone).
     const int res = 512;
     const QString guid = QStringLiteral("jahlab-leaf-mask-%1").arg(cells);
-    iris::Texture2DPtr tex = iris::LiveTextures::find(guid);
+    iris::Texture2DPtr tex = iris::LiveTextures::find(guid.toStdString());
     if (!tex) {
-        tex = iris::LiveTextures::create(guid, QStringLiteral("leaf mask"), res, res, true);
+        tex = iris::LiveTextures::create(guid.toStdString(), (QStringLiteral("leaf mask")).toStdString(), res, res, true);
         if (tex) {
             iris::Image img = iris::Image::filled(res, res, 255, 255, 255, 0);
             Lcg rng(0x1eafu + unsigned(cells));

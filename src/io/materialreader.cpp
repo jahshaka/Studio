@@ -40,7 +40,6 @@ For more information see the LICENSE file
 // iris includes
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "services/jahlog.h"
-#include "modules/materials/core/materialhelper.h"
 
 MaterialReader::MaterialReader(TextureSource texSrc)
 {
@@ -99,7 +98,7 @@ iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Data
 	            .arg(matObject.value(QStringLiteral("materialType")).toString()));
 	auto mat = iris::PbrMaterial::create();
 	const QString name = matObject.value(QStringLiteral("name")).toString();
-	if (!name.isEmpty()) mat->setName(name);
+	if (!name.isEmpty()) mat->setName(name.toStdString());
 	return mat;
 }
 
@@ -187,7 +186,7 @@ void MaterialReader::restoreGeneratedPieces(iris::PbrMaterialPtr mat, const QJso
 	MaterialHelper::resolveAppRelativeTextures(graph.get(), MaterialHelper::TextureBinding::PathOnly,
 	                                           assethome::materials());
 	const QJsonObject pieces = materials::PieceEmitter::emitAndStore(graph.get(), MaterialHelper::textureResolver());
-	mat->setCustomPiecePixel(pieces.value(QStringLiteral("customPiecePixel")).toString());
-	mat->setCustomPieceVertex(pieces.value(QStringLiteral("customPieceVertex")).toString());
+	mat->setCustomPiecePixel((pieces.value(QStringLiteral("customPiecePixel")).toString()).toStdString());
+	mat->setCustomPieceVertex((pieces.value(QStringLiteral("customPieceVertex")).toString()).toStdString());
 }
 

@@ -107,8 +107,8 @@ QStringList makePbrMapKeys()
     // what makes material.set resolve a guid through the CAS for them, and what
     // the writableKeys answer quotes.
     for (int i = 0; i < iris::PbrMaterial::kDetailLayers; ++i) {
-        keys << iris::PbrMaterial::detailRow(i, "Map");
-        keys << iris::PbrMaterial::detailRow(i, "NormalMap");
+        keys << QString::fromStdString(iris::PbrMaterial::detailRow(i, "Map"));
+        keys << QString::fromStdString(iris::PbrMaterial::detailRow(i, "NormalMap"));
     }
     keys << QStringLiteral("detailWeightMap");
     return keys;
@@ -1887,11 +1887,11 @@ bool MaterialApi::setDetail(const QString &nodeId, int layer, const QVariantMap 
     };
     for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
         const QString &k = it.key();
-        if      (k == QLatin1String("map"))          flat[row("Map")] = it.value();
-        else if (k == QLatin1String("normalMap"))    flat[row("NormalMap")] = it.value();
-        else if (k == QLatin1String("blend"))        flat[row("Blend")] = it.value();
-        else if (k == QLatin1String("weight"))       flat[row("Weight")] = it.value();
-        else if (k == QLatin1String("normalWeight")) flat[row("NormalWeight")] = it.value();
+        if      (k == QLatin1String("map"))          flat[QString::fromStdString(row("Map"))] = it.value();
+        else if (k == QLatin1String("normalMap"))    flat[QString::fromStdString(row("NormalMap"))] = it.value();
+        else if (k == QLatin1String("blend"))        flat[QString::fromStdString(row("Blend"))] = it.value();
+        else if (k == QLatin1String("weight"))       flat[QString::fromStdString(row("Weight"))] = it.value();
+        else if (k == QLatin1String("normalWeight")) flat[QString::fromStdString(row("NormalWeight"))] = it.value();
         else if (k == QLatin1String("offset") || k == QLatin1String("scale")) {
             // {x, y} or [x, y] — the two shapes every vector argument in the
             // registry accepts.
@@ -1909,8 +1909,8 @@ bool MaterialApi::setDetail(const QString &nodeId, int layer, const QVariantMap 
             if (!xv.isValid() && !yv.isValid())
                 return fail(QStringLiteral("material.setDetail: '%1' expects {x, y} or [x, y]")
                                 .arg(k));
-            if (xv.isValid()) flat[row(isOffset ? "OffsetU" : "ScaleU")] = xv;
-            if (yv.isValid()) flat[row(isOffset ? "OffsetV" : "ScaleV")] = yv;
+            if (xv.isValid()) flat[QString::fromStdString(row(isOffset ? "OffsetU" : "ScaleU"))] = xv;
+            if (yv.isValid()) flat[QString::fromStdString(row(isOffset ? "OffsetV" : "ScaleV"))] = yv;
         }
         else
             return fail(QStringLiteral("material.setDetail: unknown key '%1' — accepted: map, "
@@ -1931,9 +1931,9 @@ QVariantList MaterialApi::detail(const QString &nodeId)
     for (int i = 0; i < iris::PbrMaterial::kDetailLayers; ++i) {
         const auto &d = pbr->detail[i];
         out.append(QVariantMap{
-            { "map", d.map }, { "normalMap", d.normalMap },
+            { "map", QString::fromStdString(d.map) }, { "normalMap", QString::fromStdString(d.normalMap) },
             { "blend", d.blend },
-            { "blendName", QString::fromLatin1(names.value(d.blend, names.value(0))) },
+            { "blendName", QString::fromLatin1(d.blend >= 0 && d.blend < int(names.size()) ? names[d.blend] : names[0]) },
             { "offset", QVariantMap{ { "x", d.offsetU }, { "y", d.offsetV } } },
             { "scale",  QVariantMap{ { "x", d.scaleU },  { "y", d.scaleV } } },
             { "weight", d.weight }, { "normalWeight", d.normalWeight },
@@ -1992,8 +1992,8 @@ QVariantMap MaterialApi::get(const QString &nodeId)
     // surface rather than a baked one. Reported read-only, and absent when
     // there is none.
     if (auto *pbr = dynamic_cast<iris::PbrMaterial *>(material.get())) {
-        if (!pbr->customPiecePixel.isEmpty()) out["customPiecePixel"] = pbr->customPiecePixel;
-        if (!pbr->customPieceVertex.isEmpty()) out["customPieceVertex"] = pbr->customPieceVertex;
+        if (!pbr->customPiecePixel.empty()) out["customPiecePixel"] = QString::fromStdString(pbr->customPiecePixel);
+        if (!pbr->customPieceVertex.empty()) out["customPieceVertex"] = QString::fromStdString(pbr->customPieceVertex);
         // The animated UV fold's scroll (TORNADO-1), read-only like the pieces.
         if (pbr->textureVelocityU != 0.0f || pbr->textureVelocityV != 0.0f)
             out["textureVelocity"] = QVariantList{ double(pbr->textureVelocityU),

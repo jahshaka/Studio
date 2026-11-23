@@ -89,18 +89,18 @@ static QJsonObject oldRealistic(const iris::SkyRealistic &r)
 static QJsonObject oldLocomotionToJson(const iris::LocomotionAsset &asset)
 {
     QJsonObject out;
-    out[QStringLiteral("name")] = asset.name;
-    out[QStringLiteral("entry")] = asset.entry;
+    out[QStringLiteral("name")] = QString::fromStdString(asset.name);
+    out[QStringLiteral("entry")] = QString::fromStdString(asset.entry);
 
     QJsonArray states;
     for (const auto &s : asset.states) {
         QJsonObject o;
-        o[QStringLiteral("name")] = s.name;
+        o[QStringLiteral("name")] = QString::fromStdString(s.name);
         o[QStringLiteral("loop")] = s.loop;
         QJsonObject src;
         if (s.kind == iris::LocomotionSourceKind::Clip) {
             src[QStringLiteral("kind")] = QStringLiteral("clip");
-            src[QStringLiteral("clip")] = s.clip;
+            src[QStringLiteral("clip")] = QString::fromStdString(s.clip);
             src[QStringLiteral("speed")] = double(s.speed);
         } else {
             src[QStringLiteral("kind")] = QStringLiteral("blendspace");
@@ -108,7 +108,7 @@ static QJsonObject oldLocomotionToJson(const iris::LocomotionAsset &asset)
             QJsonArray samples;
             for (const auto &sm : s.space.samples) {
                 QJsonObject so;
-                so[QStringLiteral("clip")] = sm.clip;
+                so[QStringLiteral("clip")] = QString::fromStdString(sm.clip);
                 so[QStringLiteral("position")] = double(sm.position);
                 so[QStringLiteral("authoredSpeed")] = double(sm.authoredSpeed);
                 samples.append(so);
@@ -123,12 +123,12 @@ static QJsonObject oldLocomotionToJson(const iris::LocomotionAsset &asset)
     QJsonArray transitions;
     for (const auto &t : asset.transitions) {
         QJsonObject o;
-        o[QStringLiteral("from")] = t.from;
-        o[QStringLiteral("to")] = t.to;
+        o[QStringLiteral("from")] = QString::fromStdString(t.from);
+        o[QStringLiteral("to")] = QString::fromStdString(t.to);
         // The CANONICAL TEXT, not the enum: a file that stored an int would
         // freeze today's enum order, and a human reading the scene JSON would
         // learn nothing. `text()` round-trips through `parse` byte for byte.
-        o[QStringLiteral("condition")] = t.condition.text();
+        o[QStringLiteral("condition")] = QString::fromStdString(t.condition.text());
         o[QStringLiteral("blendDuration")] = double(t.blendDuration);
         transitions.append(o);
     }
@@ -141,16 +141,16 @@ static QJsonObject oldAvatarToJson(const iris::AvatarDefinition &def)
     QJsonObject obj;
     obj[QStringLiteral("format")] = QStringLiteral("jah-avatar");
     obj[QStringLiteral("version")] = iris::AvatarDefinition::kFormatVersion;
-    obj[QStringLiteral("name")] = def.name;
+    obj[QStringLiteral("name")] = QString::fromStdString(def.name);
 
     QJsonObject model;
-    model[QStringLiteral("asset")] = def.modelAsset;
+    model[QStringLiteral("asset")] = QString::fromStdString(def.modelAsset);
     obj[QStringLiteral("model")] = model;
 
     QJsonObject rig;
-    rig[QStringLiteral("rigId")] = def.rig.rigId;
+    rig[QStringLiteral("rigId")] = QString::fromStdString(def.rig.rigId);
     rig[QStringLiteral("bones")] = def.rig.bones;
-    rig[QStringLiteral("boneNames")] = QJsonArray::fromStringList(def.rig.boneNames);
+    rig[QStringLiteral("boneNames")] = QJsonArray::fromStringList(qtstd::toQStringList(def.rig.boneNames));
     if (def.rig.hasUnitScale) rig[QStringLiteral("unitScale")] = def.rig.unitScale;
     else rig[QStringLiteral("unitScale")] = QJsonValue();   // the SLOT, written as null
     obj[QStringLiteral("rig")] = rig;
@@ -158,9 +158,9 @@ static QJsonObject oldAvatarToJson(const iris::AvatarDefinition &def)
     QJsonArray clips;
     for (const auto &clip : def.clips) {
         QJsonObject entry;
-        entry[QStringLiteral("asset")] = clip.asset;
-        entry[QStringLiteral("rawName")] = clip.rawName;
-        entry[QStringLiteral("name")] = clip.name;
+        entry[QStringLiteral("asset")] = QString::fromStdString(clip.asset);
+        entry[QStringLiteral("rawName")] = QString::fromStdString(clip.rawName);
+        entry[QStringLiteral("name")] = QString::fromStdString(clip.name);
         entry[QStringLiteral("looping")] = clip.looping;
         entry[QStringLiteral("rootMotion")] = clip.rootMotion;
         clips.append(entry);
@@ -168,7 +168,7 @@ static QJsonObject oldAvatarToJson(const iris::AvatarDefinition &def)
     obj[QStringLiteral("clips")] = clips;
 
     QJsonObject defaults;
-    defaults[QStringLiteral("activeClip")] = def.defaultClip;
+    defaults[QStringLiteral("activeClip")] = QString::fromStdString(def.defaultClip);
     obj[QStringLiteral("defaults")] = defaults;
 
     if (def.hasLocomotion) {
@@ -177,7 +177,7 @@ static QJsonObject oldAvatarToJson(const iris::AvatarDefinition &def)
         for (int i = 0; i < iris::kClipRoleCount; ++i) {
             const auto role = iris::ClipRole(i);
             if (def.locomotionRoles.has(role))
-                roles[QLatin1String(iris::clipRoleName(role))] = def.locomotionRoles.get(role);
+                roles[QLatin1String(iris::clipRoleName(role))] = QString::fromStdString(def.locomotionRoles.get(role));
         }
         loco[QStringLiteral("roles")] = roles;
         loco[QStringLiteral("asset")] = oldLocomotionToJson(def.locomotion);
@@ -306,19 +306,19 @@ static void testFileCodecs()
 {
     std::printf("\n-- (2) the avatar definition and the locomotion asset: written, parsed, read, written again --\n");
     iris::AvatarDefinition def;
-    def.name = QStringLiteral("Avatar é");
-    def.modelAsset = QStringLiteral("model-guid");
-    def.rig.rigId = QStringLiteral("rig");
+    def.name = (QStringLiteral("Avatar é")).toStdString();
+    def.modelAsset = (QStringLiteral("model-guid")).toStdString();
+    def.rig.rigId = (QStringLiteral("rig")).toStdString();
     def.rig.bones = 3;
-    def.rig.boneNames = { QStringLiteral("hips"), QStringLiteral("spine"), QStringLiteral("head") };
+    def.rig.boneNames = { "hips", "spine", "head" };
     def.rig.hasUnitScale = true;
     def.rig.unitScale = 0.01;
     iris::AvatarClipEntry clip;
-    clip.asset = QStringLiteral("clip-guid");
-    clip.rawName = QStringLiteral("Take 001");
-    clip.name = QStringLiteral("walk");
-    def.clips.append(clip);
-    def.defaultClip = QStringLiteral("walk");
+    clip.asset = (QStringLiteral("clip-guid")).toStdString();
+    clip.rawName = (QStringLiteral("Take 001")).toStdString();
+    clip.name = (QStringLiteral("walk")).toStdString();
+    def.clips.push_back(clip);
+    def.defaultClip = (QStringLiteral("walk")).toStdString();
     def.hasMovement = true;
     def.movement.walkSpeed = 2.5f;
     def.hasSockets = true;
@@ -326,31 +326,31 @@ static void testFileCodecs()
     def.hasLocomotion = true;
     {
         iris::LocomotionAsset &a = def.locomotion;
-        a.name = QStringLiteral("Biped");
-        a.entry = QStringLiteral("idle");
+        a.name = (QStringLiteral("Biped")).toStdString();
+        a.entry = (QStringLiteral("idle")).toStdString();
         iris::LocomotionStateDef idle;
-        idle.name = QStringLiteral("idle");
+        idle.name = (QStringLiteral("idle")).toStdString();
         idle.kind = iris::LocomotionSourceKind::Clip;
-        idle.clip = QStringLiteral("walk");
+        idle.clip = (QStringLiteral("walk")).toStdString();
         idle.speed = 1.25f;
         iris::LocomotionStateDef move;
-        move.name = QStringLiteral("move");
+        move.name = (QStringLiteral("move")).toStdString();
         move.kind = iris::LocomotionSourceKind::BlendSpace;
         move.space.syncClips = false;
         iris::LocomotionBlendSample sample;
-        sample.clip = QStringLiteral("walk");
+        sample.clip = (QStringLiteral("walk")).toStdString();
         sample.position = 2.0f;
         sample.authoredSpeed = 1.5f;
-        move.space.samples.append(sample);
+        move.space.samples.push_back(sample);
         sample.position = 5.5f;
         sample.authoredSpeed = 4.75f;
-        move.space.samples.append(sample);   // a blend space needs two
+        move.space.samples.push_back(sample);   // a blend space needs two
         a.states = { idle, move };
         iris::LocomotionTransitionDef t;
-        t.from = QStringLiteral("idle");
-        t.to = QStringLiteral("move");
-        QString err;
-        iris::LocomotionCondition::parse(QStringLiteral("speed > 0.5"), t.condition, &err);
+        t.from = (QStringLiteral("idle")).toStdString();
+        t.to = (QStringLiteral("move")).toStdString();
+        std::string err;
+        iris::LocomotionCondition::parse("speed > 0.5", t.condition, &err);
         t.blendDuration = 0.2f;
         a.transitions = { t };
     }
@@ -358,8 +358,8 @@ static void testFileCodecs()
     // nulls), and one with locomotion but no movement or unit scale.
     {
         iris::AvatarDefinition bare;
-        bare.name = QStringLiteral("bare");
-        bare.modelAsset = QStringLiteral("m");
+        bare.name = (QStringLiteral("bare")).toStdString();
+        bare.modelAsset = (QStringLiteral("m")).toStdString();
         iris::AvatarDefinition partial = def;
         partial.hasMovement = false;
         partial.rig.hasUnitScale = false;
@@ -375,10 +375,10 @@ static void testFileCodecs()
     }
     const QByteArray first = QJsonDocument(qtstd::toQJsonObject(iris::avatarDefinitionToJson(def))).toJson();
     iris::AvatarDefinition back;
-    QString error;
+    std::string error;
     const bool read = iris::avatarDefinitionFromJson(qtstd::fromQJsonObject(QJsonDocument::fromJson(first).object()), back, &error);
     const QByteArray second = QJsonDocument(qtstd::toQJsonObject(iris::avatarDefinitionToJson(back))).toJson();
-    CHECK(read && first == second, "the avatar definition: its text read back writes the same bytes (" + error.toStdString() + ")");
+    CHECK(read && first == second, "the avatar definition: its text read back writes the same bytes (" + error + ")");
     ++texts;
     CHECK(back.name == def.name && back.rig.boneNames == def.rig.boneNames && back.rig.unitScale == def.rig.unitScale &&
           back.sockets == def.sockets && back.movement.walkSpeed == 2.5f && back.locomotion.states.size() == def.locomotion.states.size(),

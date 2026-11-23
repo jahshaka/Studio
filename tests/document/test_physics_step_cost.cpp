@@ -76,6 +76,7 @@
 #include "jahshaka/engine/Published.h"
 #include "jahshaka/engine/EngineInspect.h"
 #include "../support/enginetesthelpers.h"
+#include "irisgl/document/mapvalue.h"
 
 static int gFailures = 0;
 #define CHECK(cond, ...) do { char m_[512]; std::snprintf(m_, sizeof m_, __VA_ARGS__); \
@@ -204,8 +205,8 @@ Run runPile(const std::string &arm, int bodies, int frames, Rig *mirrorRig, cons
                                 (unsigned long long)std::chrono::duration_cast<std::chrono::nanoseconds>(t1.time_since_epoch()).count() });
         int a = 0, nonFinite = 0;
         for (auto it = env->hashBodies.cbegin(); it != env->hashBodies.cend(); ++it) {
-            if (it.value()->getInvMass() > 0.0f && it.value()->isActive()) ++a;
-            const btVector3 o = it.value()->getWorldTransform().getOrigin();
+            if (it->second->getInvMass() > 0.0f && it->second->isActive()) ++a;
+            const btVector3 o = it->second->getWorldTransform().getOrigin();
             if (!std::isfinite(o.x()) || !std::isfinite(o.y()) || !std::isfinite(o.z())) ++nonFinite;
         }
         active.push_back(a);
@@ -225,7 +226,7 @@ Run runPile(const std::string &arm, int bodies, int frames, Rig *mirrorRig, cons
         if (((f + 1) & f) == 0 || f + 1 == frames) {   // a power of two, and the last
             std::vector<btTransform> at;
             for (const auto &n : pile.bodies)
-                if (btRigidBody *body = env->hashBodies.value(QString::fromStdString(n->getGUID()), nullptr)) at.push_back(body->getWorldTransform());
+                if (btRigidBody *body = iris::valueOr(env->hashBodies, n->getGUID(), nullptr)) at.push_back(body->getWorldTransform());
             r.checkpoints.push_back({ f + 1, std::move(at) });
         }
     }
@@ -241,7 +242,7 @@ Run runPile(const std::string &arm, int bodies, int frames, Rig *mirrorRig, cons
     std::sort(active.begin(), active.end());
     r.activeMedian = active[active.size() / 2];
     for (const auto &n : pile.bodies)
-        if (btRigidBody *body = env->hashBodies.value(QString::fromStdString(n->getGUID()), nullptr)) r.poses.push_back(body->getWorldTransform());
+        if (btRigidBody *body = iris::valueOr(env->hashBodies, n->getGUID(), nullptr)) r.poses.push_back(body->getWorldTransform());
     if (mirror) {
         CHECK(mirror->verifyAgainstFullWalk() == 0, "[%s] in play the full walk after the physics frames pushes nothing",
               arm.c_str());

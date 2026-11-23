@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/core/text.h"
 
 using namespace scriptmod;
 
@@ -262,7 +263,7 @@ QVariantList AnimApi::list(const QString &id)
         const int animIndex = index++;
         if (!anim) continue;
         QVariantMap m;
-        m["name"] = anim->getName();
+        m["name"] = QString::fromStdString(anim->getName());
         m["index"] = animIndex;
         m["active"] = (anim == active);
         m["length"] = anim->getLength();
@@ -270,8 +271,8 @@ QVariantList AnimApi::list(const QString &id)
         m["frameRate"] = anim->getFrameRate();
         m["skeletal"] = anim->hasSkeletalAnimation();
         QVariantList props;
-        for (auto it = anim->properties.constBegin(); it != anim->properties.constEnd(); ++it)
-            props.append(it.key());
+        for (auto it = anim->properties.cbegin(); it != anim->properties.cend(); ++it)
+            props.append(QString::fromStdString(it->first));
         m["properties"] = props;
         out.append(m);
     }
@@ -286,7 +287,7 @@ QString AnimApi::create(const QString &id, const QString &name)
     const QString animName = name.isEmpty()
             ? QStringLiteral("Animation%1").arg(node->getAnimations().size() + 1)
             : name;
-    auto anim = iris::Animation::create(animName);
+    auto anim = iris::Animation::create(animName.toStdString());
     node->addAnimation(anim);
     node->setAnimation(anim);
     return animName;
@@ -361,7 +362,7 @@ QVariantList AnimApi::properties(const QString &id)
         m["displayName"] = prop.displayName;
         m["type"] = trackTypeName(prop.type);
         m["value"] = propertyValueToJs(prop.type, prop.value);
-        m["animated"] = active ? active->hasPropertyAnim(prop.name) : false;
+        m["animated"] = active ? active->hasPropertyAnim(prop.name.toStdString()) : false;
         out.append(m);
     }
     return out;
@@ -444,13 +445,13 @@ QVariantMap AnimApi::keyframes(const QString &id, const QString &property)
     out["length"] = anim->getLength();
     QVariantList tracks;
 
-    if (anim->hasPropertyAnim(property)) {
-        if (auto *track = anim->getPropertyAnim(property)) {
+    if (anim->hasPropertyAnim(property.toStdString())) {
+        if (auto *track = anim->getPropertyAnim(property.toStdString())) {
             const auto frames = track->getKeyFrames();
-            out["type"] = trackTypeName(frames.count());
+            out["type"] = trackTypeName(int(frames.size()));
             for (const auto &info : frames) {
                 QVariantMap t;
-                t["name"] = info.name;
+                t["name"] = QString::fromStdString(info.name);
                 QVariantList keys;
                 if (info.keyFrame) {
                     for (auto *key : info.keyFrame->keys) {
@@ -486,9 +487,9 @@ bool AnimApi::setKeyTangents(const QString &id, const QString &property, double 
     if (!node) return false;
     auto anim = activeOrFail(node, QStringLiteral("anim.setKeyTangents"));
     if (!anim) return false;
-    if (!anim->hasPropertyAnim(property))
+    if (!anim->hasPropertyAnim(property.toStdString()))
         return fail(QStringLiteral("anim.setKeyTangents: no track for '%1'").arg(property));
-    auto *track = anim->getPropertyAnim(property);
+    auto *track = anim->getPropertyAnim(property.toStdString());
     if (!track) return fail(QStringLiteral("anim.setKeyTangents: no track for '%1'").arg(property));
 
     iris::TangentType left = iris::TangentType::Free, right = iris::TangentType::Free;
@@ -506,7 +507,7 @@ bool AnimApi::setKeyTangents(const QString &id, const QString &property, double 
     int touched = 0;
     for (const auto &info : track->getKeyFrames()) {
         if (!info.keyFrame) continue;
-        if (!channel.isEmpty() && info.name.compare(channel, Qt::CaseInsensitive) != 0) continue;
+        if (!channel.isEmpty() && !iris::text::iequalsAscii(info.name, channel.toStdString())) continue;
         for (auto *key : info.keyFrame->keys) {
             if (qAbs(key->time - time) > 1e-4) continue;
             if (shape.contains("left"))       key->leftTangent = left;

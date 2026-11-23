@@ -24,7 +24,7 @@ namespace BuiltinMaterials {
 iris::PbrMaterialPtr fromPreset(const MaterialPreset &preset)
 {
     auto mat = iris::PbrMaterial::create();
-    mat->setName(preset.name);
+    mat->setName(preset.name.toStdString());
 
     if (preset.type.compare(QStringLiteral("PBR"), Qt::CaseInsensitive) == 0) {
         mat->setValue("baseColor",           qtstd::colourValue(preset.baseColor));

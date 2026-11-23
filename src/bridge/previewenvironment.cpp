@@ -289,10 +289,10 @@ void apply(const iris::ScenePtr &scene)
     // ONE session texture for every preview surface in the process: the pixels
     // are identical by construction, and one upload per mirror is the whole
     // cost of the environment.
-    iris::Texture2DPtr sky = iris::LiveTextures::find(QString::fromLatin1(kSkyGuid));
+    iris::Texture2DPtr sky = iris::LiveTextures::find(QString::fromLatin1(kSkyGuid).toStdString());
     if (!sky) {
-        sky = iris::LiveTextures::create(QString::fromLatin1(kSkyGuid),
-                                         QStringLiteral("Preview studio environment"),
+        sky = iris::LiveTextures::create(QString::fromLatin1(kSkyGuid).toStdString(),
+                                         "Preview studio environment",
                                          kWidth, kHeight, false);
         if (sky) {
             iris::Image frame = imagedecode::toImage(image());   // once a process, not a frame

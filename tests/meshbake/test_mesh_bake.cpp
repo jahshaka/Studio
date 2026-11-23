@@ -83,6 +83,8 @@
 #include "services/assetstorepaths.h"
 #include "services/import/assetimportservice.h"
 #include "services/meshbakestore.h"
+#include "io/scenewriter.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/import/meshprewarm.h"
 #include "irisgl/import/parsecensus.h"
 #include "services/primitiveassets.h"
@@ -3494,6 +3496,53 @@ static int roundTripRow()
 
     std::printf("== 5. a corrupt bake is re-baked by itself when its source is there ==\n");
     refusedBakeRequeued();
+
+    // (6) THE SAVED ACTIVE-CLIP INDEX (the reader's F19 on batch 2): QList::indexOf wrote -1 for an active clip that is
+    // not in the node's list; `find - begin` wrote the list's size. The file says -1; the present clip its index (the
+    // control); scenereader.cpp's bound (an index past the list is no clip) reads both.
+    std::printf("== 6. the saved active clip: its index, or -1 when it is not in the list ==\n");
+    {
+        auto node = iris::SceneNode::create();
+        auto listed = iris::Animation::create("listed"), absent = iris::Animation::create("absent");
+        node->addAnimation(listed);
+        node->setAnimation(absent);
+        QJsonObject obj;
+        SceneWriter::writeAnimationData(obj, node);
+        CHECK_LOUD(obj.value("activeAnimation").toInt(99) == -1, "an active clip NOT in the node's list is saved as -1");
+        node->setAnimation(listed);
+        QJsonObject control;
+        SceneWriter::writeAnimationData(control, node);
+        CHECK_LOUD(control.value("activeAnimation").toInt(99) == 0, "the control: the listed active clip is saved as its index, 0");
+    }
+
+    // (7) THE CLIP BAKE (.jcb, v39): the .jmb's payload checksum (a flipped byte at four places REFUSED by name) and the
+    // parent's bound at the read (the hierarchy is pre-order: a parent past the count, or the node itself, REFUSED by name
+    // - src/services/animationfile.cpp's posePlanar indexes a pose with it). The untouched clip loads (the control).
+    std::printf("== 7. the clip bake: its checksum and its nodes' parents ==\n");
+    {
+        const QString cfp = iris::MeshBake::clipFingerprintFor(QStringLiteral("0123456789abcdef").repeated(4));
+        const iris::MeshBake::Clip clip =
+            iris::MeshBake::buildClipFromFile(fixture(QStringLiteral("tests/importer/fixtures/ticks_anim.glb")), cfp);
+        CHECK_LOUD(clip.valid && clip.info.nodeParents.size() > 1, "the clip fixture bakes, with a hierarchy (ticks_anim.glb)");
+        const QByteArray good = iris::MeshBake::serializeClip(clip);
+        CHECK_LOUD(iris::MeshBake::deserializeClip(good, cfp).valid, "the control: the untouched clip blob loads");
+        for (const int at : { 16, int(good.size() / 2), int(good.size()) - 9, int(good.size()) - 1 }) {
+            QByteArray flipped = good;
+            flipped[at] = char(flipped.at(at) ^ 0x01);
+            const iris::MeshBake::Clip back = iris::MeshBake::deserializeClip(flipped, cfp);
+            CHECK_LOUD(!back.valid && back.refusal == "its checksum does not match",
+                       qUtf8Printable(QStringLiteral("a clip byte flipped at %1 of %2 is REFUSED by name").arg(at).arg(good.size())));
+        }
+        iris::MeshBake::Clip bad = clip;
+        bad.info.nodeParents.last() = int(bad.info.nodeParents.size());   // past the count
+        const iris::MeshBake::Clip past = iris::MeshBake::deserializeClip(iris::MeshBake::serializeClip(bad), cfp);
+        CHECK_LOUD(!past.valid && past.refusal == "a node's parent index is out of range",
+                   "a node whose parent index is past the node count is REFUSED by name");
+        bad.info.nodeParents.last() = int(bad.info.nodeParents.size()) - 1;   // the node itself (a cycle of one)
+        const iris::MeshBake::Clip self = iris::MeshBake::deserializeClip(iris::MeshBake::serializeClip(bad), cfp);
+        CHECK_LOUD(!self.valid && self.refusal == "a node's parent index is out of range",
+                   "a node that is its own parent is REFUSED by name");
+    }
 
     std::printf("info: %d check(s)\n", checks);
     if (failures) std::printf("bake.round_trip: FAILED (%d)\n", failures);   // the verdict, the last line (CODING_RULES § 4)

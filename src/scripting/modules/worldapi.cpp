@@ -3057,7 +3057,7 @@ QVariantMap WorldApi::clouds(const QVariantMap &params)
         // VALIDATED BEFORE ANYTHING IS WRITTEN (world.vr's rule): a call with
         // one bad value writes none of the good ones.
         iris::CloudLayer c = scene->clouds;
-        QString weatherPath = scene->cloudWeatherMap ? scene->cloudWeatherMap->source : QString();
+        QString weatherPath = scene->cloudWeatherMap ? QString::fromStdString(scene->cloudWeatherMap->source) : QString();
         if (params.contains(QStringLiteral("enabled")))
             c.enabled = params.value(QStringLiteral("enabled")).toBool();
         const struct { const char *key; float *field; } numbers[] = {
@@ -3790,7 +3790,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         if (!resolveTexture(params.value("texture"), guid, path))
             return fail("world.sky: 'texture' must be a texture asset guid with stored bytes "
                         "(assets.list({type:\"texture\"}) lists them)");
-        scene->setSkyTexture(iris::Texture2D::load(path));
+        scene->setSkyTexture(iris::Texture2D::load(path.toStdString()));
         QJsonObject def;
         def.insert("equiSkyGuid", guid);
         scene->skyData.insert_or_assign("Equirectangular", qtstd::fromQJsonObject(def));

@@ -72,12 +72,12 @@ EditPose<Pose> documentEditPose(std::initializer_list<const Run *> runs, const D
         return edit;
     }
     if (simulated)
-        for (auto it = simulated->constBegin(); it != simulated->constEnd(); ++it) {
+        for (auto it = simulated->cbegin(); it != simulated->cend(); ++it) {
             Pose p;
-            p.pos = it->pos;
-            p.rot = it->rot;
-            p.scale = it->scale;
-            edit.pose.insert(it.key(), p);
+            p.pos = it->second.pos;   // the environment's held poses: its guid -> pose map
+            p.rot = it->second.rot;
+            p.scale = it->second.scale;
+            edit.pose.insert(QString::fromStdString(it->first), p);
         }
     return edit;
 }
@@ -93,11 +93,11 @@ QMap<QString, Pose> playStartSnapshot(const NodeMap &nodes, const Held &held)
         if (!node) continue;
         const QString guid = QString::fromStdString(node->guid);   // the editor's keys stay QString (its edge)
         Pose p;
-        const auto h = held.constFind(guid);
-        if (h != held.constEnd()) {
-            p.pos = h->pos;
-            p.rot = h->rot;
-            p.scale = h->scale;
+        const auto h = held.find(node->guid);   // the environment's held poses: its guid -> pose map
+        if (h != held.end()) {
+            p.pos = h->second.pos;
+            p.rot = h->second.rot;
+            p.scale = h->second.scale;
         } else {
             p.pos = node->getLocalPos();
             p.rot = node->getLocalRot();

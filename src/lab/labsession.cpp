@@ -862,8 +862,8 @@ bool Session::exec(const Command &c)
                 if (!n) return;
                 if (const iris::AnimationPtr a = n->getAnimation()) {
                     ++animated;
-                    if (a->hasPropertyAnim(QStringLiteral("position")) || a->hasPropertyAnim(QStringLiteral("rotation")) ||
-                        a->hasPropertyAnim(QStringLiteral("scale")))
+                    if (a->hasPropertyAnim((QStringLiteral("position")).toStdString()) || a->hasPropertyAnim((QStringLiteral("rotation")).toStdString()) ||
+                        a->hasPropertyAnim((QStringLiteral("scale")).toStdString()))
                         ++tracks;
                 }
                 clips += int(n->getAnimations().size());

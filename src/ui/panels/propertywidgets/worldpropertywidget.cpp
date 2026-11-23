@@ -120,7 +120,7 @@ WorldPropertyWidget::WorldPropertyWidget()
     rowundo::bind(playModeSelector, rows(QStringLiteral("playMode"), tr("Play Mode"),
                                          [this](const QVariant &row) {
         iris::ScenePlayMode mode = iris::ScenePlayMode::Explorer;
-        iris::playModeFromName(playModeSelector->getItemData(row.toInt()).toString(), mode);
+        iris::playModeFromName(playModeSelector->getItemData(row.toInt()).toString().toStdString(), mode);
         return QVariant(int(mode));
     }));
 

@@ -18,6 +18,7 @@
 #include <cstdio>
 
 #include "irisgl/document/input/inputmap.h"
+#include "app/keynames.h"
 
 using namespace iris;
 
@@ -52,17 +53,17 @@ int main(int argc, char **argv)
         CHECK(!InputMap::actionFromName("Crouch", a), "an unknown action name is refused");
     }
 
-    // ---- key names round-trip (the bare modifiers are the trap) -----------
+    // ---- key names round-trip (the bare modifiers are the trap): the EDITOR's speller (src/app/keynames.h) ----
     {
-        CHECK(InputMap::keyName(Qt::Key_W) == "W", "Qt::Key_W spells W");
-        CHECK(InputMap::keyName(Qt::Key_Space) == "Space", "Qt::Key_Space spells Space");
-        CHECK(InputMap::keyName(Qt::Key_Shift) == "Shift",
+        CHECK(keynames::keyName(Qt::Key_W) == "W", "Qt::Key_W spells W");
+        CHECK(keynames::keyName(Qt::Key_Space) == "Space", "Qt::Key_Space spells Space");
+        CHECK(keynames::keyName(Qt::Key_Shift) == "Shift",
               "a BARE modifier spells Shift, not QKeySequence's 'Shift+'");
-        CHECK(InputMap::keyFromName("W") == Qt::Key_W, "W parses back");
-        CHECK(InputMap::keyFromName("space") == Qt::Key_Space, "key names are case-insensitive");
-        CHECK(InputMap::keyFromName("Shift") == Qt::Key_Shift, "Shift parses back");
-        CHECK(InputMap::keyFromName("Left") == Qt::Key_Left, "an arrow key parses");
-        CHECK(InputMap::keyFromName("") == 0 && InputMap::keyFromName("Nonsense") == 0,
+        CHECK(keynames::keyFromName("W") == Qt::Key_W, "W parses back");
+        CHECK(keynames::keyFromName("space") == Qt::Key_Space, "key names are case-insensitive");
+        CHECK(keynames::keyFromName("Shift") == Qt::Key_Shift, "Shift parses back");
+        CHECK(keynames::keyFromName("Left") == Qt::Key_Left, "an arrow key parses");
+        CHECK(keynames::keyFromName("") == 0 && keynames::keyFromName("Nonsense") == 0,
               "an unparseable key name is 0, never a wrong key");
     }
 
@@ -94,10 +95,10 @@ int main(int argc, char **argv)
               map.bindings(InputAction::Jump)[0].key == Qt::Key_Space, "Jump defaults to Space");
         CHECK(map.bindings(InputAction::Sprint).size() == 1 &&
               map.bindings(InputAction::Sprint)[0].key == Qt::Key_Shift, "Sprint defaults to Shift");
-        CHECK(map.bindings(InputAction::Look).isEmpty(), "Look binds no keys — it is the mouse");
-        CHECK(map.displayText(InputAction::Look) == "Mouse",
+        CHECK(map.bindings(InputAction::Look).empty(), "Look binds no keys — it is the mouse");
+        CHECK(keynames::displayText(map, InputAction::Look) == "Mouse",
               "Look's Preferences row reads Mouse, not '(unbound)'");
-        CHECK(map.displayText(InputAction::Move) == "W / S / A / D / Up / Down / Left / Right",
+        CHECK(keynames::displayText(map, InputAction::Move) == "W / S / A / D / Up / Down / Left / Right",
               "Move's Preferences row lists its keys, both spellings");
 
         // The ShortcutOverride set (§8.3) is exactly the bound keys.
@@ -116,11 +117,12 @@ int main(int argc, char **argv)
     // ---- conflicts: named, and the refusal is ATOMIC ----------------------
     {
         InputMap map;
-        QString action, key;
+        std::string action;
+        int key = 0;
         const bool ok = map.bind(InputAction::Sprint, { { Qt::Key_W, 0, 0 } }, &action, &key);
         CHECK(!ok, "binding Sprint onto Move's W is refused");
         CHECK(action == "Move", "the conflict names the holding action");
-        CHECK(key == "W", "the conflict names the key");
+        CHECK(key == Qt::Key_W && keynames::keyName(key) == "W", "the conflict names the key (its code; the editor spells W)");
         CHECK(map.bindings(InputAction::Sprint).size() == 1 &&
               map.bindings(InputAction::Sprint)[0].key == Qt::Key_Shift,
               "the refused bind changed nothing");
@@ -128,7 +130,7 @@ int main(int argc, char **argv)
         // Atomicity: a list whose SECOND key conflicts must not write the first.
         const bool ok2 = map.bind(InputAction::Sprint,
                                   { { Qt::Key_Control, 0, 0 }, { Qt::Key_D, 0, 0 } }, &action, &key);
-        CHECK(!ok2 && key == "D", "a conflict anywhere in the list refuses the whole bind");
+        CHECK(!ok2 && key == Qt::Key_D, "a conflict anywhere in the list refuses the whole bind");
         CHECK(!map.isBound(Qt::Key_Control), "no partial write from the refused bind");
 
         // Rebinding a key INSIDE the same action is not a conflict.
@@ -158,11 +160,22 @@ int main(int argc, char **argv)
         CHECK(other.bindings(InputAction::Jump).size() == 1 &&
               other.bindings(InputAction::Jump)[0].key == Qt::Key_Return, "the button key came back");
         CHECK(other.toValue() == serialized, "the round trip is byte-stable");
+        // THE DOCUMENT STORES THE KEY's NUMBER (the ruling's call 4): never a name it would have to spell.
+        const iris::Value *jumpRow = serialized.find("Jump");
+        CHECK(jumpRow && jumpRow->kind() == iris::Kind::Array && jumpRow->asArray().size() == 1
+                  && jumpRow->asArray()[0].asString() == std::to_string(int(Qt::Key_Return)),
+              "a button key is stored as its key code's number");
+        // A row the document cannot decode (a NAME, as rows were written before) leaves the action as it was.
+        InputMap named;
+        (void)named.fromValue(iris::Value(iris::Value::Object{ { "Jump", iris::Value(iris::Value::Array{ iris::Value("Return") }) } }));
+        CHECK(named.bindings(InputAction::Jump).size() == 1 && named.bindings(InputAction::Jump)[0].key == Qt::Key_Space,
+              "an action whose every row fails to decode keeps its binding (Space), never unbinds");
 
         // Tolerance: a future action and a corrupt key must not brick the map.
         iris::Value junk = serialized;
         (void)junk.set("Crouch", iris::Value(iris::Value::Array{ iris::Value("C") }));
-        (void)junk.set("Jump", iris::Value(iris::Value::Array{ iris::Value("NotAKey"), iris::Value("Return") }));
+        (void)junk.set("Jump", iris::Value(iris::Value::Array{ iris::Value("NotAKey"),
+                                                               iris::Value(std::to_string(int(Qt::Key_Return))) }));
         InputMap tolerant;
         CHECK(tolerant.fromValue(junk), "an unknown action is skipped, not fatal");
         CHECK(tolerant.bindings(InputAction::Jump).size() == 1, "an unparseable key row is dropped");

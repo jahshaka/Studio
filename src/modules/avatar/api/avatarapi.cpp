@@ -59,6 +59,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "commands/nodeeditcommand.h"
+#include "irisgl/core/text.h"
 
 AvatarApi::AvatarApi(ScriptHost &host, avatar::AvatarPreviewModel *model, QObject *parent)
     : ApiModule(host, parent), mModel(model)
@@ -633,16 +634,16 @@ QVariant AvatarApi::loadAnimation(const QString &pathOrAssetGuid, const QVariant
         for (const auto &clip : mModel->clips()) {
             if (clip.source != QFileInfo(path).absoluteFilePath()) continue;
             const QString display = nameOverride.isEmpty() ? clip.name : nameOverride;
-            if (mOpen.definition.findClip(display)) continue;
+            if (mOpen.definition.findClip(display.toStdString())) continue;
             iris::AvatarClipEntry entry;
-            entry.asset = clipAssetGuid;
-            entry.rawName = clip.rawName;
-            entry.name = display;
-            mOpen.definition.clips.append(entry);
+            entry.asset = clipAssetGuid.toStdString();
+            entry.rawName = clip.rawName.toStdString();
+            entry.name = display.toStdString();
+            mOpen.definition.clips.push_back(entry);
             mOpen.dirty = true;
         }
-        if (mOpen.definition.defaultClip.isEmpty() && !mOpen.definition.clips.isEmpty()) {
-            mOpen.definition.defaultClip = mOpen.definition.clips.first().name;
+        if (mOpen.definition.defaultClip.empty() && !mOpen.definition.clips.empty()) {
+            mOpen.definition.defaultClip = mOpen.definition.clips.front().name;
             mOpen.dirty = true;
         }
         // EACH AVATAR KEEPS ITS OWN ANIMATIONS (owner 2026-09-13): written into
@@ -1121,14 +1122,14 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
         if (!loadProjectDefinition("avatar.spawn", assetGuid, definition, &definitionVersion))
             return QString();
         linked = true;
-        assetRow = host.db->fetchAsset(definition.modelAsset);
+        assetRow = host.db->fetchAsset(QString::fromStdString(definition.modelAsset));
         if (assetRow.guid.isEmpty() || assetRow.type != static_cast<int>(ModelTypes::Object)) {
             record(QStringLiteral("avatar.spawn: the avatar '%1' names a model this library "
                                   "does not have").arg(definition.name));
             return QString();
         }
     }
-    const QString modelGuid = linked ? definition.modelAsset : assetGuid;
+    const QString modelGuid = linked ? QString::fromStdString(definition.modelAsset) : assetGuid;
     if (assetRow.guid.isEmpty() || assetRow.type != static_cast<int>(ModelTypes::Object)) {
         record(QStringLiteral("avatar.spawn: '%1' is not an object asset").arg(assetGuid));
         return QString();
@@ -1226,9 +1227,9 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     if (linked) {
         node->avatarLink.asset = assetGuid.toStdString();
         node->avatarLink.version = definitionVersion.toStdString();
-        node->avatarLink.name = definition.name.toStdString();
-        if (!definition.name.isEmpty()) {
-            node->setName(definition.name.toStdString());
+        node->avatarLink.name = definition.name;
+        if (!definition.name.empty()) {
+            node->setName(definition.name);
             // THE OUTLINER ALREADY HAS THE ROW (S9, R2 repro: a freshly
             // spawned avatar's row read "RootNode" until something else
             // refreshed the tree). addMaterialMesh inserted the node under the
@@ -1511,7 +1512,7 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     auto hostNode = clipHostFor(character);
     QSet<QString> used;
     for (const auto &anim : hostNode->getAnimations())
-        if (!!anim) used.insert(anim->getName());
+        if (!!anim) used.insert(QString::fromStdString(anim->getName()));
 
     QVariantList addedNames;
     QList<iris::AnimationPtr> added;
@@ -1533,7 +1534,7 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
         for (int suffix = 2; used.contains(unique); ++suffix)
             unique = base + QStringLiteral(" %1").arg(suffix);
         used.insert(unique);
-        clip->setName(unique);
+        clip->setName(unique.toStdString());
         // A ZERO-LENGTH clip must not loop (Animation::getSampleTime is a fmod,
         // so length 0 samples at NaN). Same guard the preview has.
         clip->calculateAnimationLength();
@@ -1654,18 +1655,18 @@ QVariantMap AvatarApi::loadClip(const QString &nodeId, const QString &pathOrAsse
             bool changed = false;
             for (const QVariant &name : added) {
                 const QString clipName = name.toString();
-                if (loaded.definition.findClip(clipName)) continue;
+                if (loaded.definition.findClip(clipName.toStdString())) continue;
                 iris::AvatarClipEntry entry;
-                entry.asset = guid;
-                entry.rawName = clipName;
-                entry.name = clipName;
-                loaded.definition.clips.append(entry);
+                entry.asset = guid.toStdString();
+                entry.rawName = clipName.toStdString();
+                entry.name = clipName.toStdString();
+                loaded.definition.clips.push_back(entry);
                 changed = true;
             }
             if (changed) {
-                if (loaded.definition.defaultClip.isEmpty()
-                    && !loaded.definition.clips.isEmpty())
-                    loaded.definition.defaultClip = loaded.definition.clips.first().name;
+                if (loaded.definition.defaultClip.empty()
+                    && !loaded.definition.clips.empty())
+                    loaded.definition.defaultClip = loaded.definition.clips.front().name;
                 QString error;
                 const QString version = AvatarAssets::save(linkedAsset,
                                                            AvatarAssets::Scope::Project,
@@ -1876,7 +1877,7 @@ QVariant AvatarApi::possessed()
 {
     auto *possession = possessionOrFail("avatar.possessed");
     if (!possession) return QVariant();
-    const QString guid = possession->possessedGuid();
+    const QString guid = QString::fromStdString(possession->possessedGuid());
     return guid.isEmpty() ? QVariant() : QVariant(guid);
 }
 
@@ -1886,7 +1887,7 @@ QVariantList AvatarApi::list()
     auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
                                                              : iris::ScenePtr();
     if (!scene) { record("avatar.list: no scene is open"); return out; }
-    const QString possessedGuid = scene->getPossession()->possessedGuid();
+    const QString possessedGuid = QString::fromStdString(scene->getPossession()->possessedGuid());
 
     // DOCUMENT ORDER, depth-first — byte for byte the walk auto-possess and
     // Environment's avatar registration use, so list()[0] really is the avatar
@@ -1907,7 +1908,7 @@ QVariantList AvatarApi::list()
                     { "grounded", s.grounded },
                     { "mode", s.mode == iris::AvatarMovementMode::Walking
                                   ? QStringLiteral("walking") : QStringLiteral("falling") },
-                    { "state", child->locomotion() ? child->locomotion()->currentState()
+                    { "state", child->locomotion() ? QString::fromStdString(child->locomotion()->currentState())
                                                    : QString() },
                 });
             }
@@ -2021,14 +2022,14 @@ QVariantMap AvatarApi::locomotionState(const QString &nodeId)
 
     QVariantList weights;
     if (auto *loco = node->locomotion()) {
-        out["state"] = loco->currentState();
-        out["previousState"] = loco->previousState();
+        out["state"] = QString::fromStdString(loco->currentState());
+        out["previousState"] = QString::fromStdString(loco->previousState());
         out["transitioning"] = loco->isTransitioning();
         out["transitionProgress"] = double(loco->transitionProgress());
         out["transitionDuration"] = double(loco->transitionDuration());
         out["phase"] = double(loco->statePhase());
         for (const auto &w : loco->weights())
-            weights.append(QVariantMap{ { "clip", w.clip },
+            weights.append(QVariantMap{ { "clip", QString::fromStdString(w.clip) },
                                         { "weight", double(w.weight) },
                                         { "time", double(w.time) },
                                         { "looping", w.looping } });
@@ -2071,7 +2072,7 @@ bool AvatarApi::setLocomotionAsset(const QString &nodeId, const QVariantMap &val
     // both paths because they ARE one path.
     const iris::Value obj = qtstd::fromVariant(QVariant(scriptmod::normalizeJs(values).toMap()));
     iris::LocomotionAsset asset;
-    QString err;
+    std::string err;
     if (!iris::locomotionAssetFromJson(obj, asset, &err))
         return record(QStringLiteral("avatar.setLocomotionAsset: %1").arg(err));
 
@@ -2086,7 +2087,7 @@ bool AvatarApi::setLocomotionAsset(const QString &nodeId, const QVariantMap &val
             QStringLiteral("locomotion asset"),
             [weak, asset]() {
                 if (auto n = weak.lock())
-                    if (auto *l = n->locomotion()) { QString e; l->setAsset(asset, &e); }
+                    if (auto *l = n->locomotion()) { std::string e; l->setAsset(asset, &e); }
             },
             [weak, before, wasDefault]() {
                 if (auto n = weak.lock())
@@ -2095,7 +2096,7 @@ bool AvatarApi::setLocomotionAsset(const QString &nodeId, const QVariantMap &val
                         // generated default has to restore "this is the
                         // default" too, or the next role bind would refuse to
                         // regenerate what it is looking at.
-                        QString e;
+                        std::string e;
                         l->restoreAsset(before, wasDefault, &e);
                     }
             }));
@@ -2119,17 +2120,17 @@ QVariantMap AvatarApi::clipRoles(const QString &nodeId)
     loco->refreshClips(node, p.walkSpeed, p.runSpeed);
 
     const iris::ClipRoles &r = loco->roles();
-    out["idle"] = r.get(iris::ClipRole::Idle);
-    out["walk"] = r.get(iris::ClipRole::Walk);
-    out["run"] = r.get(iris::ClipRole::Run);
-    out["jumpStart"] = r.get(iris::ClipRole::JumpStart);
-    out["fallLoop"] = r.get(iris::ClipRole::FallLoop);
-    out["land"] = r.get(iris::ClipRole::Land);
+    out["idle"] = QString::fromStdString(r.get(iris::ClipRole::Idle));
+    out["walk"] = QString::fromStdString(r.get(iris::ClipRole::Walk));
+    out["run"] = QString::fromStdString(r.get(iris::ClipRole::Run));
+    out["jumpStart"] = QString::fromStdString(r.get(iris::ClipRole::JumpStart));
+    out["fallLoop"] = QString::fromStdString(r.get(iris::ClipRole::FallLoop));
+    out["land"] = QString::fromStdString(r.get(iris::ClipRole::Land));
 
     QVariantList clips;
-    const QMap<QString, float> &lengths = loco->clipLengths();
-    for (auto it = lengths.constBegin(); it != lengths.constEnd(); ++it)
-        clips.append(QVariantMap{ { "name", it.key() }, { "length", double(it.value()) } });
+    const std::map<std::string, float> &lengths = loco->clipLengths();
+    for (const auto &[clipName, length] : lengths)
+        clips.append(QVariantMap{ { "name", QString::fromStdString(clipName) }, { "length", double(length) } });
     out["clips"] = clips;
     return out;
 }
@@ -2146,7 +2147,7 @@ bool AvatarApi::setClipRole(const QString &nodeId, const QString &role, const QS
         return false;
     }
     iris::ClipRole r;
-    if (!iris::clipRoleFromName(role, r))
+    if (!iris::clipRoleFromName(role.toStdString(), r))
         return record(QStringLiteral("avatar.setClipRole: '%1' is not a role (known: idle, "
                                      "walk, run, jumpStart, fallLoop, land)").arg(role));
 
@@ -2184,14 +2185,14 @@ bool AvatarApi::setClipRole(const QString &nodeId, const QString &role, const QS
             if (candidates.isEmpty()) candidates.append(shown);
 
             clip.clear();
-            const QMap<QString, float> &lengths = loco->clipLengths();
+            const std::map<std::string, float> &lengths = loco->clipLengths();
             for (const QString &candidate : candidates) {
-                if (lengths.contains(candidate)) { clip = candidate; break; }
+                if (lengths.count(candidate.toStdString()) != 0) { clip = candidate; break; }
                 // "Walking 2" — the uniquifying suffix a second load of the
                 // same file adds; the first match wins deterministically
                 // (clipLengths is a QMap, sorted by name).
-                for (auto it = lengths.constBegin(); it != lengths.constEnd(); ++it)
-                    if (it.key().startsWith(candidate)) { clip = it.key(); break; }
+                for (auto it = lengths.cbegin(); it != lengths.cend(); ++it)
+                    if (iris::text::startsWith(it->first, candidate.toStdString())) { clip = QString::fromStdString(it->first); break; }
                 if (!clip.isEmpty()) break;
             }
             if (clip.isEmpty())
@@ -2201,19 +2202,19 @@ bool AvatarApi::setClipRole(const QString &nodeId, const QString &role, const QS
         }
     }
 
-    const QString before = loco->roles().get(r);
-    loco->setClipRole(r, clip);
+    const QString before = QString::fromStdString(loco->roles().get(r));
+    loco->setClipRole(r, clip.toStdString());
     if (host.services && host.services->undo) {
         auto weak = std::weak_ptr(node);
         host.services->undo->push(new NodeEditCommand(
             QStringLiteral("clip role"),
             [weak, r, clip]() {
                 if (auto n = weak.lock())
-                    if (auto *l = n->locomotion()) l->setClipRole(r, clip);
+                    if (auto *l = n->locomotion()) l->setClipRole(r, clip.toStdString());
             },
             [weak, r, before]() {
                 if (auto n = weak.lock())
-                    if (auto *l = n->locomotion()) l->setClipRole(r, before);
+                    if (auto *l = n->locomotion()) l->setClipRole(r, before.toStdString());
             }));
     }
     return true;
@@ -2236,21 +2237,21 @@ QVariantMap definitionToJs(const iris::AvatarDefinition &def)
 {
     QVariantList clips;
     for (const auto &clip : def.clips)
-        clips.append(QVariantMap{ { "asset", clip.asset },
-                                  { "rawName", clip.rawName },
-                                  { "name", clip.name },
+        clips.append(QVariantMap{ { "asset", QString::fromStdString(clip.asset) },
+                                  { "rawName", QString::fromStdString(clip.rawName) },
+                                  { "name", QString::fromStdString(clip.name) },
                                   { "looping", clip.looping },
                                   { "rootMotion", clip.rootMotion } });
     QVariantList boneNames;
-    for (const QString &bone : def.rig.boneNames) boneNames.append(bone);
+    for (const std::string &bone : def.rig.boneNames) boneNames.append(QString::fromStdString(bone));
     return {
-        { "name", def.name },
-        { "model", def.modelAsset },
-        { "rig", QVariantMap{ { "rigId", def.rig.rigId },
+        { "name", QString::fromStdString(def.name) },
+        { "model", QString::fromStdString(def.modelAsset) },
+        { "rig", QVariantMap{ { "rigId", QString::fromStdString(def.rig.rigId) },
                               { "bones", def.rig.bones },
                               { "boneNames", boneNames } } },
         { "clips", clips },
-        { "defaultClip", def.defaultClip },
+        { "defaultClip", QString::fromStdString(def.defaultClip) },
         { "hasLocomotion", def.hasLocomotion },
         { "hasMovement", def.hasMovement },
     };
@@ -2313,7 +2314,7 @@ QVariantList AvatarApi::library(const QVariantMap &options)
         const QString projectVersion = AvatarAssets::projectVersion(host.db, record.guid, host.project);
         const auto loaded = AvatarAssets::load(record.guid, s, host.db, host.project);
         QVariantList clips;
-        for (const auto &clip : loaded.definition.clips) clips.append(clip.name);
+        for (const auto &clip : loaded.definition.clips) clips.append(QString::fromStdString(clip.name));
         return QVariantMap{
             { "guid", record.guid },
             { "name", record.name },
@@ -2949,11 +2950,11 @@ QString AvatarApi::openDefinition(const QString &guid, AvatarAssets::Scope scope
     mOpen.dirty = false;
 
     if (rowNameOut)
-        *rowNameOut = loaded.definition.name.isEmpty() ? loaded.name : loaded.definition.name;
+        *rowNameOut = loaded.definition.name.empty() ? loaded.name : QString::fromStdString(loaded.definition.name);
     // The MODEL ROW behind the preview (IMPORT-1): its import settings are what
     // the parse below has to be given, or the page shows a different size from
     // the scene.
-    if (modelGuidOut) *modelGuidOut = loaded.definition.modelAsset;
+    if (modelGuidOut) *modelGuidOut = QString::fromStdString(loaded.definition.modelAsset);
     if (!mModel) return QString();
 
     // The PREVIEW follows the definition: the module's centre panel shows the
@@ -2962,9 +2963,9 @@ QString AvatarApi::openDefinition(const QString &guid, AvatarAssets::Scope scope
     const QString modelPath =
         (scope == AvatarAssets::Scope::Project && host.project)
             ? AssetCas::resolvePinned(host.db->connection(), AssetStorePaths::root(),
-                                      host.project->getProjectGuid(), loaded.definition.modelAsset)
+                                      host.project->getProjectGuid(), QString::fromStdString(loaded.definition.modelAsset))
             : AssetCas::resolveSource(host.db->connection(), AssetStorePaths::root(),
-                                      loaded.definition.modelAsset);
+                                      QString::fromStdString(loaded.definition.modelAsset));
     if (modelPath.isEmpty() || !QFileInfo::exists(modelPath)) return QString();
     return modelPath;
 }
@@ -3059,7 +3060,7 @@ QVariantMap AvatarApi::asset()
     out["guid"] = mOpen.guid;
     out["scope"] = AvatarAssets::scopeName(mOpen.scope);
     out["version"] = mOpen.version;
-    out["name"] = mOpen.definition.name;
+    out["name"] = QString::fromStdString(mOpen.definition.name);
     out["dirty"] = mOpen.dirty;
     // A write is ARMED but not yet made (the coalescing window). `dirty` alone
     // cannot tell "nobody asked" from "asked, about to happen".
@@ -3203,13 +3204,13 @@ bool AvatarApi::removeClip(const QString &name)
         return record(QStringLiteral("avatar.removeClip: '%1' has no clip called '%2'")
                           .arg(mOpen.definition.name, name));
 
-    mOpen.definition.clips.remove(index);
+    mOpen.definition.clips.erase(mOpen.definition.clips.begin() + index);
     // The default clip cannot name a clip that is gone — the file's own reader
     // refuses that, so leaving it would make the definition unsaveable.
     if (mOpen.definition.defaultClip == name)
-        mOpen.definition.defaultClip = mOpen.definition.clips.isEmpty()
-                                           ? QString()
-                                           : mOpen.definition.clips.first().name;
+        mOpen.definition.defaultClip = mOpen.definition.clips.empty()
+                                           ? std::string()
+                                           : mOpen.definition.clips.front().name;
     mOpen.dirty = true;
     schedulePersist();
     notifyChanged();
@@ -3246,15 +3247,15 @@ QVariantMap AvatarApi::setClipOptions(const QString &name, const QVariantMap &va
                    "it by)");
             return out;
         }
-        if (wanted != name && mOpen.definition.findClip(wanted)) {
+        if (wanted != name && mOpen.definition.findClip(wanted.toStdString())) {
             record(QStringLiteral("avatar.setClipOptions: '%1' already names another clip")
                        .arg(wanted));
             return out;
         }
         // The default-clip pointer is a NAME, so it travels with the rename or
         // the definition stops parsing.
-        if (mOpen.definition.defaultClip == name) mOpen.definition.defaultClip = wanted;
-        entry->name = wanted;
+        if (mOpen.definition.defaultClip == name) mOpen.definition.defaultClip = wanted.toStdString();
+        entry->name = wanted.toStdString();
     }
     if (values.contains(QStringLiteral("looping")))
         entry->looping = values.value(QStringLiteral("looping")).toBool();
@@ -3263,7 +3264,7 @@ QVariantMap AvatarApi::setClipOptions(const QString &name, const QVariantMap &va
 
     mOpen.dirty = true;
     schedulePersist();
-    out["name"] = entry->name;
+    out["name"] = QString::fromStdString(entry->name);
     out["looping"] = entry->looping;
     out["rootMotion"] = entry->rootMotion;
     notifyChanged();
@@ -3274,10 +3275,10 @@ bool AvatarApi::setDefaultClip(const QString &name)
 {
     if (!requireOpenAsset("avatar.setDefaultClip")) return false;
     if (!requireIdle("avatar.setDefaultClip")) return false;
-    if (!name.isEmpty() && !mOpen.definition.findClip(name))
+    if (!name.isEmpty() && !mOpen.definition.findClip(name.toStdString()))
         return record(QStringLiteral("avatar.setDefaultClip: '%1' has no clip called '%2'")
                           .arg(mOpen.definition.name, name));
-    mOpen.definition.defaultClip = name;
+    mOpen.definition.defaultClip = name.toStdString();
     mOpen.dirty = true;
     schedulePersist();
     notifyChanged();
@@ -3321,15 +3322,15 @@ bool AvatarApi::applyDefinition(const iris::SceneNodePtr &node,
     // has to leave the instance too or "remove" would look like it did nothing.
     // The ACTIVE clip survives when it is still in the set.
     QStringList wanted;
-    for (const auto &clip : definition.clips) wanted.append(clip.name);
+    for (const auto &clip : definition.clips) wanted.append(QString::fromStdString(clip.name));
 
     for (const auto &clip : definition.clips) {
         const QString path =
             host.project ? AssetCas::resolvePinned(host.db->connection(),
                                                    AssetStorePaths::root(),
-                                                   host.project->getProjectGuid(), clip.asset)
+                                                   host.project->getProjectGuid(), QString::fromStdString(clip.asset))
                          : AssetCas::resolveSource(host.db->connection(),
-                                                   AssetStorePaths::root(), clip.asset);
+                                                   AssetStorePaths::root(), QString::fromStdString(clip.asset));
         if (path.isEmpty() || !QFileInfo::exists(path)) {
             if (warningsOut)
                 warningsOut->append(QStringLiteral("clip '%1' has no stored bytes").arg(clip.name));
@@ -3339,7 +3340,7 @@ bool AvatarApi::applyDefinition(const iris::SceneNodePtr &node,
         // The clip is attached through the SAME route avatar.loadClip uses —
         // parse, score against this rig, name by the shared rule — so a
         // definition clip and a hand-loaded one are the same thing on the node.
-        if (!attachClipsFromFile("avatar.refreshInstances", node, path, clip.asset, clip.name,
+        if (!attachClipsFromFile("avatar.refreshInstances", node, path, QString::fromStdString(clip.asset), QString::fromStdString(clip.name),
                                  ignored)) {
             if (warningsOut) warningsOut->append(mLastError);
         }
@@ -3365,11 +3366,11 @@ bool AvatarApi::applyDefinition(const iris::SceneNodePtr &node,
 
     if (auto *loco = node->locomotion()) {
         if (definition.hasLocomotion) {
-            QString error;
+            std::string error;
             loco->markRolesFromFile(definition.locomotionRoles, false);
             if (!loco->setAssetPreservingDefaultFlag(definition.locomotion, &error)
                 && warningsOut)
-                warningsOut->append(error);
+                warningsOut->append(QString::fromStdString(error));
         } else {
             loco->refreshClips(node, movement->params().walkSpeed, movement->params().runSpeed);
         }
@@ -3379,7 +3380,7 @@ bool AvatarApi::applyDefinition(const iris::SceneNodePtr &node,
     // already matched on it); what this routine owns is WHICH VERSION the
     // instance is now made of.
     node->avatarLink.version = version.toStdString();
-    node->avatarLink.name = definition.name.toStdString();
+    node->avatarLink.name = definition.name;
     return true;
 }
 

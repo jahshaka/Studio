@@ -627,15 +627,15 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     // honesty the decal block carries — so nobody reads a plain base material
     // in a stock viewer as a lost map.
     {
-        bool anyDetail = !pbr->detailWeightMap.isEmpty();
+        bool anyDetail = !pbr->detailWeightMap.empty();
         for (int i = 0; i < iris::PbrMaterial::kDetailLayers && !anyDetail; ++i)
-            anyDetail = !pbr->detail[i].map.isEmpty() || !pbr->detail[i].normalMap.isEmpty();
+            anyDetail = !pbr->detail[i].map.empty() || !pbr->detail[i].normalMap.empty();
         if (anyDetail) {
             c.warnings.append(QStringLiteral(
                 "material '%1': detail layers are NOT exported — glTF has no detail-map "
                 "concept, and the web target does not claim detail parity. The base maps "
                 "are exported as authored.")
-                .arg(pbr->getName().isEmpty() ? QStringLiteral("material") : pbr->getName()));
+                .arg(pbr->getName().empty() ? QStringLiteral("material") : QString::fromStdString(pbr->getName())));
             // Recorded in extras so a round trip through our OWN format can see
             // that something was dropped, and what.
             jah["detailLayersDropped"] = true;
@@ -647,8 +647,9 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     // a non-metallic material, so a metallic one's extras are unchanged.
     if (pbr->workflow != 0) {
         QJsonObject wf;
-        wf["workflow"] = QString::fromLatin1(
-            iris::PbrMaterial::workflowNames().value(pbr->workflow, "Metallic"));
+        const auto &workflows = iris::PbrMaterial::workflowNames();
+        wf["workflow"] = QString::fromLatin1(pbr->workflow >= 0 && pbr->workflow < int(workflows.size())
+                                                 ? workflows[pbr->workflow] : "Metallic");
         const iris::LinearColor scl = iris::linearOf(pbr->specularColor);
         wf["specularColor"] = colorArray(scl.r, scl.g, scl.b);
         wf["ior"] = double(pbr->ior);
@@ -672,7 +673,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
             m["extensions"] = ext;
         }
     }
-    if (pbr->brdf != 0) jah["brdf"] = iris::PbrMaterial::brdfEngineName(pbr->brdf);
+    if (pbr->brdf != 0) jah["brdf"] = QString::fromStdString(iris::PbrMaterial::brdfEngineName(pbr->brdf));
     if (!pbr->receiveShadows) jah["receiveShadows"] = false;
     if (pbr->emissiveAsLightmap) jah["emissiveAsLightmap"] = true;
     if (pbr->alphaMode == 4) jah["blendMode"] = "additive";
@@ -829,7 +830,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
     case iris::SkyType::EQUIRECTANGULAR: {
         sky["type"] = "equirect";
         sky["source"] = "equirect";
-        const QString src = scene->skyTexture ? scene->skyTexture->source : QString();
+        const QString src = scene->skyTexture ? QString::fromStdString(scene->skyTexture->source) : QString();
         const QImage img = loadDocumentImage(src, c);
         if (!img.isNull()) sky["image"] = imageToDataUri(img, true);
         else { sky["type"] = "color"; sky["color"] = iris::toQColor(scene->skyColor).name();
@@ -1022,8 +1023,8 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                     if (!n) return;
                     for (const auto &anim : n->getAnimations())
                         if (!!anim && anim->hasSkeletalAnimation()
-                            && !clipNames.contains(QJsonValue(anim->getName())))
-                            clipNames.append(anim->getName());
+                            && !clipNames.contains(QJsonValue(QString::fromStdString(anim->getName()))))
+                            clipNames.append(QString::fromStdString(anim->getName()));
                     for (int i = 0; i < n->childCount(); ++i)
                         if (auto *child = n->childAt(i)) names(child->weak_from_this().lock());
                 };
@@ -1247,8 +1248,8 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             p["dissipateInv"] = ps->dissipateInv;
             p["useAdditive"] = ps->useAdditive;
             p["maxParticles"] = ps->maxParticles;
-            if (ps->texture && !ps->texture->source.isEmpty()) {
-                const QImage img = loadDocumentImage(ps->texture->source, c);
+            if (ps->texture && !ps->texture->source.empty()) {
+                const QImage img = loadDocumentImage(QString::fromStdString(ps->texture->source), c);
                 if (!img.isNull()) p["texture"] = imageToDataUri(img, false);
             }
             jah["particles"] = p;
@@ -1404,8 +1405,8 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                         if (!skelAnim) continue;
                         // The NODE's display name wins: it is what the scene
                         // plays the clip by ("Walking", not "mixamo.com").
-                        const std::string name = anim->getName().isEmpty() ? skelAnim->name
-                                                                           : anim->getName().toStdString();
+                        const std::string name = anim->getName().empty() ? skelAnim->name
+                                                                           : anim->getName();
                         if (!anims.count(name)) anims.insert_or_assign(name, skelAnim);
                     }
                     for (int i = 0; i < n->childCount(); ++i)

@@ -146,7 +146,7 @@ iris::MeshPtr EngineAssetScene::previewSphere()
     // THE DOCK'S OWN FURNITURE, BAKED (SHIPPED-BAKES-1): a Furniture seed row
     // (src/data/primitives.h), read by its seed key through IrisGL's seam —
     // never parsed. Null until a library is seeded; asked again next time.
-    mSphere = iris::ShippedMeshes::mesh(QStringLiteral(":/content/primitives/hp_sphere.obj"));
+    mSphere = iris::ShippedMeshes::mesh((QStringLiteral(":/content/primitives/hp_sphere.obj")).toStdString());
     return mSphere;
 }
 

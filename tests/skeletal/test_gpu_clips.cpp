@@ -155,15 +155,15 @@ static std::vector<BonePose> posesFrom(const SkeletonDesc &rig, const iris::Extr
         out[i].scale    = rig.bones[i].bindScale;
     }
     for (const auto &track : clip.tracks) {
-        if (track.bone < 0 || size_t(track.bone) >= out.size() || track.keys.isEmpty()) continue;
+        if (track.bone < 0 || size_t(track.bone) >= out.size() || track.keys.empty()) continue;
         iris::Vec3 pos, scale;
         iris::Quat rot;
-        if (t <= track.keys.first().time) {
-            pos = track.keys.first().position; rot = track.keys.first().rotation;
-            scale = track.keys.first().scale;
-        } else if (t >= track.keys.last().time) {
-            pos = track.keys.last().position; rot = track.keys.last().rotation;
-            scale = track.keys.last().scale;
+        if (t <= track.keys.front().time) {
+            pos = track.keys.front().position; rot = track.keys.front().rotation;
+            scale = track.keys.front().scale;
+        } else if (t >= track.keys.back().time) {
+            pos = track.keys.back().position; rot = track.keys.back().rotation;
+            scale = track.keys.back().scale;
         } else {
             for (int k = 1; k < track.keys.size(); ++k) {
                 if (track.keys[k].time < t) continue;
@@ -247,7 +247,7 @@ int main(int argc, char **argv)
 
     // ---- clip translation ----------------------------------------------
     iris::ExtractedClip extracted;
-    QString exErr;
+    std::string exErr;
     CHECK(iris::ClipExtractor::extract(rig.node, rig.node, rig.node->getSkeleton(),
                                        rig.clip->getSkeletalAnimation(), rig.clip->getName(),
                                        rig.clip->getLength(), &rig.rest, extracted, &exErr),
@@ -364,10 +364,10 @@ int main(int argc, char **argv)
             std::vector<BonePose> poses = posesFrom(desc, sx, t);
             {
                 // slerp, not nlerp, on the one animated bone
-                const auto &tr = sx.tracks.first();
+                const auto &tr = sx.tracks.front();
                 const float u = std::min(std::max(t / sparse.clip->getLength(), 0.0f), 1.0f);
-                const iris::Quat q = iris::Quat::slerp(tr.keys.first().rotation,
-                                                         tr.keys.last().rotation, u);
+                const iris::Quat q = iris::Quat::slerp(tr.keys.front().rotation,
+                                                         tr.keys.back().rotation, u);
                 poses[size_t(tr.bone)].rotation = Quat(q.x(), q.y(), q.z(), q.scalar());
             }
             s->setBonePoses(nodeDoc, poses.data(), poses.size());
@@ -425,17 +425,17 @@ int main(int argc, char **argv)
         // jointRoot is SHARED (must split 0.5/0.5) and jointTip is Swing's
         // alone (must get ALL of Swing at any split) — G5's exact shape.
         iris::ExtractedClip partial = extracted;
-        partial.name = QStringLiteral("RootOnly");
+        partial.name = (QStringLiteral("RootOnly")).toStdString();
         partial.tracks.clear();
         {
             iris::ClipBoneTrack t;
             t.bone = 0;
-            t.boneName = QStringLiteral("jointRoot");
+            t.boneName = (QStringLiteral("jointRoot")).toStdString();
             iris::ClipBoneKey k0; k0.time = 0.0f; k0.scale = iris::Vec3(1, 1, 1);
             iris::ClipBoneKey k1 = k0; k1.time = length;
             k1.rotation = iris::Quat::fromAxisAndAngle(0, 0, 1, 20.0f);
-            t.keys.append(k0); t.keys.append(k1);
-            partial.tracks.append(t);
+            t.keys.push_back(k0); t.keys.push_back(k1);
+            partial.tracks.push_back(t);
         }
         ClipDesc partialDesc;
         CHECK(SceneMirror::toClipDesc(partial, desc.id, partialDesc), "the partial clip translates");

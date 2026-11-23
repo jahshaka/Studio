@@ -510,7 +510,7 @@ inline QVariantMap materialSummaryToJs(const iris::SceneNodePtr &node)
             { "u_roughnessMap", "roughness" }, { "u_normalMap", "normal" },
             { "u_emissiveMap", "emissive" },   { "u_reflectionMap", "reflection" } };
         for (const auto &slot : kPbrMapSlots)
-            if (pbr->textures.contains(QLatin1String(slot.slot)))
+            if (pbr->textures.count(slot.slot))
                 maps << QString::fromLatin1(slot.name);
         m["maps"] = maps;
     } else {

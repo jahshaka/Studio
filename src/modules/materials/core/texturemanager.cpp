@@ -45,7 +45,7 @@ void TextureManager::loadUnloadedTextures()
 {
 	for (auto tex : this->textures) {
 		if (tex->dirty) {
-			tex->texture = iris::Texture2D::load(tex->path);
+			tex->texture = iris::Texture2D::load(tex->path.toStdString());
 			tex->dirty = false;
 		}
 	}

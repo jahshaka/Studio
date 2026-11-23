@@ -63,7 +63,7 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     // flat quads never did.
     // The room is built from the BAKED cube primitive, by its seed key
     // (SHIPPED-BAKES-1, irisgl/document/assets/shippedmeshes.h) — never a parse.
-    auto mesh = iris::ShippedMeshes::mesh(QStringLiteral(":/content/primitives/cube.obj"));
+    auto mesh = iris::ShippedMeshes::mesh((QStringLiteral(":/content/primitives/cube.obj")).toStdString());
     if (!mesh) return iris::SceneNodePtr();   // no library, no baked cube
 
     // Materials, shared by role.

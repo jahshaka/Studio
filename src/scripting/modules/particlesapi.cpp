@@ -174,7 +174,7 @@ QVariantMap ParticlesApi::describe(const QString &id)
     m["quota"] = ps->maxParticles;
     m["emitColourStart"] = colorToJs(iris::toQColor(ps->emitColourStart));
     m["emitColourEnd"] = colorToJs(iris::toQColor(ps->emitColourEnd));
-    m["texture"] = ps->texture ? ps->texture->getSource() : QString();
+    m["texture"] = ps->texture ? QString::fromStdString(ps->texture->getSource()) : QString();
     // The IMAGE'S ASSET (TEX-REF-1): what a saved scene stores for `texture`.
     m["textureGuid"] = QString::fromStdString(ps->textureGuid);
     m["colourKeys"] = colourKeys(id);

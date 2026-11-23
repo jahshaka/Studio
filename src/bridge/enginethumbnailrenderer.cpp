@@ -402,7 +402,7 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
         // The tile's own subject: the BAKED Sphere primitive, by its seed key
         // (SHIPPED-BAKES-1, irisgl/document/assets/shippedmeshes.h) — never a
         // parse.
-        mSphere = iris::ShippedMeshes::mesh(QStringLiteral(":/content/primitives/sphere.obj"));
+        mSphere = iris::ShippedMeshes::mesh((QStringLiteral(":/content/primitives/sphere.obj")).toStdString());
         if (!mSphere)
             return failed(QStringLiteral("the preview sphere (the Sphere primitive's bake) is not "
                                          "available — the library has not seeded it"));

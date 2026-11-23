@@ -39,6 +39,7 @@
 #include "modules/materials/models/nodemodel.h"
 #include "modules/materials/nodes/pbrmasternode.h"
 #include "../support/testmesh.h"
+#include <algorithm>
 
 /// THE SUITE'S NODE LIBRARY, OWNED (LEAK-1 L4): one, built on first use and freed at exit. The suite used to
 /// mint a `new LibraryV1()` per graph and free none (250 entries, 26 KB, each).
@@ -104,7 +105,7 @@ iris::PbrMaterialPtr pulsingMaterial(const QString &dir, QString *pathOut)
     material->setBaseColor(iris::toSrgbColor(QColor::fromRgbF(0.5, 0.5, 0.5)));
     material->setRoughnessFactor(0.6f);
     material->setMetallicFactor(0.0f);
-    material->setCustomPiecePixel(path);
+    material->setCustomPiecePixel(path.toStdString());
     delete graph;
     return material;
 }
@@ -228,7 +229,7 @@ int main(int argc, char **argv)
     }
 
     // ---- and back: dropping the piece stops the motion ----------------------
-    animated->setCustomPiecePixel(QString());
+    animated->setCustomPiecePixel(QString().toStdString());
     auto stopped = iris::PbrMaterial::create();
     stopped->setBaseColor(iris::toSrgbColor(QColor::fromRgbF(0.6, 0.3, 0.2)));
     stopped->setRoughnessFactor(0.6f);
