@@ -96,7 +96,7 @@ const QStringList &builtInNames()
 
 QString mapBone(const iris::SkeletonPtr &skeleton, const QString &socketName)
 {
-    if (!skeleton || skeleton->bones.isEmpty()) return QString();
+    if (!skeleton || skeleton->bones.empty()) return QString();
     const QStringList &candidates = candidatesFor(socketName);
     if (candidates.isEmpty()) return QString();
 
@@ -106,10 +106,10 @@ QString mapBone(const iris::SkeletonPtr &skeleton, const QString &socketName)
     QHash<QString, QString> byNormalized;
     for (const iris::BonePtr &bone : skeleton->bones) {
         if (!bone) continue;
-        const QString key = normalize(bone->name);
+        const QString key = normalize(QString::fromStdString(bone->name));
         // First bone wins a collision: `mixamorig:Head` before a stray `head`
         // helper further down the list.
-        if (!key.isEmpty() && !byNormalized.contains(key)) byNormalized.insert(key, bone->name);
+        if (!key.isEmpty() && !byNormalized.contains(key)) byNormalized.insert(key, QString::fromStdString(bone->name));
     }
     for (const QString &candidate : candidates) {
         const auto it = byNormalized.constFind(candidate);

@@ -58,6 +58,10 @@ inline bool intoImage(const QImage &src, iris::Image &dst)
         dst.rgba.resize(row * std::size_t(h));
     }
     if (src.format() == QImage::Format_RGBA8888) {
+        // ONE PASS MORE THAN THE BASE HERE: before stage 3 an RGBA8888 frame at the texture's size was shared into the
+        // texture (0 passes); this copies it. QVideoFrame::toImage never gave RGBA8888 in the probe on this box - but
+        // that probe ran with "No RHI backend. Using CPU conversion": the app's RHI path and other platforms are
+        // UNVERIFIED (the reader's S2; the STATE's leftovers).
         for (int y = 0; y < h; ++y)
             std::memcpy(dst.rgba.data() + row * std::size_t(y), src.constScanLine(y), row);
         return true;

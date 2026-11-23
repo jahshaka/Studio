@@ -149,6 +149,8 @@ int main(int argc, char **argv)
         QImage second(4, 2, QImage::Format_ARGB32_Premultiplied);
         for (int y = 0; y < 2; ++y)
             for (int x = 0; x < 4; ++x) second.setPixelColor(x, y, QColor(200, 100 + 10 * x, 50 * y, 60 + 40 * x));
+        second.setPixelColor(0, 1, QColor(200, 100, 50, 0));   // alpha 0 and 1: where the un-premultiply's rounding
+        second.setPixelColor(1, 1, QColor(200, 100, 50, 1));   // differs most (the reader's S1)
         iris::Image spare;
         CHECK(imagedecode::intoImage(first, spare) && !spare.isNull(), "live frame: the first frame converts into the producer's buffer");
         const std::uint8_t *filled = spare.rgba.data();

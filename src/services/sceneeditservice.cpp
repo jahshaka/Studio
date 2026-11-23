@@ -203,11 +203,11 @@ int SceneEditService::rebindPendingClips(const QSet<QString> &assetGuids, const 
             if (!anim || !anim->hasSkeletalAnimation()) continue;
             const iris::SkeletalAnimationPtr skel = anim->getSkeletalAnimation();
             // A PLACEHOLDER: a reference with no keys and no source (a read clip always has its source).
-            if (!skel->source.isEmpty() || !skel->boneAnimations.isEmpty()
-                || !assetGuids.contains(skel->assetGuid))
+            if (!skel->source.empty() || !skel->boneAnimations.empty()
+                || !assetGuids.contains(QString::fromStdString(skel->assetGuid)))
                 continue;
             if (const iris::SkeletalAnimationPtr real =
-                    reader.getSkeletalAnimation(skel->assetGuid, skel->name, node->getName())) {
+                    reader.getSkeletalAnimation(QString::fromStdString(skel->assetGuid), QString::fromStdString(skel->name), QString::fromStdString(node->getName()))) {
                 anim->setSkeletalAnimation(real);
                 changed = true;
                 ++bound;
@@ -251,9 +251,9 @@ int SceneEditService::completeLandedContent(const iris::SceneNodePtr &root)
         for (const iris::AnimationPtr &anim : anims) {
             if (!anim || !anim->hasSkeletalAnimation()) continue;
             const iris::SkeletalAnimationPtr skel = anim->getSkeletalAnimation();
-            if (skel->source.isEmpty() && skel->boneAnimations.isEmpty() && !skel->assetGuid.isEmpty()) {
-                const QString path = source(skel->assetGuid);
-                if (!path.isEmpty() && !MeshBakeStore::bakePending(path)) clipGuids.insert(skel->assetGuid);
+            if (skel->source.empty() && skel->boneAnimations.empty() && !skel->assetGuid.empty()) {
+                const QString path = source(QString::fromStdString(skel->assetGuid));
+                if (!path.isEmpty() && !MeshBakeStore::bakePending(path)) clipGuids.insert(QString::fromStdString(skel->assetGuid));
             }
         }
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
@@ -307,7 +307,7 @@ void SceneEditService::addPrimitive(const QString &text,
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
-        nodeGuid, node->getName(),
+        nodeGuid, QString::fromStdString(node->getName()),
         static_cast<int>(ModelTypes::Object),
         project->getProjectGuid(),
         assethome::project(project->getProjectGuid()),
@@ -460,10 +460,10 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     if (!scene()) return iris::ParticleSystemNodePtr();
 
     auto node = iris::ParticleSystemNode::create();
-    node->setName(preset == iris::ParticlePreset::Custom
-                      ? QStringLiteral("Particle System")
-                      : iris::ParticleSystemNode::presetName(preset).left(1).toUpper() +
-                            iris::ParticleSystemNode::presetName(preset).mid(1));
+    node->setName((preset == iris::ParticlePreset::Custom
+                       ? QStringLiteral("Particle System")
+                       : iris::ParticleSystemNode::presetName(preset).left(1).toUpper() +
+                             iris::ParticleSystemNode::presetName(preset).mid(1)).toStdString());
     // The recipe first: it resets every authoring field, so anything set here
     // afterwards (the texture, below) survives and anything set before does not.
     if (preset != iris::ParticlePreset::Custom) node->applyPreset(preset);
@@ -488,7 +488,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
         if (fguid.isEmpty()) return iris::ParticleSystemNodePtr();
         QJsonObject props;
         db->createAssetEntry(
-            nodeGuid, node->getName(),
+            nodeGuid, QString::fromStdString(node->getName()),
             static_cast<int>(ModelTypes::ParticleSystem),
             fguid,
             assethome::project(project->getProjectGuid()),
@@ -721,7 +721,7 @@ iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
     // below and the export walkers hang off it).
     QJsonObject props;
     props["type"] = "builtin";
-    db->createAssetEntry(nodeGuid, node->getName(),
+    db->createAssetEntry(nodeGuid, QString::fromStdString(node->getName()),
                          static_cast<int>(ModelTypes::Object),
                          project->getProjectGuid(), assethome::project(project->getProjectGuid()), assethome::Origin::Create,
                          QString(), QString(), QByteArray(),
@@ -748,7 +748,7 @@ iris::DecalNodePtr SceneEditService::addDecal(const QString &textureGuid,
     node->metalness = qBound(0.0f, opts.metalness, 1.0f);
     node->roughness = qBound(0.0f, opts.roughness, 1.0f);
     node->ignoreAlphaDiffuse = opts.ignoreAlphaDiffuse;
-    node->setName(QStringLiteral("Decal"));
+    node->setName((QStringLiteral("Decal")).toStdString());
 
     // The decal node gets a DB object row like the built-in primitives, so the
     // Object->Texture dependency row below has something to hang off (the
@@ -758,7 +758,7 @@ iris::DecalNodePtr SceneEditService::addDecal(const QString &textureGuid,
     if (db && project && !project->getProjectGuid().isEmpty()) {
         QJsonObject props;
         props["type"] = "builtin";
-        db->createAssetEntry(nodeGuid, node->getName(),
+        db->createAssetEntry(nodeGuid, QString::fromStdString(node->getName()),
                              static_cast<int>(ModelTypes::Object),
                              project->getProjectGuid(), assethome::project(project->getProjectGuid()), assethome::Origin::Create,
                              QString(), QString(), QByteArray(),
@@ -770,7 +770,7 @@ iris::DecalNodePtr SceneEditService::addDecal(const QString &textureGuid,
         // Name the node after the image, like the image plane does.
         const QString baseName = QFileInfo(db ? db->fetchAsset(textureGuid).name : QString())
                                      .completeBaseName();
-        if (!baseName.isEmpty()) node->setName(baseName);
+        if (!baseName.isEmpty()) node->setName(baseName.toStdString());
         setDecalTexture(node, textureGuid);
     }
 
@@ -894,7 +894,7 @@ void SceneEditService::addAssetParticleSystem(bool ignore, iris::Vec3 position, 
     particleNode->setGravity((float) pDefs["gravityComplement"].toDouble(1.0f));
     particleNode->setBlendMode(pDefs["blendMode"].toBool());
     particleNode->setLife((float) pDefs["lifeLength"].toDouble(1.0f));
-    particleNode->setName(pDefs["name"].toString());
+    particleNode->setName(pDefs["name"].toString().toStdString());
     particleNode->setSpeed((float) pDefs["speed"].toDouble(1.0f));
     {
         // The stored value is an asset guid: resolve it through the CAS (the
@@ -915,7 +915,7 @@ void SceneEditService::addAssetParticleSystem(bool ignore, iris::Vec3 position, 
 
     particleNode->setPickable(true);
     particleNode->setGUID(guid);
-    particleNode->setName(assetName);
+    particleNode->setName(assetName.toStdString());
     particleNode->setLocalPos(position);
 
     addNodeToScene(particleNode, ignore);
@@ -1044,7 +1044,7 @@ iris::SceneNodePtr SceneEditService::duplicateNode(iris::SceneNodePtr source)
     // outliner, node.find and every verb that names one could not tell apart.
     // The rename happens BEFORE the add command so the command's own text
     // ("Add Cube2") and the outliner row agree from the first frame.
-    node->setName(nodenaming::uniqueSiblingName(source->getParent(), source->getName()));
+    node->setName((nodenaming::uniqueSiblingName(source->getParent(), QString::fromStdString(source->getName()))).toStdString());
     // Undoable now (SCRIPTING_SPEC §1.2): the add command parents the copy,
     // refreshes the hierarchy and selects it — the manual addChild+repopulate
     // this slot used to do, minus the missing undo entry.
@@ -1076,7 +1076,7 @@ QString SceneEditService::renameNode(const iris::SceneNodePtr &node, const QStri
     // Unique among the SIBLINGS, excluding the node itself: renaming "Cube2"
     // to "Cube2" is a no-op, not a request for "Cube3".
     const QString given = nodenaming::uniqueSiblingName(node->getParent(), wanted, node.get());
-    const QString before = node->getName();
+    const QString before = QString::fromStdString(node->getName());
     if (given == before) return given;
 
     // The outliner rebuilds from the document on hierarchyChanged — the same
@@ -1088,7 +1088,7 @@ QString SceneEditService::renameNode(const iris::SceneNodePtr &node, const QStri
     QPointer<SceneEditService> self(this);
     const iris::SceneNodePtr target = node;
     auto apply = [self, target](const QString &name) {
-        target->setName(name);
+        target->setName(name.toStdString());
         if (self) self->notifyHierarchyChanged();
     };
     undo->push(new NodeEditCommand(
@@ -1195,7 +1195,7 @@ iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragmen
     // parent — the same rule Duplicate uses, because a paste is a copy too
     // (owner decision 2026-09-09). Pasting into a parent that has no node of
     // this name keeps the name: the suffix disambiguates, it does not brand.
-    node->setName(nodenaming::uniqueSiblingName(parent, node->getName()));
+    node->setName((nodenaming::uniqueSiblingName(parent, QString::fromStdString(node->getName()))).toStdString());
     // The SAME add command every other add uses — one undo entry, the hierarchy
     // refresh, the selection, and the SCENE_STATIC pass on redo.
     auto *cmd = new AddSceneNodeCommand(parent, node, index);
@@ -1860,7 +1860,7 @@ QString SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const 
     QJsonObject definition;
     SceneWriter::writeSceneNodeMaterial(definition, mesh->getMaterial());
     const QString name = MaterialBundle::uniqueName(
-        db, mesh->getName().isEmpty() ? QStringLiteral("New Material") : mesh->getName());
+        db, mesh->getName().empty() ? QStringLiteral("New Material") : QString::fromStdString(mesh->getName()));
 
     // THE ONE MINT (MaterialBundle::create): the definition a store object,
     // its edges reconciled, its sidecar written — the project's own row.
@@ -1903,7 +1903,7 @@ assetshare::BundleStage SceneEditService::stageNodeExport(const iris::SceneNodeP
         stage.error = QStringLiteral("the node produced no fragment");
         return stage;
     }
-    return assetshare::stageNode(db, project, fragment.node, node->getName(),
+    return assetshare::stageNode(db, project, fragment.node, QString::fromStdString(node->getName()),
                                  static_cast<int>(modelType), assetshare::yieldToEventLoop);
 }
 

@@ -992,7 +992,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     const exportwalk::NodeVisitor writeNode =
         [&](const iris::SceneNodePtr &node, const QVector<int> &childHandles) -> int {
         QJsonObject n;
-        n["name"] = node->getName().isEmpty() ? QStringLiteral("node") : node->getName();
+        n["name"] = node->getName().empty() ? QStringLiteral("node") : QString::fromStdString(node->getName());
         writeTrs(n, node);
 
         QJsonObject jah;
@@ -1106,7 +1106,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 area["color"] = iris::toQColor(light->color).name();
                 area["intensity"] = double(light->intensity * kLightIntensityScale);
                 area["doubleSided"] = light->doubleSided;
-                QJsonObject shim = orientationShimNode(node->getName() + ".orient");
+                QJsonObject shim = orientationShimNode(QString::fromStdString(node->getName() + ".orient"));
                 QJsonObject shimJah; shimJah["areaLight"] = area;
                 QJsonObject shimExtras; shimExtras["jah"] = shimJah;
                 shim["extras"] = shimExtras;
@@ -1159,7 +1159,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 }
                 c.lights.append(l);
                 const int lightIdx = c.lights.size() - 1;
-                QJsonObject shim = orientationShimNode(node->getName() + ".orient");
+                QJsonObject shim = orientationShimNode(QString::fromStdString(node->getName() + ".orient"));
                 QJsonObject shimExt;
                 QJsonObject ref; ref["light"] = lightIdx;
                 shimExt["KHR_lights_punctual"] = ref;
@@ -1304,7 +1304,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     for (auto &ps : pendingSkins) {
         if (ps.meshNodeIndex < 0 || !ps.mesh->hasSkeleton()) continue;
         iris::SkeletonPtr skel = ps.mesh->getSkeleton();
-        if (!skel || skel->bones.isEmpty()) continue;
+        if (!skel || skel->bones.empty()) continue;
 
         // One glTF node per bone, carrying its BIND local TRS (Bone::binding*,
         // which iris::extractSkeleton fills). The animation channels below are
@@ -1317,7 +1317,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         ibm.reserve(size_t(skel->bones.size()) * 16);
         for (const auto &bone : skel->bones) {
             QJsonObject bn;
-            bn["name"] = bone->name;
+            bn["name"] = QString::fromStdString(bone->name);
             const iris::Vec3 bp = bone->bindingPos;
             const iris::Quat br = bone->bindingRot.normalized();
             const iris::Vec3 bs = bone->bindingScale;
@@ -1331,7 +1331,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             bn["scale"] = s;
             c.nodes.append(bn);
             const int bIdx = c.nodes.size() - 1;
-            boneNode.insert(bone->name, bIdx);
+            boneNode.insert(QString::fromStdString(bone->name), bIdx);
             joints.append(bIdx);
             const float *m = bone->inverseMeshSpacePoseMatrix.constData();   // column-major, glTF order
             for (int k = 0; k < 16; ++k) ibm.push_back(m[k]);
@@ -1340,9 +1340,9 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // frame — glTF only requires joints to be in the scene graph.
         QJsonArray skinRoots;
         for (const auto &bone : skel->bones) {
-            const int bIdx = boneNode.value(bone->name);
+            const int bIdx = boneNode.value(QString::fromStdString(bone->name));
             if (auto parent = bone->parent()) {
-                const int pIdx = boneNode.value(parent->name, -1);
+                const int pIdx = boneNode.value(QString::fromStdString(parent->name), -1);
                 if (pIdx >= 0) {
                     QJsonObject parent = c.nodes.at(pIdx).toObject();
                     QJsonArray kids = parent["children"].toArray();
@@ -1403,24 +1403,24 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                         if (!skelAnim) continue;
                         // The NODE's display name wins: it is what the scene
                         // plays the clip by ("Walking", not "mixamo.com").
-                        const QString name = anim->getName().isEmpty() ? skelAnim->name
-                                                                       : anim->getName();
-                        if (!anims.contains(name)) anims.insert(name, skelAnim);
+                        const std::string name = anim->getName().isEmpty() ? skelAnim->name
+                                                                           : anim->getName().toStdString();
+                        if (!anims.count(name)) anims.insert_or_assign(name, skelAnim);
                     }
                     for (int i = 0; i < n->childCount(); ++i)
                         if (auto *child = n->childAt(i)) gather(child->weak_from_this().lock());
                 };
             gather(clipRoot);
         }
-        for (auto it = anims.constBegin(); it != anims.constEnd(); ++it) {
-            const iris::SkeletalAnimationPtr &anim = it.value();
+        for (auto it = anims.cbegin(); it != anims.cend(); ++it) {
+            const iris::SkeletalAnimationPtr &anim = it->second;
             if (!anim) continue;
             QJsonArray channels, samplers;
-            for (auto bIt = anim->boneAnimations.constBegin();
-                 bIt != anim->boneAnimations.constEnd(); ++bIt) {
-                const int nodeIdx = boneNode.value(bIt.key(), -1);
+            for (auto bIt = anim->boneAnimations.cbegin();
+                 bIt != anim->boneAnimations.cend(); ++bIt) {
+                const int nodeIdx = boneNode.value(QString::fromStdString(bIt->first), -1);
                 if (nodeIdx < 0) continue;
-                const auto &ba = bIt.value();
+                const auto &ba = bIt->second;
                 auto addChannel = [&](const char *path, const std::vector<float> &times,
                                       const std::vector<float> &values, int comps) {
                     if (times.empty()) return;
@@ -1438,7 +1438,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                     channel["target"] = target;
                     channels.append(channel);
                 };
-                if (ba->posKeys && !ba->posKeys->keys.isEmpty()) {
+                if (ba->posKeys && !ba->posKeys->keys.empty()) {
                     std::vector<float> t, v;
                     for (const auto *k : ba->posKeys->keys) {
                         t.push_back(float(k->time));
@@ -1446,7 +1446,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                     }
                     addChannel("translation", t, v, 3);
                 }
-                if (ba->rotKeys && !ba->rotKeys->keys.isEmpty()) {
+                if (ba->rotKeys && !ba->rotKeys->keys.empty()) {
                     std::vector<float> t, v;
                     for (const auto *k : ba->rotKeys->keys) {
                         t.push_back(float(k->time));
@@ -1455,7 +1455,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                     }
                     addChannel("rotation", t, v, 4);
                 }
-                if (ba->scaleKeys && !ba->scaleKeys->keys.isEmpty()) {
+                if (ba->scaleKeys && !ba->scaleKeys->keys.empty()) {
                     std::vector<float> t, v;
                     for (const auto *k : ba->scaleKeys->keys) {
                         t.push_back(float(k->time));
@@ -1466,7 +1466,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             }
             if (!channels.isEmpty()) {
                 QJsonObject a;
-                a["name"] = it.key().isEmpty() ? QStringLiteral("animation") : it.key();
+                a["name"] = it->first.empty() ? QStringLiteral("animation") : QString::fromStdString(it->first);
                 a["channels"] = channels;
                 a["samplers"] = samplers;
                 c.animations.append(a);

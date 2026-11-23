@@ -172,7 +172,7 @@ void ViewController::rebuildCamerasMenu()
               });
     for (const iris::CameraNodePtr &cam : cameras) {
         QAction *action = mCamerasMenu->addAction(
-            cam->getName().isEmpty() ? tr("Camera") : cam->getName());
+            cam->getName().empty() ? tr("Camera") : QString::fromStdString(cam->getName()));
         action->setCheckable(true);
         action->setChecked(piloted == cam);
         group->addAction(action);

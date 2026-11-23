@@ -26,9 +26,9 @@ bool extractMeshBuffers(iris::Mesh *mesh, MeshBuffers &out)
     if (!mesh) return false;
     for (const auto &vb : mesh->getVertexBuffers()) {
         if (!vb || !vb->data) continue;
-        const QList<iris::VertexAttribute> attribs = vb->vertexLayout.getAttribs();
-        if (attribs.isEmpty()) continue;
-        const iris::VertexAttribute &attr = attribs.first();
+        const std::vector<iris::VertexAttribute> attribs = vb->vertexLayout.getAttribs();
+        if (attribs.empty()) continue;
+        const iris::VertexAttribute &attr = attribs.front();
         const float *f = reinterpret_cast<const float *>(vb->data);
         const int floats = vb->dataSize / int(sizeof(float));
         switch (attr.usage) {

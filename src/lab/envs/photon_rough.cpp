@@ -111,7 +111,7 @@ Built buildGlint(unsigned seed, bool bake)
     fixedBox(b, unit, "panel", V(-1.0f, 0.0f, -2.05f), V(1.0f, 2.0f, -2.0f), b.material(0.95f, 0.95f, 0.95f, 0.05f, 1.0f));
     auto lamp = iris::LightNode::create();
     lamp->setLightType(iris::LightType::Point);
-    lamp->setName(QStringLiteral("glint-lamp"));
+    lamp->setName((QStringLiteral("glint-lamp")).toStdString());
     b.built().doc->getRootNode()->addChild(lamp);
     lamp->setLocalPos(V(0.0f, 1.67f, 0.0f));
     lamp->setPropertyValue("intensity", 3.0f);

@@ -315,7 +315,7 @@ void Session::nameEngineNodes()
 {
     mNodeNames.clear();
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
-        if (const NodeId id = mMirror->engineNode(n.get())) mNodeNames.push_back({ (unsigned long long)id, n->getName() });
+        if (const NodeId id = mMirror->engineNode(n.get())) mNodeNames.push_back({ (unsigned long long)id, QString::fromStdString(n->getName()) });
         for (const iris::SceneNodePtr &c : n->children()) walk(c);
     };
     walk(mDoc->getRootNode());
@@ -1434,7 +1434,7 @@ bool Session::exec(const Command &c)
                 const iris::LightNodePtr l = std::static_pointer_cast<iris::LightNode>(n);
                 const iris::Vec3 p = n->getGlobalPosition();
                 std::printf("LAB LIGHT %s type %d at %.4f,%.4f,%.4f intensity %.4g range %.4g sourceRadius %.4g\n",
-                            qPrintable(n->getName()), int(l->lightType), p.x(), p.y(), p.z(), l->intensity, l->distance,
+                            n->getName().c_str(), int(l->lightType), p.x(), p.y(), p.z(), l->intensity, l->distance,
                             l->sourceRadius);
             }
             for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
@@ -1623,7 +1623,7 @@ bool Session::lamp(const Command &c)
 {
     iris::LightNodePtr found;
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
-        if (!found && n->getSceneNodeType() == iris::SceneNodeType::Light && n->getName().toStdString() == c.args[0])
+        if (!found && n->getSceneNodeType() == iris::SceneNodeType::Light && n->getName() == c.args[0])
             found = std::static_pointer_cast<iris::LightNode>(n);
         for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
     };
@@ -1715,7 +1715,7 @@ bool Session::material(const Command &c)
 {
     iris::MeshNodePtr found;
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
-        if (!found && n->getSceneNodeType() == iris::SceneNodeType::Mesh && n->getName().toStdString() == c.args[0])
+        if (!found && n->getSceneNodeType() == iris::SceneNodeType::Mesh && n->getName() == c.args[0])
             found = std::static_pointer_cast<iris::MeshNode>(n);
         for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
     };
@@ -2030,7 +2030,7 @@ bool Session::slide(const Command &c)
 {
     iris::SceneNodePtr found;
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
-        if (!found && n->getSceneNodeType() == iris::SceneNodeType::Mesh && n->getName().toStdString() == c.args[0])
+        if (!found && n->getSceneNodeType() == iris::SceneNodeType::Mesh && n->getName() == c.args[0])
             found = n;
         for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
     };

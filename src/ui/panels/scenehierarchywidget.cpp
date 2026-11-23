@@ -1207,7 +1207,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
             QMenu *kindMenu = addConstraintsMenu->addMenu(tr(kind.label));
             kindMenu->setEnabled(!bodies.isEmpty());
             for (const iris::SceneNodePtr &body : bodies) {
-                QAction *to = kindMenu->addAction(body->getName());
+                QAction *to = kindMenu->addAction(QString::fromStdString(body->getName()));
                 const QString type = QLatin1String(kind.type);
                 connect(to, &QAction::triggered, this, [this, node, body, type]() {
                     addConstraint(node, body, type);
@@ -1455,7 +1455,7 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 {
     auto childTreeItem = new QTreeWidgetItem();
     childTreeItem->setFlags(childTreeItem->flags() | Qt::ItemIsEditable);
-    childTreeItem->setText(0, node->getName());
+    childTreeItem->setText(0, QString::fromStdString(node->getName()));
     childTreeItem->setData(0, Qt::UserRole, QVariant::fromValue(node->getNodeId()));
 	childTreeItem->setData(1, Qt::UserRole, QVariant::fromValue(node->isVisible()));
 	childTreeItem->setData(2, Qt::UserRole, QVariant::fromValue(node->isPickable()));
@@ -1718,7 +1718,7 @@ void SceneHierarchyWidget::OnLstItemsCommitData(QWidget *listItem)
     // The service rebuilds the tree on success; on a refusal (or no service)
     // put the row back to the name the document actually holds.
     if (given.isEmpty() && item && treeItemList.value(nodeId) == item)
-        item->setText(0, node->getName());
+        item->setText(0, QString::fromStdString(node->getName()));
 }
 
 QTreeWidget * SceneHierarchyWidget::getWidget()

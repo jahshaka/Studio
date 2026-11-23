@@ -1924,7 +1924,7 @@ QVariant VrApi::hover()
     out[QStringLiteral("hand")] =
         h.hand == VrHandRight ? QStringLiteral("right") : QStringLiteral("left");
     out[QStringLiteral("id")] = h.node->getGUID();
-    out[QStringLiteral("name")] = h.node->getName();
+    out[QStringLiteral("name")] = QString::fromStdString(h.node->getName());
     out[QStringLiteral("rootId")] = h.picked ? ScenePicker::pickRoot(h.picked)->getGUID()
                                              : h.node->getGUID();
     out[QStringLiteral("x")] = double(h.point.x());

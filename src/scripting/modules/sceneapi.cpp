@@ -416,7 +416,7 @@ QVariantList SceneApi::raycast(const QVariant &origin, const QVariant &direction
         if (!h.node) continue;
         QVariantMap m;
         m.insert(QStringLiteral("id"), h.node->getGUID());
-        m.insert(QStringLiteral("name"), h.node->getName());
+        m.insert(QStringLiteral("name"), QString::fromStdString(h.node->getName()));
         // `rootId` is what a VIEWPORT CLICK on this hit would select (F4,
         // 2026-09-06 verb-coverage audit): the top of the node's `attached`
         // chain, resolved by the picker's own ScenePicker::pickRoot so the

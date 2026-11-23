@@ -1237,7 +1237,7 @@ QVariantList NodeApi::components(const QString &id)
     for (const nodecomponents::Part &part : nodecomponents::partsOf(node)) {
         out.append(QVariantMap{
             { "id", part.node->getGUID() },
-            { "name", part.node->getName() },
+            { "name", QString::fromStdString(part.node->getName()) },
             { "type", nodeTypeName(part.node->getSceneNodeType()) },
             { "depth", part.depth },
             // The part's OWN flags, not the inherited state — the same two the
@@ -1265,7 +1265,7 @@ QVariant NodeApi::boneNames(const QString &id)
     if (!node) return QVariant();
     QVariantList out;
     if (auto skel = skeletonOf(node))
-        for (const auto &bone : skel->bones) out.append(bone->name);
+        for (const auto &bone : skel->bones) out.append(QString::fromStdString(bone->name));
     return out;
 }
 

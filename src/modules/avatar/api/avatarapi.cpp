@@ -1228,7 +1228,7 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
         node->avatarLink.version = definitionVersion;
         node->avatarLink.name = definition.name;
         if (!definition.name.isEmpty()) {
-            node->setName(definition.name);
+            node->setName(definition.name.toStdString());
             // THE OUTLINER ALREADY HAS THE ROW (S9, R2 repro: a freshly
             // spawned avatar's row read "RootNode" until something else
             // refreshed the tree). addMaterialMesh inserted the node under the
@@ -1427,7 +1427,7 @@ namespace {
 void collectNodeNames(const iris::SceneNodePtr &node, QSet<QString> &out)
 {
     if (!node) return;
-    out.insert(node->getName());
+    out.insert(QString::fromStdString(node->getName()));
     const int n = node->childCount();
     for (int i = 0; i < n; ++i)
         if (auto *child = node->childAt(i)) collectNodeNames(child->weak_from_this().lock(), out);
@@ -1504,7 +1504,7 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     }
     if (scored[best].ratio < rig::kRigMatchThreshold) {
         record(QStringLiteral("%1: %2")
-                   .arg(v, rig::mismatchMessage(scored[best], shown, character->getName())));
+                   .arg(v, rig::mismatchMessage(scored[best], shown, QString::fromStdString(character->getName()))));
         return false;
     }
 
@@ -1520,7 +1520,7 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
         // The clip's REFERENCE is the asset it was read from (CLIP-REF-1):
         // the scene persists {assetGuid, name} and resolves it through the store.
         auto clip = iris::Animation::createFromSkeletalAnimation(
-            iris::SkeletalAnimation::referencedAs(s.skel, assetGuid));
+            iris::SkeletalAnimation::referencedAs(s.skel, assetGuid.toStdString()));
         if (!clip) continue;
         // The same display-name rule the preview uses: every Mixamo clip is
         // literally called "mixamo.com", so a junk name becomes the FILE's base
@@ -1900,7 +1900,7 @@ QVariantList AvatarApi::list()
                 const iris::AvatarLocomotionState &s = child->avatar()->state();
                 out.append(QVariantMap{
                     { "id", child->getGUID() },
-                    { "name", child->getName() },
+                    { "name", QString::fromStdString(child->getName()) },
                     { "possessed", child->getGUID() == possessedGuid },
                     { "speed", double(s.speed) },
                     { "grounded", s.grounded },
@@ -3396,7 +3396,7 @@ QVariantList AvatarApi::instances(const QString &assetGuid)
         const QString pinned = AvatarAssets::projectVersion(host.db, node->avatarLink.asset, host.project);
         out.append(QVariantMap{
             { "node", node->getGUID() },
-            { "name", node->getName() },
+            { "name", QString::fromStdString(node->getName()) },
             { "asset", node->avatarLink.asset },
             { "version", node->avatarLink.version },
             // STALE = the project's pin has moved since this instance resolved.

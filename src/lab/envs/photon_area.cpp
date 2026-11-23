@@ -36,7 +36,7 @@ Built buildArea(unsigned seed, bool bake)
              b.material(0.9f, 0.9f, 0.9f, 0.3f, 1.0f));
     auto light = iris::LightNode::create();
     light->setLightType(iris::LightType::Area);
-    light->setName(QStringLiteral("area"));
+    light->setName((QStringLiteral("area")).toStdString());
     b.built().doc->getRootNode()->addChild(light);
     light->setLocalPos(V(0.0f, 3.0f, -1.5f));
     light->setPropertyValue("rectWidth", 2.0f);

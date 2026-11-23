@@ -1929,7 +1929,7 @@ QVariantMap WorldApi::atomCutProbe(const QVariantMap &params)
     if (SceneMirror *mirror = host.viewport ? host.viewport->sceneMirror() : nullptr) {
         for (const iris::SceneNodePtr &n : std::as_const(doc->nodes)) {
             if (!n) continue;
-            if (const jahshaka::engine::NodeId id = mirror->engineNode(n.get())) docNames.insert(id, n->getName());
+            if (const jahshaka::engine::NodeId id = mirror->engineNode(n.get())) docNames.insert(id, QString::fromStdString(n->getName()));
         }
     }
     std::vector<const jahshaka::engine::AtomCutProbeObject *> order;
@@ -2874,7 +2874,7 @@ QVariantMap WorldApi::sun()
     auto sun = scene->sunLight();
     QVariantMap out;
     out[QStringLiteral("light")] = sun ? sun->getGUID() : QString();
-    out[QStringLiteral("name")] = sun ? sun->getName() : QString();
+    out[QStringLiteral("name")] = sun ? QString::fromStdString(sun->getName()) : QString();
     out[QStringLiteral("explicit")] = !scene->sunLightGuid.isEmpty();
     out[QStringLiteral("reason")] = scene->sunReason();
     out[QStringLiteral("priority")] = sun ? sun->forwardShadingPriority : -1;
@@ -2890,7 +2890,7 @@ QVariantMap WorldApi::sun()
     QVariantList secondaries;
     for (const auto &l : scene->secondaryDirectionals())
         secondaries.append(QVariantMap{ { QStringLiteral("light"), l->getGUID() },
-                                        { QStringLiteral("name"), l->getName() },
+                                        { QStringLiteral("name"), QString::fromStdString(l->getName()) },
                                         { QStringLiteral("priority"), l->forwardShadingPriority } });
     out[QStringLiteral("secondaries")] = secondaries;
     out[QStringLiteral("nextPriority")] = scene->nextForwardShadingPriority();
@@ -2920,7 +2920,7 @@ QVariantMap WorldApi::skyLight()
     if (!scene) return out;
     const auto light = scene->skyLight();
     out[QStringLiteral("light")] = light ? light->getGUID() : QString();
-    out[QStringLiteral("name")] = light ? light->getName() : QString();
+    out[QStringLiteral("name")] = light ? QString::fromStdString(light->getName()) : QString();
     out[QStringLiteral("intensity")] = light ? double(light->intensity) : 0.0;
     out[QStringLiteral("tint")] = light ? colorToJs(iris::toQColor(light->color)) : QVariant();
     out[QStringLiteral("reason")] = scene->skyLightReason();

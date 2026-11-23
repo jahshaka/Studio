@@ -112,7 +112,7 @@ QVariantMap settingsToJs(const iris::CameraNodePtr &cam)
     QVariantMap out;
     if (!cam) return out;
     out["id"] = cam->getGUID();
-    out["name"] = cam->getName();
+    out["name"] = QString::fromStdString(cam->getName());
     out["angle"] = cam->angle;                 // vertical degrees
     out["focalLength"] = cam->focalLength();   // the same angle, in mm
     out["sensorWidth"] = cam->sensorWidth;

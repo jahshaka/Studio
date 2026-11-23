@@ -189,12 +189,12 @@ void ComponentsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         QVector<QTreeWidgetItem *> byDepth;   // byDepth[d] = the last row at depth d+1
         for (const nodecomponents::Part &part : nodecomponents::partsOf(subject)) {
             auto *item = new QTreeWidgetItem();
-            item->setText(0, part.node->getName());
+            item->setText(0, QString::fromStdString(part.node->getName()));
             item->setIcon(0, nodeicons::forType(part.node->getSceneNodeType()));
             item->setData(0, kGuidRole, part.node->getGUID());
             item->setIcon(1, nodeicons::visibility(part.node->isVisible()));
             item->setIcon(2, nodeicons::lock(!part.node->isPickable()));
-            item->setToolTip(0, part.node->getName());
+            item->setToolTip(0, QString::fromStdString(part.node->getName()));
             partsByGuid.insert(part.node->getGUID(), part.node);
 
             QTreeWidgetItem *parent = (part.depth >= 2 && byDepth.size() >= part.depth - 1)

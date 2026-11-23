@@ -314,7 +314,7 @@ inline int endsEmpty()
     iris::MeshBake::buildClusterDag(prop, &st);
     const MeshClusterDag &dag = prop->clusterDag;
     const cutcurve::Dag d = cutcurve::fromMesh(dag);
-    const float topError = dag.groups.isEmpty() ? 0.0f : dag.groups.last().error;
+    const float topError = dag.groups.empty() ? 0.0f : dag.groups.back().error;
     std::printf("== prop: %d clusters, %d groups, top error %.4g (the ring's diagonal %.4g); cut below it %lld, above "
                 "it %lld\n", int(dag.clusters.size()), int(dag.groups.size()), double(topError), double(st.rootError),
                 cutcurve::cutAt(d, topError * 0.999f), cutcurve::cutAt(d, topError * 1.001f));
@@ -609,7 +609,7 @@ inline int levelTableIsACut()
         int prevTris = -1, lastDepth = 0;
         std::printf("== %s: DAG depth %d, %d levels:", s.name, rd.maxDepth, int(s.mesh->lodIndices.size()));
         for (int i = 0; i < s.mesh->lodIndices.size(); ++i) {
-            const QVector<quint32> &idx = s.mesh->lodIndices.at(i);
+            const std::vector<quint32> &idx = s.mesh->lodIndices.at(i);
             std::vector<std::array<quint32, 3>> tris;
             for (int t = 0; t + 2 < idx.size(); t += 3) tris.push_back({ idx[t], idx[t + 1], idx[t + 2] });
             for (quint32 v : idx) if (size_t(v) >= nv) ++badIndex;
@@ -634,7 +634,7 @@ inline int levelTableIsACut()
         std::snprintf(msg, sizeof(msg), "%s: at most %d levels, at least one when the DAG has a level", s.name,
                       iris::MeshBake::kLevelTableMax);
         CHECK_LOUD(s.mesh->lodIndices.size() <= iris::MeshBake::kLevelTableMax &&
-                       (rd.maxDepth < 2 || !s.mesh->lodIndices.isEmpty()), msg);
+                       (rd.maxDepth < 2 || !s.mesh->lodIndices.empty()), msg);
         std::snprintf(msg, sizeof(msg), "%s: every level is a uniform-depth cut of the DAG (%d not)", s.name, notACut);
         CHECK_LOUD(notACut == 0, msg);
         std::snprintf(msg, sizeof(msg), "%s: every bound is the largest stored error at its depth (%d not)", s.name, overStored);

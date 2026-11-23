@@ -397,7 +397,7 @@ inline QVariantMap nodeToJs(const iris::SceneNodePtr &node)
 {
     QVariantMap m;
     m["id"] = node->getGUID();
-    m["name"] = node->getName();
+    m["name"] = QString::fromStdString(node->getName());
     m["type"] = nodeTypeName(node->getSceneNodeType());
     auto parentNode = node->getParent();
     m["parent"] = parentNode ? parentNode->getGUID() : QString();

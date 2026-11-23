@@ -143,7 +143,7 @@ QVariantMap ParticlesApi::describe(const QString &id)
 
     QVariantMap m;
     m["id"] = ps->getGUID();
-    m["name"] = ps->getName();
+    m["name"] = QString::fromStdString(ps->getName());
     m["preset"] = iris::ParticleSystemNode::presetName(ps->preset);
     m["shape"] = iris::ParticleSystemNode::shapeName(ps->shape);
     m["orientation"] = iris::ParticleSystemNode::orientationName(ps->orientation);

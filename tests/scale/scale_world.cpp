@@ -683,7 +683,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
         const int gx = i % side, gz = i / side;
         const size_t mi = size_t(i) % meshes.size();
         auto n = iris::MeshNode::create();
-        n->setName(QStringLiteral("item%1").arg(i));
+        n->setName((QStringLiteral("item%1").arg(i)).toStdString());
         n->setMesh(meshes[mi]);
         const float size = kScales[(i / int(meshes.size())) % 3];
         const float k = size / extents[mi];
@@ -708,7 +708,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
         auto l = iris::LightNode::create();
         const bool spot = (i % 4) == 3;
         l->setLightType(spot ? iris::LightType::Spot : iris::LightType::Point);
-        l->setName(QStringLiteral("lamp%1").arg(i));
+        l->setName((QStringLiteral("lamp%1").arg(i)).toStdString());
         l->setLocalPos(iris::Vec3(float(i % lside) * spec.lightGrid - lhalf, 4.0f,
                                   float(i / lside) * spec.lightGrid - lhalf));
         if (spot) l->setLocalRot(iris::Quat::fromEulerAngles(-90.0f, 0.0f, 0.0f));

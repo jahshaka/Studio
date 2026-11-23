@@ -1168,7 +1168,7 @@ QVariantList EditorApi::outlinerRows()
             if (iris::SceneNode *child = node->childAt(i))
                 if (!child->isAttached()) ++childRows;
         out.append(QVariantMap{ { "id", node->getGUID() },
-                                { "name", node->getName() },
+                                { "name", QString::fromStdString(node->getName()) },
                                 { "type", scriptmod::nodeTypeName(node->getSceneNodeType()) },
                                 { "children", childRows } });
     }
@@ -2687,7 +2687,7 @@ QVariant EditorApi::clickTargetAt(double x, double y)
     const iris::SceneNodePtr node = host.viewport->clickTargetAt(QPointF(x, y));
     if (!node) return QVariant();
     return QVariantMap{ { QStringLiteral("id"), node->getGUID() },
-                        { QStringLiteral("name"), node->getName() } };
+                        { QStringLiteral("name"), QString::fromStdString(node->getName()) } };
 }
 
 QVariant EditorApi::dropTargetAt(double x, double y)
@@ -2698,7 +2698,7 @@ QVariant EditorApi::dropTargetAt(double x, double y)
     if (!node) return QVariant();
     QVariantMap out;
     out.insert("id", node->getGUID());
-    out.insert("name", node->getName());
+    out.insert("name", QString::fromStdString(node->getName()));
     // A LOCKED node is reported, not hidden (owner correction, 2026-09-15):
     // "there is something here and it will refuse you" is a different answer
     // from "there is nothing here", and only one of them spawns an image plane.
@@ -3140,7 +3140,7 @@ QString EditorApi::raiseIssue(const QVariantMap &issue)
         if (auto scene = (host.services && host.services->sceneEdit)
                               ? host.services->sceneEdit->scene() : iris::ScenePtr()) {
             auto node = scene->nodes.value(out.node);
-            if (node) out.nodeName = node->getName();
+            if (node) out.nodeName = QString::fromStdString(node->getName());
         }
     }
     return SceneIssues::instance().raise(out);

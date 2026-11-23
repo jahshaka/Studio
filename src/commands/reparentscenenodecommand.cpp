@@ -25,7 +25,7 @@ ReparentSceneNodeCommand::ReparentSceneNodeCommand(iris::SceneNodePtr sceneNode,
     // Captured BEFORE anything moves — this is the only moment the old slot
     // exists (audit F5).
     this->oldIndex = sceneNode ? sceneNode->siblingIndex() : -1;
-    setText(QObject::tr("Reparent %1").arg(sceneNode ? sceneNode->getName() : QString()));
+    setText(QObject::tr("Reparent %1").arg(sceneNode ? QString::fromStdString(sceneNode->getName()) : QString()));
 }
 
 void ReparentSceneNodeCommand::undo()

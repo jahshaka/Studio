@@ -394,7 +394,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         for (const auto &anim : n->getAnimations()) {
             if (anim && anim->hasSkeletalAnimation())
                 anim->setSkeletalAnimation(iris::SkeletalAnimation::referencedAs(
-                    anim->getSkeletalAnimation(), out.meshGuid));
+                    anim->getSkeletalAnimation(), out.meshGuid.toStdString()));
         }
         for (auto &child : n->children()) rewrite(child);
     };

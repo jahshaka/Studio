@@ -4109,7 +4109,7 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
     if (mPilot) {
         d.stats = true;
         d.corner = jahshaka::engine::OverlayCorner::TopLeft;
-        const QString name = mPilot->getName().isEmpty() ? tr("Camera") : mPilot->getName();
+        const QString name = mPilot->getName().empty() ? tr("Camera") : QString::fromStdString(mPilot->getName());
         d.lines.push_back(tr("Piloting: %1").arg(name).toStdString());
         d.lines.push_back(tr("Esc or the camera menu to eject").toStdString());
     }

@@ -150,6 +150,17 @@ set_tests_properties(bake.dag_stats_result PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(bake.dag_stats_result)
 
+# bake.round_trip (NOQT-DOCUMENT-1 stage 5, the 5-bake commit; meshbake.roundtrip's law, archived at TEST-CUT-1, back as the
+# bake's FORWARD proof): what we bake reads back EQUAL to the parse over seven fixtures; a non-ASCII name (2-, 3- and 4-byte
+# UTF-8) on a node, a clip, a channel and a bone survives exactly; the payload checksum refuses a flipped byte by name at
+# four places; an index of 0x80000000 is refused at each of the three index guards. test_mesh_bake.cpp roundTripRow says
+# the laws. A CPU row: FRAMES 0.
+add_test(NAME bake.round_trip COMMAND $<TARGET_FILE:test_mesh_bake> --round-trip
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(bake.round_trip PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(bake.round_trip)
+
 # meshbake.archive_bakes.import / .rebuild / .missing (FORWARD-ONLY-1 item 1): an ARCHIVE IMPORT bakes every model it
 # brings (archives carry no bakes), so a fresh library that imports the shipped samples opens them from bakes with ZERO
 # parses; with the bakes gone the open rebuilds them from their sources; with the sources gone too the world opens with

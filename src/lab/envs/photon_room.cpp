@@ -47,7 +47,7 @@ void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr
     if (!withLamp) return;
     auto lamp = iris::LightNode::create();
     lamp->setLightType(iris::LightType::Point);
-    lamp->setName(QStringLiteral("lamp"));
+    lamp->setName((QStringLiteral("lamp")).toStdString());
     b.built().doc->getRootNode()->addChild(lamp);
     lamp->setLocalPos(V(0, 6, 0));
     lamp->setPropertyValue("intensity", iris::lens::kDefaultLampIntensity);

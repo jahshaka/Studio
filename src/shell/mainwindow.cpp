@@ -726,7 +726,7 @@ void MainWindow::assignAnimationAsset(const QString &guid, const iris::SceneNode
     ref.intent = AssetRef::Intent::Assign;
     if (node) {
         ref.targetGuid = node->getGUID();
-        ref.targetName = node->getName();
+        ref.targetName = QString::fromStdString(node->getName());
     }
     moduleHub->openAsset(ref);
 }

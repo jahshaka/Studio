@@ -50,13 +50,13 @@ QVector<ClipScore> scoreClips(const QMap<QString, iris::SkeletalAnimationPtr> &a
         ClipScore s;
         s.raw = it.key();
         s.skel = it.value();
-        for (auto ch = s.skel->boneAnimations.constBegin();
-             ch != s.skel->boneAnimations.constEnd(); ++ch) {
+        for (auto ch = s.skel->boneAnimations.cbegin();
+             ch != s.skel->boneAnimations.cend(); ++ch) {
             ++s.channels;
-            if (isPivotChannel(ch.key())) continue;
+            if (isPivotChannel(QString::fromStdString(ch->first))) continue;
             ++s.boneChannels;
-            if (rigNodeNames.contains(ch.key())) ++s.matched;
-            else if (s.unmatched.size() < 5) s.unmatched.append(ch.key());
+            if (rigNodeNames.contains(QString::fromStdString(ch->first))) ++s.matched;
+            else if (s.unmatched.size() < 5) s.unmatched.append(QString::fromStdString(ch->first));
         }
         s.ratio = s.boneChannels > 0 ? double(s.matched) / double(s.boneChannels) : 0.0;
         scored.append(s);
