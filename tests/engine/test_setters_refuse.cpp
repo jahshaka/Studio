@@ -240,7 +240,7 @@ int posted(Engine &e)
     for (const Setter &t : theTen()) t.wrapped(s, dead);
     enginetest::frames(e, 1);
     const int wrapped = count("wrapped", missed);
-    check(missed.empty() && direct == 11 && wrapped == 11 && liveWrapped == 0,
+    check(missed.empty() && direct == 11 && wrapped == 11 && liveWrapped == 0 && liveDirect == 0,
           "POSTED (EngineConfig::hostRecords): the eleven setters on a removed node each publish a REFUSAL naming the "
           "verb and the node - by a direct call (" + std::to_string(direct) + " of 11) AND THROUGH THE APP's ROUTE, "
           "scenecmd::call (" + std::to_string(wrapped) + " of 11); THE CONTROL: the live node's posts publish none (" +
