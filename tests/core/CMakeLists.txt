@@ -26,7 +26,20 @@ add_test(NAME core.guid
          COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/guid_library.py $<TARGET_FILE:test_core_guid>
                  ${CMAKE_BINARY_DIR}/tests/.seedhome/data/JahLibrary.db ${CMAKE_SOURCE_DIR}/src/data/primitives.h
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
+# core.json_qt_parity: the one codec writes Qt's text (option B; test_core_json_qt_parity.cpp says the laws) - the number edges,
+# NaN / infinity refused by name, the empty containers, and every JSON blob of the seeded template library (tests/.seedhome).
+# Its process LINKS QtCore on purpose: QJsonDocument is the reference, beside iris::json. It lives until the saved scene's
+# format is rewritten (plan 0.16).
+add_executable(test_core_json_qt_parity test_core_json_qt_parity.cpp)
+set_target_properties(test_core_json_qt_parity PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_link_libraries(test_core_json_qt_parity PRIVATE IrisCore Qt6::Core)
+target_include_directories(test_core_json_qt_parity PRIVATE ${CMAKE_SOURCE_DIR})
+add_test(NAME core.json_qt_parity
+         COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/json_qt_parity.py $<TARGET_FILE:test_core_json_qt_parity>
+                 ${CMAKE_BINARY_DIR}/tests/.seedhome/data/JahLibrary.db
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
 # its binary is on its command line; the seeded library it reads is the warm-up's (tests/support/seed_home.sh), no build target
-jah_builds(none ROWS core.guid)
-set_tests_properties(core.text core.files core.guid core.signal core.bound core.json PROPERTIES TIMEOUT 60 LABELS "core")
-jah_no_display(core.text core.files core.guid core.signal core.bound core.json)
+jah_builds(none ROWS core.guid core.json_qt_parity)
+set_tests_properties(core.text core.files core.guid core.signal core.bound core.json core.json_qt_parity PROPERTIES TIMEOUT 60
+                     LABELS "core")
+jah_no_display(core.text core.files core.guid core.signal core.bound core.json core.json_qt_parity)

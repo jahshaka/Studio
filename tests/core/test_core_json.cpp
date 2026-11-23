@@ -1,7 +1,8 @@
 // core.json — THE ONE JSON CODEC, ITS LAWS ON THE CPU (MCP-ON-HOST-1 stage 1 as script.json; irisgl/core/json.h says
 // them). No device, no engine: the codec alone, in the core library with the value (NOQT-CORE-1 stage 3: moved).
-// THE LAWS: every kind round-trips value -> text -> value WITH ITS KIND (a Number stays a Number: "1.0"); 0.1 + 0.2 and
-// -0.0 by their bits; 2^53 + 1 and INT64_MIN exact as Int; an integer past int64 and a number past a double refused; NaN
+// THE LAWS: every kind round-trips value -> text -> value, its VALUE (ONE NUMBER TEXT, option B, Qt's: an integral Number
+// is written "1" and reads back an Int - a Number parameter admits it, script.host); 0.1 + 0.2 by its bits; -0.0 written
+// "0" (Qt's); 2^53 + 1 and INT64_MIN exact as Int; an integer past int64 and a number past a double refused; NaN
 // and infinity never written (the path named); strict UTF-8 both ways (`\u` pairs joined, a lone surrogate refused);
 // control characters and `\n` written escaped; a duplicate member, nesting past 64, trailing text, a BOM and an empty
 // input refused (line and column named); bytes as {"$bytes": base64} both ways, capped at 1 MiB by name.
@@ -80,7 +81,7 @@ int main()
 {
     std::string why;
 
-    // 1. EVERY KIND ROUND-TRIPS WITH ITS KIND
+    // 1. EVERY KIND ROUND-TRIPS (its value; a Number's kind only when it is not integral: option B)
     const Value all(Value::Object{
         {"null", Value()}, {"yes", Value(true)}, {"no", Value(false)}, {"int", Value(-42)}, {"one", Value(1.0)},
         {"zero", Value(0.0)}, {"big", Value(1e300)}, {"tiny", Value(5e-324)}, {"half", Value(2.5)},
@@ -90,12 +91,17 @@ int main()
         {"bytes", Value::bytes({0, 1, 2, 254, 255})}});
     const std::string allText = text(all);
     const Value back = read(allText, why);
-    CHECK(why.empty() && sameKind(all, back),
-          "every kind round-trips value -> text -> value with its kind (" + allText.substr(0, 96) + "...) " + why);
-    CHECK(text(Value(1.0)) == "1.0" && text(Value(0.0)) == "0.0" && text(Value(1e300)) == "1e+300" && text(Value(1)) == "1" &&
+    CHECK(why.empty() && back == all && back["half"].kind() == Kind::Number && back["tiny"].kind() == Kind::Number &&
+              back["one"].kind() == Kind::Int && sameKind(back["text"], all["text"]) && sameKind(back["bytes"], all["bytes"]),
+          "every kind round-trips value -> text -> value, its value; a non-integral Number stays a Number, an integral one "
+          "reads back an Int (" + allText.substr(0, 96) + "...) " + why);
+    CHECK(text(Value(1.0)) == "1" && text(Value(0.0)) == "0" && text(Value(1e300)) == "1e+300" && text(Value(1)) == "1" &&
+              text(Value(1e16)) == "1e+16" && text(Value(1e-4)) == "1e-04" && text(Value(0.001)) == "0.001" &&
               read("1.0", why).kind() == Kind::Number && read("1", why).kind() == Kind::Int &&
               read("1e2", why).kind() == Kind::Number,
-          "a Number is written with a fraction or an exponent (1.0 " + text(Value(1.0)) + ", 1e300 " + text(Value(1e300)) +
+          "ONE NUMBER TEXT (option B, Qt's): an integral Number of magnitude <= 2^53 as an integer (1.0 " + text(Value(1.0)) +
+              "), any other the shortest of fixed and exponent (1e300 " + text(Value(1e300)) + ", 1e16 " +
+              text(Value(1e16)) + ", 1e-4 " + text(Value(1e-4)) + ", 0.001 " + text(Value(0.001)) +
               "); an integer literal reads an Int, a fraction or an exponent a Number");
     CHECK(text(Value(Value::Object{{"b", Value(1)}, {"a", Value(2)}})) == "{\"b\":1,\"a\":2}" &&
               read("{\"b\":1,\"a\":2}", why).asObject()[0].first == "b",
@@ -106,8 +112,8 @@ int main()
     const Value sumBack = read(text(Value(sum)), why), zeroBack = read(text(Value(negZero)), why);
     CHECK(sumBack.kind() == Kind::Number && bits(sumBack.asNumber()) == bits(sum),
           "0.1 + 0.2 round-trips bit-exact (" + text(Value(sum)) + ")");
-    CHECK(text(Value(negZero)) == "-0.0" && zeroBack.kind() == Kind::Number && bits(zeroBack.asNumber()) == bits(negZero),
-          "-0.0 is kept by its bits (" + text(Value(negZero)) + ")");
+    CHECK(text(Value(negZero)) == "0" && zeroBack == Value(negZero),
+          "-0.0 is written \"0\" as Qt writes it (its sign dropped; equal as a number) (" + text(Value(negZero)) + ")");
     const std::int64_t p53 = (std::int64_t(1) << 53) + 1, lowest = std::numeric_limits<std::int64_t>::min();
     const Value p53Back = read("9007199254740993", why), lowBack = read("-9223372036854775808", why);
     CHECK(p53Back.kind() == Kind::Int && p53Back.asInt() == p53 && lowBack.kind() == Kind::Int && lowBack.asInt() == lowest &&
