@@ -1,0 +1,9 @@
+engine.gi.readCardAt Scene::readCardAt
+engine.gi.readCardRadiance Scene::readCardRadiance
+engine.gi.voxelStats Scene::giVoxelStats
+engine.gi.voxelVolume Scene::giVoxelVolume
+engine.gi.voxelLight Scene::giVoxelLight
+engine.gi.voxelDirect Scene::giVoxelDirect
+engine.gi.voxelHalves Scene::giVoxelHalves
+engine.gi.changedRegions Scene::giChangedRegions
+engine.gi.traceRays Scene::traceRays
