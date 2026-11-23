@@ -480,6 +480,38 @@ if(JAHSHAKA_ASAN)
     endforeach()
     target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_engine_asan PRIVATE -fsanitize=address)
+
+    # jahengine_asan (SCRIPT-IN-ENGINE-1 2f) - THE SCRIPTED ENGINE UNDER AddressSanitizer: jahengine's own main.cpp over
+    # the script host's ASan twin (JahshakaScriptAsan: the host's archive, JAHSHAKA_ENGINE_SCRIPT_SOURCES, sanitised too -
+    # a use-after-free in a command or the registry is a red, not only one in the engine) over JahshakaEngineAsan, and the
+    # MCP adapter's twin (jahengine links it). Built ON DEMAND (out of the default build) by the rows that run it - the
+    # tail moves atom.component_asan onto it (a script on jahengine_asan, label `long`).
+    add_library(JahshakaScriptAsan STATIC EXCLUDE_FROM_ALL ${JAHSHAKA_ENGINE_SCRIPT_SOURCES})
+    target_include_directories(JahshakaScriptAsan PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+    target_link_libraries(JahshakaScriptAsan PUBLIC JahshakaEngineAsan PRIVATE qjs)
+    set_target_properties(JahshakaScriptAsan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+                                                        CXX_STANDARD_REQUIRED ON)
+    target_compile_options(JahshakaScriptAsan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    get_target_property(_mcp_sources JahshakaEngineMcp SOURCES)   # (absolute: irisgl/engine/CMakeLists.txt names them so)
+    add_library(JahshakaEngineMcpAsan STATIC EXCLUDE_FROM_ALL ${_mcp_sources})
+    target_include_directories(JahshakaEngineMcpAsan PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/mcp/include)
+    target_link_libraries(JahshakaEngineMcpAsan PUBLIC JahshakaScriptAsan)
+    set_target_properties(JahshakaEngineMcpAsan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+                                                           CXX_STANDARD_REQUIRED ON)
+    target_compile_options(JahshakaEngineMcpAsan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    add_executable(jahengine_asan ${CMAKE_SOURCE_DIR}/irisgl/engine/jahengine/main.cpp)
+    set_target_properties(jahengine_asan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "$ORIGIN")
+    # jahengine's own two (irisgl/engine/CMakeLists.txt), ON ITS SOURCE in this directory: a target-wide path define is
+    # moved onto the target's sources under tests/ and dropped elsewhere (tests/CMakeLists.txt, jah_scope_path_defines)
+    set_property(SOURCE ${CMAKE_SOURCE_DIR}/irisgl/engine/jahengine/main.cpp APPEND PROPERTY COMPILE_DEFINITIONS
+                 JAHENGINE_OGRE_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHENGINE_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_link_libraries(jahengine_asan PRIVATE JahshakaScriptAsan JahshakaEngineMcpAsan)
+    add_dependencies(jahengine_asan JahshakaEngineMedia)
+    target_compile_options(jahengine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(jahengine_asan PRIVATE -fsanitize=address)
+    jah_on_demand(jahengine_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
 endif()
 
 # engine.chain_reflect_sources / engine.reflect_chain_shape — THE REFLECTION CHAIN's RULES as pure functions (PHOTON-7-9A;
