@@ -45,6 +45,7 @@
 #include <QCryptographicHash>
 
 #include "../support/testmesh.h"
+#include "irisgl/document/qt/colour.h"
 #include "../support/proceduralshell.h"
 #include <QDir>
 #include <QFile>
@@ -294,7 +295,7 @@ static void compareFragment(const iris::SceneNodePtr &parsed, const iris::SceneN
 static iris::MaterialPtr testMaterial(iris::MeshPtr, iris::MeshMaterialData &data)
 {
     auto mat = iris::PbrMaterial::create();
-    mat->setValue("baseColor", data.diffuseColor);
+    mat->setValue("baseColor", iris::toQColor(data.diffuseColor));
     return iris::MaterialPtr(mat);
 }
 

@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
         }
         return still >= 3;
     };
-    const iris::LinearColor want = iris::linearOf(kSky);
+    const iris::LinearColor want = iris::linearOf(iris::toSrgbColor(kSky));
     const double code = 1.0 / 255.0;
     for (const bool gi : { false }) {
         doc->giMode = gi ? iris::GiMode::VCT : iris::GiMode::OFF;

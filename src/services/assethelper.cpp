@@ -253,7 +253,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         // import.
         if (data.hasEmbeddedDiffTexture && !data.diffuseTexture.isEmpty()) {
             hasEmbeddedTexture = true;
-            data.diffuseColor = QColor(255, 255, 255);
+            data.diffuseColor = iris::SrgbColor(255, 255, 255);
         }
         return iris::MaterialPtr(iris::materialFromMeshData(data));
     }, ssource, nullptr, extractDir, xf);

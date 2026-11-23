@@ -334,7 +334,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     const UvTransform uvScale{ pbr->textureScale, pbr->textureScaleV,
                                pbr->textureOffsetU, pbr->textureOffsetV,
                                pbr->textureRotation };
-    const QColor bc = iris::toQColor(pbr->baseColor);
+    const iris::SrgbColor bc = pbr->baseColor;
     const float bf = pbr->baseColorFactor;
     // Translucent (2) and Additive (4) carry alpha into baseColorFactor.A
     // (three's AdditiveBlending is SrcAlpha/One, so alpha scales the glow —
@@ -426,7 +426,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     // A METALLIC material takes none of this: its glTF is byte-identical to
     // what it was before workflows existed.
     if (pbr->workflow != 0) {
-        const QColor bc = iris::toQColor(pbr->baseColor);
+        const iris::SrgbColor bc = pbr->baseColor;
         const float diffuse[4] = { float(bc.redF()) * pbr->baseColorFactor,
                                    float(bc.greenF()) * pbr->baseColorFactor,
                                    float(bc.blueF()) * pbr->baseColorFactor,
@@ -435,20 +435,20 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
         // (Specular-as-Fresnel) has no kS to speak of — the specular VALUE is
         // the F0 — so F0 is what goes in, which is the same quantity the
         // conversion's dielectric-vs-metal test is written against.
-        QColor spec = iris::toQColor(pbr->specularColor);
+        iris::SrgbColor spec = pbr->specularColor;
         if (pbr->workflow == 2) {
-            spec = pbr->useFresnelColor ? iris::toQColor(pbr->fresnelColor) : QColor();
+            spec = pbr->useFresnelColor ? pbr->fresnelColor : iris::SrgbColor();
             if (!spec.isValid()) {
                 // F0 from the IOR, the renderer's own formula.
                 const float ior = std::max(1.0f, pbr->ior);
                 const float f = (1.0f - ior) / (1.0f + ior);
                 const int v = int(std::lround(std::min(1.0f, f * f) * 255.0f));
-                spec = QColor(v, v, v);
+                spec = iris::SrgbColor(v, v, v);
             }
         }
         const float specular[3] = { float(spec.redF()), float(spec.greenF()),
                                     float(spec.blueF()) };
-        QColor convertedBase;
+        iris::SrgbColor convertedBase;
         float convertedMetal = 0.0f, convertedRough = 0.0f;
         iris::MaterialHelper::specularGlossinessToMetallicRoughness(
             diffuse, specular, 1.0f - pbr->roughnessFactor,
@@ -491,7 +491,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     // editor pretends to honour. Bake AO into the base colour at import
     // otherwise; that works on both targets.
 
-    const QColor ec = iris::toQColor(pbr->emissiveColor);
+    const iris::SrgbColor ec = pbr->emissiveColor;
     const float ei = pbr->emissiveIntensity;
     const bool emissiveOn = ei > 0.0f && (ec.redF() + ec.greenF() + ec.blueF()) > 0.0;
     if (emissiveOn) {
