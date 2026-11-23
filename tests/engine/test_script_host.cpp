@@ -16,7 +16,9 @@
 #include "script/records.h"            // ONE FIELD TABLE PER RECORD (engine-private): the machinery, on this file's records
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <ctime>
 #include <limits>
@@ -67,6 +69,20 @@ struct Textured {   // (E0: a record carrying engine ids - Field::handle)
     std::vector<NodeId> nodes;
     float x = 1.0f;
 };
+struct Faced {   // (E0, the audit's 1: SkyDesc's six faces - a handle array of FIXED length, none per element)
+    TextureId faces[6] = {};
+    std::vector<TextureId> list;
+};
+struct Pair {   // (a trivially copyable element, carried in bytes)
+    float a = 0, b = 0;
+};
+struct Shaped {   // (E0, the audit's 2: the shapes of MeshData, GiVoxelVolume, PublishedEngineFrame)
+    std::vector<float> big;                      // Field::bytes (GiVoxelVolume::light)
+    float fixed4[4] = {};                        // Field::bytes on a T[N]
+    std::vector<std::vector<unsigned>> lods;     // an array of arrays: of bytes (MeshData::lodIndices)
+    std::vector<Pair> joints[2];                 // T[N] of arrays of records: of bytes (PublishedEngineFrame::vrJoints)
+    std::vector<std::vector<float>> dirs[3];     // T[N] of arrays of arrays: of PACKED bytes (GiVoxelVolume::directional)
+};
 }  // namespace tr
 namespace jahshaka { namespace engine { namespace script {
 JAH_ENUM_NAMES(tr::Mode, {{tr::Mode::Off, "off"}, {tr::Mode::Fast, "fast"}, {tr::Mode::Slow, "slow"}});
@@ -74,6 +90,21 @@ JAH_ENUM_NAMES(tr::Partial, {{tr::Partial::Named, "named"}, {tr::Partial::AlsoNa
 JAH_RECORD_COUNT(tr::Inner, 2);
 JAH_RECORD_COUNT(tr::Outer, 16);
 JAH_RECORD_COUNT(tr::Textured, 3);
+JAH_RECORD_COUNT(tr::Faced, 2);
+JAH_RECORD_COUNT(tr::Shaped, 5);
+const Table<tr::Faced> &Record<tr::Faced>::table()
+{
+    static const Table<tr::Faced> t({field("faces", &tr::Faced::faces).handle(kTexture),
+                                     field("list", &tr::Faced::list).upTo(4).handle(kTexture)});
+    return t;
+}
+const Table<tr::Shaped> &Record<tr::Shaped>::table()
+{
+    static const Table<tr::Shaped> t({field("big", &tr::Shaped::big).bytes(), field("fixed4", &tr::Shaped::fixed4).bytes(),
+                                      field("lods", &tr::Shaped::lods).upTo(8), field("joints", &tr::Shaped::joints),
+                                      field("dirs", &tr::Shaped::dirs)});
+    return t;
+}
 const Table<tr::Textured> &Record<tr::Textured>::table()
 {
     static const Table<tr::Textured> t({field("tex", &tr::Textured::tex).handle(kTexture),
@@ -1979,6 +2010,144 @@ int main()
               "(e) WHAT IS HANDED IN, GUARDED: a call on a handed-in scene its owner destroyed FAILS by name (" +
                   afterGone.message + "); THE CONTROL: the call answered while it lived");
         headless->destroyScene(handedDecals);
+    }
+
+    // 20. THE AUDIT's FIXES (SCRIPT-IN-ENGINE-1 E0, AUDIT.md 1-5), on the headless engine: (a) A HANDLE ARRAY OF FIXED
+    //     LENGTH (SkyDesc's faces[6]) registers, its default all none, null or 0 per element none, a dead element FAILS
+    //     by its index; (b) THE SHAPES (bytes, an array of arrays, of records, of arrays of arrays) round-trip, through a
+    //     command too, and a length no whole number of elements FAILS by its member; (c) THE KEPT RECORD goes with its
+    //     node and with its scene; (d) A HANDED-IN SCENE's ADDRESS REUSED: its old handle FAILS by name, never acts on the
+    //     new scene; (e) THE VERDICT never reads a declared view its owner destroyed
+    {
+        Host u;
+        std::string said;
+        u.setConsole([&said](const std::string &line) { said += line + "\n"; });
+        const Commands k = makeEngineCommands(u, headless.get(), bootError, false);
+        Registry &ur = u.registry();
+        const bool faced = ur.add({"test.faced", {Access::Reads, {target(handle("scene", kScene)), Record<tr::Faced>::table().param("rec")},
+                                                  Kind::Object},
+                                   "the faces' ids as read, and the record answered"},
+                                  [](Call &c) -> Value {
+                                      tr::Faced f;
+                                      std::string why;
+                                      if (!Record<tr::Faced>::table().fromValue(c[1], f, "", why)) return c.fail(why);
+                                      Value::Array ids;
+                                      for (const TextureId id : f.faces) ids.push_back(Value(std::int64_t(id)));
+                                      return Value(Value::Object{{"ids", Value(std::move(ids))},
+                                                                 {"answer", Record<tr::Faced>::table().toValue(f, &c)}});
+                                  });
+        const bool shapedAdded = ur.add({"test.shaped", {Access::Reads, {Record<tr::Shaped>::table().param("rec")}, Kind::Object},
+                                         "the record read and answered"},
+                                        [](Call &c) -> Value {
+                                            tr::Shaped x;
+                                            std::string why;
+                                            if (!Record<tr::Shaped>::table().fromValue(c[0], x, "rec", why)) return c.fail(why);
+                                            return Record<tr::Shaped>::table().toValue(x);
+                                        });
+        const Value sh = ur.call("engine.scene.create", {Value("e0-audit")}).value;
+        Scene *s = ur.object<Scene>(sh.asInt());
+        const std::vector<unsigned char> px(4, 99);
+        const TextureId live = s->createTexture(1, 1, px.data(), false), dead = s->createTexture(1, 1, px.data(), false);
+        s->destroyTexture(dead);
+        const Value liveH(ur.name(kTexture, live)), deadH(ur.name(kTexture, dead));
+        const auto faces = [&](Value::Array f) {
+            return ur.call("test.faced", {sh, Value(Value::Object{{"faces", Value(std::move(f))}})});
+        };
+        const Result none = ur.call("test.faced", {sh, Value(Value::Object{})});
+        const Result mixed = faces({liveH, Value(0), Value(), Value(0), Value(0), Value(0)});
+        const Result deadFace = faces({liveH, Value(0), deadH, Value(0), Value(0), Value(0)});
+        const Value six(Value::Array(6, Value()));
+        check(faced && ur.validate().empty() && none.status == Status::Ok &&
+                  none.value["ids"] == Value(Value::Array(6, Value(0))) && none.value["answer"]["faces"] == six &&
+                  mixed.status == Status::Ok && mixed.value["ids"].asArray()[0] == Value(std::int64_t(live)) &&
+                  mixed.value["ids"].asArray()[2] == Value(0) && mixed.value["answer"]["faces"].asArray()[0] == liveH &&
+                  mixed.value["answer"]["faces"].asArray()[1].isNull() &&
+                  failedWith(deadFace, "test.faced: faces[2]: texture " + std::to_string(dead) + " is not a texture"),
+              "(a) A HANDLE ARRAY OF FIXED LENGTH (faces[6]) registers (its default six nones), all-none round-trips, null "
+              "and 0 per element are none, a live face resolves and answers its handle, a dead one FAILS by its index (" +
+                  deadFace.message + ")");
+        tr::Shaped full;
+        full.big = {1.5f, -2.0f, 3.25f};
+        full.fixed4[0] = 1;
+        full.fixed4[3] = 4;
+        full.lods = {{0, 1, 2}, {3}};
+        full.joints[0] = {tr::Pair{1, 2}};
+        full.dirs[1] = {{0.5f}, {1, 2, 3}};
+        const Value whole = Record<tr::Shaped>::table().toValue(full);
+        tr::Shaped back;
+        std::string why, order;
+        const bool read = Record<tr::Shaped>::table().fromValue(whole, back, "", why);
+        const Result viaCall = ur.call("test.shaped", {whole});
+        Value::Object odd = whole.asObject();
+        odd[0].second = Value::bytes(Value::Bytes(5, 0));
+        const Result oddBytes = ur.call("test.shaped", {Value(odd)});
+        Value::Object three = whole.asObject();
+        three[1].second = Value::bytes(Value::Bytes(12, 0));
+        const Result shortFixed = ur.call("test.shaped", {Value(three)});
+        check(shapedAdded && whole["big"].kind() == Kind::Bytes && whole["big"].asBytes().size() == 12 &&
+                  whole["lods"].asArray().size() == 2 && whole["dirs"].asArray()[1].kind() == Kind::Bytes && read &&
+                  Record<tr::Shaped>::table().toValue(back) == whole && back.dirs[1][1].size() == 3 &&
+                  back.dirs[1][1][2] == 3.0f && back.joints[0][0].b == 2.0f && viaCall.status == Status::Ok &&
+                  viaCall.value == whole && failedWith(oddBytes, "rec.big holds 5 bytes, not a whole number of its 4-byte elements") &&
+                  failedWith(shortFixed, "rec.fixed4 holds 3 elements, the record's 4") &&
+                  Record<tr::Shaped>::table().inOrder(order) && Record<tr::Faced>::table().inOrder(order),
+              "(b) THE SHAPES records.h carries round-trip - bytes (a vector, a T[N]), an array of arrays, a T[N] of arrays "
+              "of records, a T[N] of arrays of arrays (packed) - directly and through a command; a length no whole number of "
+              "elements FAILS by its member (" + oddBytes.message + " | " + shortFixed.message + "); inOrder holds" +
+                  (order.empty() ? std::string() : " - " + order));
+        // (c) the kept record
+        const Value n1 = ur.call("engine.node.create", {sh}).value, n2 = ur.call("engine.node.create", {sh}).value;
+        LightDesc lamp;
+        lamp.intensity = 7.0f;
+        k.keep(s, KeptKind::Light, Call::idOf(n1), lamp);
+        k.keep(s, KeptKind::Light, Call::idOf(n2), lamp);
+        const LightDesc *keptOne = k.kept<LightDesc>(s, KeptKind::Light, Call::idOf(n1));
+        const bool keptWhileLived = keptOne && keptOne->intensity == 7.0f;
+        ur.call("engine.node.destroy", {sh, n1});
+        const bool goneWithNode = !k.kept<LightDesc>(s, KeptKind::Light, Call::idOf(n1)) &&
+                                  k.kept<LightDesc>(s, KeptKind::Light, Call::idOf(n2));
+        const bool recorded = k.st->scenes.count(s) == 1;
+        ur.call("engine.scene.destroy", {sh});
+        check(keptWhileLived && goneWithNode && recorded && k.st->scenes.count(s) == 0,
+              "(c) THE KEPT RECORD (RULED 9's store): kept while its node lived, gone with its node (the other node's "
+              "stays), and gone with its scene (forgetScene)");
+        // (d) a handed-in scene's address reused: the allocator does not hand a destroyed scene's block to the next
+        // scene on demand (measured: 64 make-and-destroy tries, none at the old address), so the law is proved in its two
+        // halves - the engine's read answers a LIVE scene ABSENT under another scene's serial (exactly what a reused
+        // address presents), and the host's handle carries the serial it held (identityOf) - and the old handle FAILS
+        Scene *a = headless->createScene("e0-reuse-a");
+        const Value ah(ur.hold("scene", std::shared_ptr<Scene>(a, [](Scene *) {})));
+        const bool aLive = ur.call("engine.node.create", {ah}).status == Status::Ok;
+        const unsigned long long aSerial = a->serial();
+        headless->destroyScene(a);
+        Scene *b = headless->createScene("e0-reuse-b");
+        const Value bh(ur.hold("scene", std::shared_ptr<Scene>(b, [](Scene *) {})));
+        const Scene::Presence underOld = headless->scenePresence(b, aSerial), underOwn = headless->scenePresence(b, b->serial());
+        const Result onOld = ur.call("engine.node.create", {ah});
+        check(aLive && aSerial != b->serial() && ur.identityOf(ah.asInt()) == aSerial &&
+                  ur.identityOf(bh.asInt()) == b->serial() && underOld == Scene::Presence::Absent &&
+                  underOwn == Scene::Presence::Present &&
+                  failedWith(onOld, "engine.node.create: the scene this handle names was destroyed by the host's owner"),
+              "(d) A SCENE's IDENTITY IS ITS SERIAL: a live scene is ABSENT under another scene's serial (what a reused "
+              "address presents to the guard) and PRESENT under its own (THE CONTROL); each handle carries the serial it "
+              "held (" + std::to_string(aSerial) + ", " + std::to_string(b->serial()) + "); the old handle FAILS by name (" +
+                  onOld.message + ")" + (b == a ? " - and here the address WAS reused" : ""));
+        // (e) the verdict and a declared view its owner destroyed: a declaration whose view the engine does not hold
+        // (here a stand-in that is no view at all - reading it is what the guard prevents)
+        alignas(std::max_align_t) static unsigned char gone[4096];
+        std::memset(gone, 0xA5, sizeof gone);
+        DeclaredRoutes d;
+        d.view = reinterpret_cast<View *>(gone);
+        d.scene = b;
+        d.viewId = 0xFFFFFFF0u;
+        d.sceneSerial = b->serial();
+        k.st->declared.push_back(d);
+        const int faults = u.verdict(Result());
+        check(faults > 0 && said.find("ROUTES a view since destroyed: declared {") != std::string::npos,
+              "(e) THE VERDICT never reads a declared view the engine no longer holds: its line names none (" +
+                  said.substr(0, said.find('\n')) + ")");
+        k.st->declared.clear();
+        headless->destroyScene(b);
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);

@@ -561,7 +561,7 @@ jah_no_display(script.host)
 # its generic laws, script_commands.h the fixture): every family registered for real (validate empty, every command tagged
 # and documented, >= 31), a test door refused at run time, then ONE CASES FILE A FAMILY (each its builder's own: the batch
 # never meets in one test file) on a host with no engine and one on ONE headless (NULL) engine. No card, no display.
-add_executable(test_script_commands test_script_commands.cpp
+add_executable(test_script_commands test_script_commands.cpp script_record_shapes.cpp
     commands_cases_scene.cpp commands_cases_node.cpp commands_cases_light.cpp commands_cases_material.cpp
     commands_cases_effects.cpp commands_cases_view.cpp commands_cases_picture.cpp commands_cases_gi.cpp
     commands_cases_gi_read.cpp commands_cases_engine.cpp commands_cases_atom.cpp commands_cases_status.cpp)
