@@ -530,7 +530,7 @@ int main(int argc, char **argv)
     //     table-info reads denied on the library's own handle, beside a library that matches and one that truly differs.
     {
         check(database.schemaMatchesFresh(), QStringLiteral("15: CONTROL: a fresh library matches this build's schema"));
-        dbseam::deny(database.connection(), [](int action, const char *what) {
+        dbseam::deny(database.connection(), [](int action, const char *what, const char *) {
             return action == dbseam::kPragma || (action == dbseam::kRead && what && std::strncmp(what, "pragma_", 7) == 0);
         });
         const bool unread = database.schemaMatchesFresh();
@@ -576,7 +576,7 @@ int main(int argc, char **argv)
         check(refusal.startsWith(QStringLiteral("the library's indexes could not be read: "))
                   && refusal.contains(QStringLiteral("not a database")),
               QStringLiteral("16: the boot's decision over an unread gate is REFUSE, naming SQLite's text: '%1'").arg(refusal));
-        dbseam::deny(database.connection(), [](int action, const char *what) {
+        dbseam::deny(database.connection(), [](int action, const char *what, const char *) {
             return action == dbseam::kRead && what
                 && (std::strcmp(what, "sqlite_master") == 0 || std::strcmp(what, "sqlite_schema") == 0);
         });

@@ -25,10 +25,19 @@ cd "$ROOT" || { echo "source.db_pointers_initialised: no such root $ROOT"; exit 
 
 failures=0
 
-# `Database *x;` / `QSqlDatabase *x;` with nothing after the name. A parameter
+# `Database *x;` with nothing after the name. A parameter
 # never matches (it ends in `,` or `)`), an initialised member never matches
 # (`= nullptr;`). Lines whose first non-space characters are // or * are prose.
-decl='(^|[^:_[:alnum:]])(Database|QSqlDatabase)[[:space:]]*\*[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*;'
+decl='(^|[^:_[:alnum:]])Database[[:space:]]*\*[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*;'
+# THE CONTROL: every `Database *x` declaration the rule judges (initialised or not) - above zero, or it reads nothing.
+judged=$(grep -rnE '(^|[^:_[:alnum:]])Database[[:space:]]*\*[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*(=[^=]|;|\{)' src/ 2>/dev/null \
+         | grep -vcE ':[0-9]+:[[:space:]]*(//|\*|/\*)' || true)
+if [ "${judged:-0}" -gt 0 ]; then
+    echo "ok:   $judged Database pointer declarations judged (CONTROL: above zero)"
+else
+    echo "FAIL: no Database pointer declaration was judged - the rule reads nothing (CONTROL)"
+    failures=$((failures + 1))
+fi
 
 hits=$(grep -rnE "$decl" src/ 2>/dev/null \
        | grep -vE ':[0-9]+:[[:space:]]*(//|\*|/\*)' || true)
@@ -41,7 +50,7 @@ if [ -n "$hits" ]; then
     echo "$hits"
     failures=$((failures + 1))
 else
-    echo "ok:   every Database/QSqlDatabase pointer declaration carries an initialiser"
+    echo "ok:   every Database pointer declaration carries an initialiser"
 fi
 
 # The two handles that are filled by a setter AND read from a signal: the
@@ -63,7 +72,7 @@ else
 fi
 
 if [ "$failures" -ne 0 ]; then
-    echo "source.db_pointers_initialised: $failures failure(s)"
+    echo "source.db_pointers_initialised: FAILED ($failures)"
     exit 1
 fi
-echo "source.db_pointers_initialised: ok"
+echo "source.db_pointers_initialised: PASSED"

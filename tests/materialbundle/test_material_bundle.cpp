@@ -41,8 +41,8 @@
 #include <cstdio>
 
 #include "data/database/database.h"
-#include "data/db/state.h"
 #include "data/db/statement.h"
+#include "../db/dbseam.h"
 #include "data/constants.h"
 #include "data/project.h"
 #include "services/assetcas.h"
@@ -61,7 +61,6 @@
 #include "services/memberstamp.h"
 #include "modules/materials/core/bakedmembers.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include <sqlite3.h>
 #include <cstring>
 
 static int failures = 0;
@@ -115,45 +114,45 @@ static QString textureRow(Database &db, const QString &guid, const QString &name
 // untouched; mode 5: only the pin's OID (`project_assets.oid_pin`) inside a SELECT ("is it pinned" still reads).
 struct Deny { int mode = 0; int selects = 0; bool inSelect = false; int probesDenied = 0; int filesSelect = -1; };
 static Deny gDeny;
-static int denyReads(void *, int action, const char *table, const char *column, const char *, const char *)
+static bool denyReads(int action, const char *table, const char *column)
 {
-    if (action == SQLITE_SELECT) { gDeny.inSelect = true; ++gDeny.selects; return SQLITE_OK; }
-    if (action == SQLITE_INSERT || action == SQLITE_UPDATE || action == SQLITE_DELETE) gDeny.inSelect = false;
-    if (action != SQLITE_READ || !table) return SQLITE_OK;
+    if (action == dbseam::kSelect) { gDeny.inSelect = true; ++gDeny.selects; return false; }
+    if (action == dbseam::kInsert || action == dbseam::kUpdate || action == dbseam::kDelete) gDeny.inSelect = false;
+    if (action != dbseam::kRead || !table) return false;
     const bool master = std::strcmp(table, "sqlite_master") == 0 || std::strcmp(table, "sqlite_schema") == 0;
     const bool pins = std::strcmp(table, "project_assets") == 0;
-    if (gDeny.mode == 1 && master) return SQLITE_DENY;
-    if (gDeny.mode == 2 && gDeny.inSelect && std::strcmp(table, "projects") == 0) return SQLITE_DENY;
+    if (gDeny.mode == 1 && master) return true;
+    if (gDeny.mode == 2 && gDeny.inSelect && std::strcmp(table, "projects") == 0) return true;
     if (gDeny.mode == 3 && master && gDeny.selects >= 7) {
         if (gDeny.selects == 7) ++gDeny.probesDenied;   // the pin-table probe's OWN denials (not the dead-pin probes')
-        return SQLITE_DENY;
+        return true;
     }
-    if (gDeny.mode == 4 && gDeny.inSelect && pins) return SQLITE_DENY;
-    if (gDeny.mode == 5 && gDeny.inSelect && pins && column && std::strcmp(column, "oid_pin") == 0) return SQLITE_DENY;
-    if (gDeny.mode == 6 && gDeny.inSelect && std::strcmp(table, "asset_files") == 0) return SQLITE_DENY;
+    if (gDeny.mode == 4 && gDeny.inSelect && pins) return true;
+    if (gDeny.mode == 5 && gDeny.inSelect && pins && column && std::strcmp(column, "oid_pin") == 0) return true;
+    if (gDeny.mode == 6 && gDeny.inSelect && std::strcmp(table, "asset_files") == 0) return true;
     if (gDeny.mode == 7 && gDeny.inSelect && std::strcmp(table, "assets") == 0 && column && std::strcmp(column, "listed") == 0)
-        return SQLITE_DENY;
-    if (gDeny.mode == 8 && gDeny.inSelect && std::strcmp(table, "dependencies") == 0) return SQLITE_DENY;
+        return true;
+    if (gDeny.mode == 8 && gDeny.inSelect && std::strcmp(table, "dependencies") == 0) return true;
     if (gDeny.mode == 9 && gDeny.inSelect && std::strcmp(table, "asset_files") == 0 && column && std::strcmp(column, "role") == 0)
-        return SQLITE_DENY;
+        return true;
     // mode 10: `dependencies.depender_type` inside a SELECT (an image's "does the project hold a companion"); mode 11:
     // `assets.properties` inside a SELECT (a row's own "is it a member" read).
     if (gDeny.mode == 10 && gDeny.inSelect && std::strcmp(table, "dependencies") == 0 && column
         && std::strcmp(column, "depender_type") == 0)
-        return SQLITE_DENY;
+        return true;
     if (gDeny.mode == 11 && gDeny.inSelect && std::strcmp(table, "assets") == 0 && column && std::strcmp(column, "properties") == 0)
-        return SQLITE_DENY;
+        return true;
     // mode 12: `assets.parent` inside a SELECT (a bake's "does this slot have its row").
     if (gDeny.mode == 12 && gDeny.inSelect && std::strcmp(table, "assets") == 0 && column && std::strcmp(column, "parent") == 0)
-        return SQLITE_DENY;
+        return true;
     // mode 13: `files` inside the FIRST SELECT that reads it, once (a pinned object's own row; the source read after
     // it is let through); mode 14: `folders` inside a SELECT.
     if (gDeny.mode == 13 && gDeny.inSelect && std::strcmp(table, "files") == 0) {
         if (gDeny.filesSelect < 0) gDeny.filesSelect = gDeny.selects;
-        if (gDeny.filesSelect == gDeny.selects) return SQLITE_DENY;
+        if (gDeny.filesSelect == gDeny.selects) return true;
     }
-    if (gDeny.mode == 14 && gDeny.inSelect && std::strcmp(table, "folders") == 0) return SQLITE_DENY;
-    return SQLITE_OK;
+    if (gDeny.mode == 14 && gDeny.inSelect && std::strcmp(table, "folders") == 0) return true;
+    return false;
 }
 
 int main(int argc, char **argv)
@@ -708,7 +707,6 @@ int main(int argc, char **argv)
     //     RAISEs on one row's insert; a library that is CLOSED.
     // =======================================================================
     {
-        sqlite3 *raw = db.connection().state()->handle;
         const auto alive = [&db](const QString &guid) { return !db.fetchAsset(guid).guid.isEmpty(); };
         const auto libraryRow = [&db](const QString &guid, bool listed) {
             db.createAssetEntry(guid, guid, static_cast<int>(ModelTypes::Texture), QString(), assethome::materials(),
@@ -727,9 +725,9 @@ int main(int argc, char **argv)
         pin(QStringLiteral("f2-project"), QStringLiteral("f2-pinned"));
         {
             bool read = true;
-            const int count = (gDeny = Deny{ 1 }, sqlite3_set_authorizer(raw, denyReads, nullptr),
+            const int count = (gDeny = Deny{ 1 }, dbseam::deny(db.connection(), denyReads),
                                db.countAssetPins(QStringLiteral("f2-pinned"), &read));
-            sqlite3_set_authorizer(raw, nullptr, nullptr);
+            dbseam::clear(db.connection());
             CHECK(!read, QStringLiteral("14.2: a failed table probe answers NO READ (count %1, read %2)").arg(count).arg(read)
                              .toUtf8().constData());
         }
@@ -740,18 +738,18 @@ int main(int argc, char **argv)
         project(QStringLiteral("f3-holder"));
         pin(QStringLiteral("f3-holder"), QStringLiteral("f3-pinned"));
         gDeny = Deny{ 2 };
-        sqlite3_set_authorizer(raw, denyReads, nullptr);
+        dbseam::deny(db.connection(), denyReads);
         db.deleteAsset(QStringLiteral("f3-pinned"));
-        sqlite3_set_authorizer(raw, nullptr, nullptr);
+        dbseam::clear(db.connection());
         CHECK(alive(QStringLiteral("f3-pinned")), "14.3: a pinned asset whose pin count could not be read SURVIVES deleteAsset");
         libraryRow(QStringLiteral("f3-orphan"), false);
         project(QStringLiteral("f3-dying"));
         pin(QStringLiteral("f3-dying"), QStringLiteral("f3-orphan"));
         pin(QStringLiteral("f3-holder"), QStringLiteral("f3-orphan"));
         gDeny = Deny{ 2 };
-        sqlite3_set_authorizer(raw, denyReads, nullptr);
+        dbseam::deny(db.connection(), denyReads);
         db.deleteProject(QStringLiteral("f3-dying"));
-        sqlite3_set_authorizer(raw, nullptr, nullptr);
+        dbseam::clear(db.connection());
         CHECK(alive(QStringLiteral("f3-orphan")),
               "14.3: an unlisted row another project pins SURVIVES the reap when its pin count could not be read");
 
@@ -764,9 +762,9 @@ int main(int argc, char **argv)
         CHECK(alive(QStringLiteral("f4-shared")) && db.countAssetPins(QStringLiteral("f4-shared")) == 2,
               "14.4: CONTROL: the shared row exists, pinned by two projects");
         gDeny = Deny{ 2 };
-        sqlite3_set_authorizer(raw, denyReads, nullptr);
+        dbseam::deny(db.connection(), denyReads);
         const assetdelete::Outcome dropped = assetdelete::removeFromProject(&db, QStringLiteral("f4-shared"), QStringLiteral("f4-p"));
-        sqlite3_set_authorizer(raw, nullptr, nullptr);
+        dbseam::clear(db.connection());
         CHECK(alive(QStringLiteral("f4-shared")) && db.isAssetPinnedBy(QStringLiteral("f4-p"), QStringLiteral("f4-shared"))
                   && dropped.error.contains(QStringLiteral("could not be read")),
               QStringLiteral("14.4: removeFromProject with a read failing is REFUSED by name before its first unpin: '%1'")
@@ -779,9 +777,9 @@ int main(int argc, char **argv)
             pin(QStringLiteral("f3-holder"), QStringLiteral("f2-pinned"));
             conn.exec("UPDATE project_assets SET oid_pin = 'f5pinonly' WHERE project_guid = 'f3-holder' AND asset_guid = 'f2-pinned'", &e);
             gDeny = Deny{ 3 };
-            sqlite3_set_authorizer(raw, denyReads, nullptr);
+            dbseam::deny(db.connection(), denyReads);
             const AssetGc::Report gc = AssetGc::collect(conn, storeRoot);
-            sqlite3_set_authorizer(raw, nullptr, nullptr);
+            dbseam::clear(db.connection());
             bool listed = false;
             for (const AssetGc::Item &item : gc.unreferencedObjects.items) listed = listed || item.id == QLatin1String("f5pinonly");
             CHECK(gDeny.probesDenied > 0, QStringLiteral("14.5: CONTROL: the pin-table probe was denied (%1; %2 selects; gc '%3')")
@@ -852,12 +850,11 @@ int main(int argc, char **argv)
                     db::Error read;
                     return s.step(&read) ? int(s.int64(0)) : -1;
                 };
-                sqlite3_set_authorizer(raw, [](void *, int action, const char *pragma, const char *value, const char *, const char *) {
-                    return action == SQLITE_PRAGMA && pragma && std::strcmp(pragma, "user_version") == 0 && !value
-                               ? SQLITE_DENY : SQLITE_OK;
-                }, nullptr);
+                dbseam::deny(db.connection(), [](int action, const char *pragma, const char *value) {
+                    return action == dbseam::kPragma && pragma && std::strcmp(pragma, "user_version") == 0 && !value;
+                });
                 AssetCas::ensureCasSchema(conn);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 const int after = generation();
                 AssetCas::ensureCasSchema(conn);
                 const int stampedAfter = generation();
@@ -902,9 +899,9 @@ int main(int argc, char **argv)
             CHECK(!held.isEmpty(), QStringLiteral("15b: CONTROL: another project's copy is refused: '%1'").arg(held)
                                        .toUtf8().constData());
             gDeny = Deny{ 2 };
-            sqlite3_set_authorizer(raw, denyReads, nullptr);
+            dbseam::deny(db.connection(), denyReads);
             const QString unread = MaterialBundle::foreignCopyRefusal(&db, QStringLiteral("f15copy"), QStringLiteral("f15-q"));
-            sqlite3_set_authorizer(raw, nullptr, nullptr);
+            dbseam::clear(db.connection());
             CHECK(unread.contains(QStringLiteral("could not be read")),
                   QStringLiteral("15b: a copy whose holders could not be read is REFUSED by name: '%1'").arg(unread)
                       .toUtf8().constData());
@@ -1006,9 +1003,9 @@ int main(int argc, char **argv)
                 CHECK(!own.isEmpty() && own != library && pinOf(QStringLiteral("p17r"), QStringLiteral("t17r")) == own,
                       "17.1: CONTROL: the project then holds its OWN version of the texture");
                 gDeny = Deny{ 4 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 reset.redo();
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 const QString after = pinOf(QStringLiteral("p17r"), QStringLiteral("t17r"));
                 CHECK(after == own, QStringLiteral("17.1: a redo whose pin read failed leaves the project's own version "
                                                    "(pin %1, own %2, library %3)").arg(after, own, library)
@@ -1035,10 +1032,10 @@ int main(int argc, char **argv)
                 def[QStringLiteral("materialType")] = QStringLiteral("pbr");
                 def[QStringLiteral("values")] = values;
                 gDeny = Deny{ 5 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const MaterialBundle::WriteResult written =
                     MaterialBundle::write(&db, &owner, m17w, def, MaterialBundle::Scope::Project);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 const QString after = pinOf(QStringLiteral("p17w"), QStringLiteral("t17w"));
                 CHECK(after == own, QStringLiteral("17.2: a write whose member's pin could not be read leaves the project's own "
                                                    "version (pin %1, own %2; write ok %3 '%4')")
@@ -1050,10 +1047,10 @@ int main(int argc, char **argv)
                 // project's pin of the material does not move (its unit rolled back).
                 const QString materialPin = pinOf(QStringLiteral("p17w"), m17w);
                 gDeny = Deny{ 4 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const MaterialBundle::WriteResult unheld =
                     MaterialBundle::write(&db, &owner, m17w, def, MaterialBundle::Scope::Project);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(!unheld.ok && unheld.error.contains(QStringLiteral("holds the material could not be read"))
                           && pinOf(QStringLiteral("p17w"), m17w) == materialPin,
                       QStringLiteral("17.2n: a write whose 'does the project hold it' could not be read is refused whole "
@@ -1067,9 +1064,9 @@ int main(int argc, char **argv)
                 CHECK(!AssetCas::resolvePinned(conn, storeRoot, QStringLiteral("p17w"), QStringLiteral("t17w")).isEmpty(),
                       "17.2j: CONTROL: the project's version resolves");
                 gDeny = Deny{ 5 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const QString unresolved = AssetCas::resolvePinned(conn, storeRoot, QStringLiteral("p17w"), QStringLiteral("t17w"));
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(unresolved.isEmpty(), QStringLiteral("17.2j: a pin read that FAILED resolves nothing (got '%1')")
                                                 .arg(unresolved).toUtf8().constData());
 
@@ -1082,10 +1079,10 @@ int main(int argc, char **argv)
                           && !db.isAssetPinnedBy(QStringLiteral("p17w"), QStringLiteral("t17a")),
                       "17.2a: CONTROL: neither the material nor its member is pinned by the project yet");
                 gDeny = Deny{ 6 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const ProjectAssets::Result added =
                     ProjectAssets::addToProject(m17a, &db, &owner, ProjectAssets::AddKind::Direct);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 const bool anyPinned = db.isAssetPinnedBy(QStringLiteral("p17w"), m17a)
                                     || db.isAssetPinnedBy(QStringLiteral("p17w"), QStringLiteral("t17a"));
                 CHECK(!anyPinned && added.error.contains(QStringLiteral("could not be read")),
@@ -1097,9 +1094,9 @@ int main(int argc, char **argv)
                 AssetCas::writePin(conn, QStringLiteral("p17w"), m17u, AssetCas::sourceOid(conn, m17u));
                 const QString ownU = painted(QStringLiteral("t17u"), owner);
                 gDeny = Deny{ 5 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const bool updated = ProjectAssets::updatePinToLatest(m17u, &db, &owner);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 const QString afterU = pinOf(QStringLiteral("p17w"), QStringLiteral("t17u"));
                 CHECK(afterU == ownU && !updated,
                       QStringLiteral("17.2: an update whose member's pin could not be read is REFUSED and leaves the project's "
@@ -1155,9 +1152,9 @@ int main(int argc, char **argv)
                 project(QStringLiteral("p19f"));
                 pin(QStringLiteral("p19f"), QStringLiteral("t19f"));
                 gDeny = Deny{ 7 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const bool deleted = db.deleteProject(QStringLiteral("p19f"));
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 bool projectRead = true;
                 const bool projectLeft = db.hasProjectRow(QStringLiteral("p19f"), &projectRead);
                 CHECK(!deleted && projectLeft && projectRead && db.isAssetPinnedBy(QStringLiteral("p19f"), QStringLiteral("t19f")),
@@ -1186,9 +1183,9 @@ int main(int argc, char **argv)
                 };
                 ResetMaterialCommand reset(&db, &owner, node, iris::MaterialPtr(), { QStringLiteral("t19g") }, {});
                 gDeny = Deny{ 8 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 reset.redo();
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 const int afterRedo = edges();
                 reset.undo();
                 CHECK(afterRedo == 1 && edges() == 1,
@@ -1217,10 +1214,10 @@ int main(int argc, char **argv)
                 values[QStringLiteral("roughness")] = 0.4;
                 def[QStringLiteral("values")] = values;
                 gDeny = Deny{ 9 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const MaterialBundle::WriteResult written =
                     MaterialBundle::write(&db, nullptr, m20, def, MaterialBundle::Scope::Library);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(!m20.isEmpty() && before == 1, QStringLiteral("20b: CONTROL: the material adopted its own copy once (%1)")
                                                          .arg(before).toUtf8().constData());
                 CHECK(!written.ok && written.error.contains(QStringLiteral("could not be read")) && copies() == before,
@@ -1233,9 +1230,9 @@ int main(int argc, char **argv)
                 memberstamp::stampedTextureFor(&db, t20oid, &stampRead);
                 CHECK(!t20oid.isEmpty() && stampRead, "20k: CONTROL: read, the answer keeps readOk");
                 gDeny = Deny{ 6 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 memberstamp::stampedTextureFor(&db, t20oid, &stampRead);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(!stampRead, "20k: a failed 'is it already a member' read clears readOk");
 
                 // 20k2 (the second confirm's W3): the row's OWN "is it a member" read - a stamped texture whose
@@ -1248,9 +1245,9 @@ int main(int argc, char **argv)
                 CHECK(held == QStringLiteral("t20s") && memberRead,
                       QStringLiteral("20k2: CONTROL: the stamped texture answers ('%1')").arg(held).toUtf8().constData());
                 gDeny = Deny{ 11 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const QString unread = memberstamp::stampedTextureFor(&db, t20sOid, &memberRead);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(!memberRead && unread.isEmpty(),
                       QStringLiteral("20k2: a member whose own properties could not be read clears readOk (readOk %1, '%2')")
                           .arg(memberRead).arg(unread).toUtf8().constData());
@@ -1280,10 +1277,10 @@ int main(int argc, char **argv)
                       QStringLiteral("21: CONTROL: an image added to a project gets ONE companion (%1; '%2')")
                           .arg(before).arg(first.error).toUtf8().constData());
                 gDeny = Deny{ 10 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const ProjectAssets::Result again =
                     ProjectAssets::addToProject(QStringLiteral("t21"), &db, &owner, ProjectAssets::AddKind::Direct);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(companions() == before && !again.ok() && again.error.contains(QStringLiteral("could not be read")),
                       QStringLiteral("21: an add whose companion read failed mints NO second companion and is refused by name "
                                      "(companions %1, was %2; ok %3 '%4')")
@@ -1340,9 +1337,9 @@ int main(int argc, char **argv)
 
                 const QString m23b = material(QStringLiteral("m23b"), QString());
                 gDeny = Deny{ 12 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const materials::BakedMembers unread = materials::bakedMemberRows(&db, m23b, maps);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(!unread.ok() && unread.error.contains(QStringLiteral("could not be read"))
                           && countWhere("SELECT COUNT(*) FROM assets WHERE parent = ?", { m23b }) == 0,
                       QStringLiteral("23: a bake whose slots could not be read writes NO row ('%1')").arg(unread.error)
@@ -1378,10 +1375,10 @@ int main(int argc, char **argv)
                       QStringLiteral("24: one statement answers each member's pin and library version (rows %1)").arg(pins.size())
                           .toUtf8().constData());
                 gDeny = Deny{ 5 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const QHash<QString, AssetCas::MemberPin> unread = AssetCas::memberPins(
                     conn, QStringLiteral("p24"), { QStringLiteral("t24a"), QStringLiteral("t24b") }, &read);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(!read && unread.isEmpty(), QStringLiteral("24: a read that failed answers nothing and clears readOk (rows %1)")
                                                      .arg(unread.size()).toUtf8().constData());
             }
@@ -1397,10 +1394,10 @@ int main(int argc, char **argv)
                 db.fetchAsset(QStringLiteral("t25e"), &rowRead);
                 CHECK(rowRead, "25e: CONTROL: the row reads (readOk kept)");
                 gDeny = Deny{ 11 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 db.fetchAsset(QStringLiteral("t25e"), &rowRead);
                 const bool stamped = memberstamp::stamp(&db, QStringLiteral("t25e"), QStringLiteral("m25e"));
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 const QJsonObject props = QJsonDocument::fromJson(db.fetchAsset(QStringLiteral("t25e")).properties).object();
                 CHECK(!rowRead, "25e: fetchAsset's failed read clears readOk");
                 CHECK(!stamped && props.contains(QStringLiteral("metadata")) && !props.contains(QStringLiteral("member")),
@@ -1416,9 +1413,9 @@ int main(int argc, char **argv)
                 project(QStringLiteral("f25-p"));
                 pin(QStringLiteral("f25-p"), QStringLiteral("f25copy"));
                 gDeny = Deny{ 11 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const QString foreign = MaterialBundle::foreignCopyRefusal(&db, QStringLiteral("f25copy"), QStringLiteral("f25-q"));
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(foreign.contains(QStringLiteral("could not be read")),
                       QStringLiteral("25f: a copy whose own row could not be read is REFUSED by name: '%1'").arg(foreign)
                           .toUtf8().constData());
@@ -1439,9 +1436,9 @@ int main(int argc, char **argv)
                 def[QStringLiteral("materialType")] = QStringLiteral("pbr");
                 def[QStringLiteral("values")] = values;
                 gDeny = Deny{ 11 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const MaterialBundle::WriteResult w25 = MaterialBundle::write(&db, nullptr, m25w, def, MaterialBundle::Scope::Library);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(edgesBefore == 1, QStringLiteral("25w: CONTROL: the member's edge is there (%1)").arg(edgesBefore)
                                             .toUtf8().constData());
                 CHECK(!w25.ok && edge() == 1,
@@ -1458,11 +1455,11 @@ int main(int argc, char **argv)
                 const QString projectPath = AssetCas::resolvePinned(conn, storeRoot, QStringLiteral("p25j"), QStringLiteral("t25j"));
                 CHECK(!own25.isEmpty() && projectPath.contains(own25), "25j: CONTROL: the project's own version resolves");
                 gDeny = Deny{ 13 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 bool pinRead = true;
                 const QString unresolved =
                     AssetCas::resolvePinned(conn, storeRoot, QStringLiteral("p25j"), QStringLiteral("t25j"), nullptr, &pinRead);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(unresolved.isEmpty() && !pinRead,
                       QStringLiteral("25j: a pinned object whose row could not be read resolves NOTHING (got '%1', readOk %2)")
                           .arg(unresolved).arg(pinRead).toUtf8().constData());
@@ -1473,18 +1470,18 @@ int main(int argc, char **argv)
                 MaterialBundle::read(&db, m25w, nullptr, &defRead);
                 CHECK(defRead, "25r: CONTROL: the definition reads");
                 gDeny = Deny{ 6 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const QJsonObject unreadDef = MaterialBundle::read(&db, m25w, nullptr, &defRead);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 CHECK(!defRead && unreadDef.isEmpty(), "25r: a definition whose store row could not be read clears readOk");
 
                 // 25d (database.cpp:1354): ensureFolder whose folder read failed (mode 14) creates NO second folder.
                 db.createProject(QStringLiteral("p25d"), QStringLiteral("p25d"));
                 const QString systems = db.ensureFolder(QStringLiteral("Systems"), QStringLiteral("p25d"), false);
                 gDeny = Deny{ 14 };
-                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                dbseam::deny(db.connection(), denyReads);
                 const QString second = db.ensureFolder(QStringLiteral("Systems"), QStringLiteral("p25d"), false);
-                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                dbseam::clear(db.connection());
                 const int folders = countWhere("SELECT COUNT(*) FROM folders WHERE name = 'Systems' AND project_guid = 'p25d'");
                 CHECK(!systems.isEmpty() && second.isEmpty() && folders == 1,
                       QStringLiteral("25d: a folder read that failed mints no second folder (answered '%1', folders %2)")

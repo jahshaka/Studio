@@ -1,71 +1,34 @@
 #!/usr/bin/env bash
 #
-# source.no_raw_transaction — a transaction on the MAIN connection is a
-# DbTransaction guard, never a raw QSqlDatabase::transaction().
+# source.no_raw_transaction — EVERY TRANSACTION BEGINS IMMEDIATE, AT ONE DOOR (PREVIEWS-1 stage 1; NOQT-DATABASE-1):
+# the std-only layer's guard, db::Transaction's constructor (src/data/db/transaction.cpp), which the DbTransaction
+# guard (database.h), the gesture batch (Database::resumeBatchIfNeeded), the preview writer's unit
+# (Database::writePreview) and the export's unit all are. The library has a second WRITING connection (the preview
+# writer, services/previewwriter.h): a DEFERRED transaction whose first statement is a read fails its first write with
+# 517 SQLITE_BUSY_SNAPSHOT once the writer has committed (spikes/previews-1/stage1/probe.out, case 4); IMMEDIATE
+# takes the lock at the BEGIN, so no other connection commits inside it (case 5). A raw `BEGIN` anywhere else in
+# src/ is red - the door's own line, anchored to ITS function's lines (the stage-1 audit's L4), is the one allowed;
+# the query log's NOTE of a unit's BEGIN (`noteQuery(`, Database::writePreview: previews.writer case j counts it) runs
+# nothing and is not judged.
 #
-# CLOSE-2's gesture batch (Database::beginBatch) keeps a transaction open for
-# the whole of a script run, and it stands down for a nested owner ONLY when
-# that owner announces itself by constructing a DbTransaction (database.h). A
-# raw `conn.transaction()` cannot: with the batch holding the connection the
-# BEGIN simply fails, the caller's own `if (started)` reads false, its writes
-# ride the batch's commit, and its rollback path does nothing. That is how
-# AssetGc::sweep would have committed dropped `files` rows while leaving their
-# objects on disk (assetgc.cpp, round 2 H1).
+# CLOSE-2's gesture batch keeps a transaction open for a whole script run, and it stands down for a nested owner
+# ONLY when that owner announces itself by constructing a DbTransaction (database.h): the guard must still call the
+# batch-yield hook. (The QtSql `.transaction()` half of this row is gone with QtSql: NOQT-DATABASE-1 stage 3.)
 #
-# AND EVERY TRANSACTION ON IT BEGINS IMMEDIATE, AT ONE DOOR (PREVIEWS-1 stage 1; NOQT-DATABASE-1):
-# the std-only layer's guard, db::Transaction's constructor (src/data/db/transaction.cpp), which the
-# DbTransaction guard (database.h) and the batch (Database::resumeBatchIfNeeded) both are. The library has a
-# second WRITING connection (the preview writer, services/previewwriter.h): a DEFERRED transaction
-# whose first statement is a read fails its first write with 517 SQLITE_BUSY_SNAPSHOT once the
-# writer has committed (spikes/previews-1/stage1/probe.out, case 4); IMMEDIATE takes the lock at the
-# BEGIN, so no other connection commits inside it (case 5). A raw `BEGIN` anywhere else is red; the
-# preview writer's own BEGIN IMMEDIATE (Database::writePreview, on ITS connection) is listed.
-#
-# Raw calls on a SIDE connection are fine — a connection nobody else is using
-# cannot collide with the batch, and the guard count is per connection. They
-# are listed here by file:symbol so that adding one is a deliberate act.
-#
-# $1 = the repo root
+# $1 = the repo root. The last line is the verdict.
 set -u
 
 ROOT="${1:?usage: no_raw_transaction.sh <source-root>}"
-cd "$ROOT" || { echo "source.no_raw_transaction: no such root $ROOT"; exit 1; }
+cd "$ROOT" || { echo "source.no_raw_transaction: FAILED (1) - no such root $ROOT"; exit 1; }
 
 failures=0
 
-# The allowed raw calls, each on a connection that TU opened itself:
-#   src/data/database/database.cpp  exportConnection / dbe  (bundle writers; stage 3 moves them onto the layer)
-#   (src/services/assetmigration.cpp's rebuild is a db::Transaction since NOQT-DATABASE-1 stage 2: no entry)
-ALLOWED='^src/data/database/database\.cpp:[0-9]+:.*(exportConnection|dbe)\.transaction\(\)'
-
-# Comments are not calls: a line whose first non-space characters are // or *
-# is prose about the rule, which several of these files carry.
-hits=$(grep -rnE '\.transaction\(\)' src/ 2>/dev/null \
-       | grep -vE ':[0-9]+:[[:space:]]*(//|\*|/\*)' \
-       | grep -vE "$ALLOWED" || true)
-
-if [ -n "$hits" ]; then
-    echo "FAIL: raw QSqlDatabase::transaction() outside the allowed side-connection sites."
-    echo "      Use a DbTransaction guard (data/database/database.h) so the editor's"
-    echo "      gesture batch stands down for it — see the header of this script."
-    echo "$hits"
-    failures=$((failures + 1))
-else
-    echo "ok:   no raw .transaction() on the main connection"
-fi
-
-# The raw BEGINs: exactly the two doors and the preview writer's own connection - each anchored to ITS
-# FUNCTION's lines (the stage-1 audit's L4: a pattern alone would admit the same text anywhere in the file).
 span() {   # span <file> <start ERE> <end ERE>: "first last" lines of the first block from start to end
     awk -v s="$2" -v e="$3" 'f == 0 && $0 ~ s { f = NR } f && NR > f && $0 ~ e { print f, NR; exit }' "$1"
 }
-read -r wp0 wp1 <<< "$(span src/data/database/database.cpp '^Database::PreviewWrite Database::writePreview\\(' '^}')"
 read -r lt0 lt1 <<< "$(span src/data/db/transaction.cpp '^Transaction::Transaction\\(' '^}')"
 allowed_begin() {   # allowed_begin <file> <line> <text>
     case "$1" in
-        src/data/database/database.cpp)
-            [ -n "$wp0" ] && [ "$2" -gt "$wp0" ] && [ "$2" -lt "$wp1" ] \
-                && printf '%s' "$3" | grep -qE 'QStringLiteral\("BEGIN IMMEDIATE"\)' ;;
         src/data/db/transaction.cpp)
             [ -n "$lt0" ] && [ "$2" -gt "$lt0" ] && [ "$2" -lt "$lt1" ] \
                 && printf '%s' "$3" | grep -qE 'connection\.exec\("BEGIN IMMEDIATE", &e\)' ;;
@@ -78,22 +41,23 @@ while IFS= read -r hit; do
     file=${hit%%:*}; rest=${hit#*:}; line=${rest%%:*}; text=${rest#*:}
     allowed_begin "$file" "$line" "$text" || begins="$begins$hit
 "
-done <<< "$(grep -rnE '"BEGIN' src/ 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(//|\*|/\*)' || true)"
+done <<< "$(grep -rnE '"BEGIN' src/ 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(//|\*|/\*)' | grep -v 'noteQuery(' || true)"
 if [ -n "$begins" ]; then
-    echo "FAIL: a raw BEGIN outside the door (db::Transaction) and the preview writer's own connection."
+    echo "FAIL: a raw BEGIN outside the door (db::Transaction's constructor)."
     echo "$begins"
     failures=$((failures + 1))
 else
-    echo "ok:   every BEGIN is at the door (db::Transaction) or on the preview writer's own connection"
+    echo "ok:   every BEGIN is at the door (db::Transaction)"
 fi
 for door in 'src/data/db/transaction.cpp:connection\.exec\("BEGIN IMMEDIATE", &e\)' \
             'src/data/database/database.h:tx\.emplace\(conn, ' \
-            'src/data/database/database.cpp:batchTx = std::make_unique<db::Transaction>\(\*mConnection, '; do
+            'src/data/database/database.cpp:batchTx = std::make_unique<db::Transaction>\(\*mConnection, ' \
+            'src/data/database/database.cpp:db::Transaction unit\(conn, "the preview writer"\)'; do
     file=${door%%:*}; pattern=${door#*:}
     if grep -qE "$pattern" "$file"; then
         echo "ok:   $file begins IMMEDIATE (at the door)"
     else
-        echo "FAIL: $file no longer begins its transaction IMMEDIATE"
+        echo "FAIL: $file no longer begins its transaction IMMEDIATE at the door"
         failures=$((failures + 1))
     fi
 done
@@ -107,7 +71,7 @@ else
 fi
 
 if [ "$failures" -ne 0 ]; then
-    echo "source.no_raw_transaction: $failures failure(s)"
+    echo "source.no_raw_transaction: FAILED ($failures)"
     exit 1
 fi
-echo "source.no_raw_transaction: ok"
+echo "source.no_raw_transaction: PASSED"

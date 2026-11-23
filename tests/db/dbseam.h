@@ -26,9 +26,9 @@ For more information see the LICENSE file
 
 namespace dbseam {
 
-/// What a denial looks at: SQLite's authorizer action (SQLITE_READ, SQLITE_PRAGMA, ...) and its first argument (a
-/// table for a read, a pragma's name for a pragma).
-using Rule = std::function<bool(int action, const char *what)>;
+/// What a denial looks at: SQLite's authorizer action (SQLITE_READ, SQLITE_PRAGMA, ...), its first argument (a table
+/// for a read, a pragma's name for a pragma) and its second (a read's column, a pragma's value).
+using Rule = std::function<bool(int action, const char *what, const char *detail)>;
 
 inline Rule &rule()
 {
@@ -40,15 +40,16 @@ inline Rule &rule()
 inline void deny(db::Connection &c, Rule deny)
 {
     rule() = std::move(deny);
-    sqlite3_set_authorizer(c.state()->handle, [](void *, int action, const char *what, const char *, const char *, const char *) {
-        return rule() && rule()(action, what) ? SQLITE_DENY : SQLITE_OK;
+    sqlite3_set_authorizer(c.state()->handle, [](void *, int action, const char *what, const char *detail, const char *,
+                                                 const char *) {
+        return rule() && rule()(action, what, detail) ? SQLITE_DENY : SQLITE_OK;
     }, nullptr);
 }
 
 /// Every read of `table` on `c` refused at its prepare.
 inline void denyReadsOf(db::Connection &c, const std::string &table)
 {
-    deny(c, [table](int action, const char *what) { return action == SQLITE_READ && what && table == what; });
+    deny(c, [table](int action, const char *what, const char *) { return action == SQLITE_READ && what && table == what; });
 }
 
 inline void clear(db::Connection &c)
@@ -59,6 +60,10 @@ inline void clear(db::Connection &c)
 
 constexpr int kRead = SQLITE_READ;
 constexpr int kPragma = SQLITE_PRAGMA;
+constexpr int kSelect = SQLITE_SELECT;
+constexpr int kInsert = SQLITE_INSERT;
+constexpr int kUpdate = SQLITE_UPDATE;
+constexpr int kDelete = SQLITE_DELETE;
 
 }   // namespace dbseam
 

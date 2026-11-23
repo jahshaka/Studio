@@ -9,8 +9,11 @@ decides (a return, a readOk, a refusal, a count) may test it.
 THE RULE: in src/, a truth test of a db::Error variable (`if (e)` / `if (!e)`, the variable declared `db::Error x`
 in the same file) whose branch (the statement after it, or its braced block up to 15 lines) logs (JahLog, qWarning,
 qInfo, qDebug, fprintf) and decides nothing is RED.
-THE LIMITS, said: only an `if (` head with the bare variable is judged (a test inside a larger condition is a
-decision by construction); the variable is matched by its name within the file; the block is read 15 lines deep.
+THE LIMITS, said (A GREEN IS NOT "NO LOG-ONLY LOOK ANYWHERE"): the row sees ONE form, `if (<a local db::Error>)` /
+`if (!<it>)` with the bare variable, and reads only the branch right after the head (15 lines deep), never an `else`.
+It does NOT see: the `else` of `if (!e)` (where that form's log sits); a compound condition; a ternary, `return e ? ...`;
+an Error tested inside a helper or lambda it was passed to; an `auto` copy or any variable not declared `db::Error x`
+in the same file (matched by name only); a struct member; a log branch that also counts (`++` reads as a decision).
 Prints `ok:`/`FAIL:` lines; the last line is the verdict. argv[1] = the source root.
 """
 import os

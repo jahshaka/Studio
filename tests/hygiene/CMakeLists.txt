@@ -20,13 +20,10 @@ jah_ship_row(source.fork_stamp)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.fork_stamp PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.fork_stamp)
 
-# source.no_raw_transaction — CLOSE-2 (round 2, H1): the editor's gesture batch
-# can only stand down for an owner that announces itself with a DbTransaction
-# guard; a raw QSqlDatabase::transaction() on the main connection silently gets
-# no transaction at all and loses its rollback. The allowed side-connection
-# sites are listed in the script.
-# PREVIEWS-1 stage 1: and every transaction on it begins IMMEDIATE at one of the two doors (DbTransaction, the
-# batch) - a second writing connection (the preview writer) makes a deferred one fail with 517.
+# source.no_raw_transaction — PREVIEWS-1 stage 1 / NOQT-DATABASE-1: every transaction begins IMMEDIATE at ONE
+# door (db::Transaction: DbTransaction, the batch, the preview writer and the export are it) - a second writing
+# connection (the preview writer) makes a deferred one fail with 517; and DbTransaction still stands the gesture
+# batch down (CLOSE-2 round 2, H1).
 add_test(NAME source.no_raw_transaction
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/no_raw_transaction.sh"
                  "${CMAKE_SOURCE_DIR}")
@@ -197,8 +194,9 @@ if(Python3_Interpreter_FOUND)
     # source.no_raw_sheets — the static half of the no-raw-stylesheet law (CODING_RULES §2), restored by
     # STUDIO-HYGIENE-1 stage 4 from archive/tests/theme with NO allowlist and a third rule: a CSS-shaped string
     # literal outside src/ui/style/ (a sheet passed as a named constant). See the script's header.
-    # source.no_live_read_at_write — PREVIEWS-1 stage 1: no QSqlQuery member or returned cursor, and a query read one
-    # row at a time is scoped or finish()ed before its connection's next write (a live read's WAL snapshot fails
+    # source.no_live_read_at_write — PREVIEWS-1 stage 1 (on the layer: NOQT-DATABASE-1 stage 3): no db::Statement /
+    # DbQuery member or returned cursor, and a read stepped one row at a time is scoped or reset() before its
+    # connection's next write (a live read's WAL snapshot fails
     # that write with 517 once the preview writer has committed). Its limits are in the script's header.
     add_test(NAME source.no_live_read_at_write
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_live_read_at_write.py" "${CMAKE_SOURCE_DIR}")
@@ -210,6 +208,14 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/db_error_looks.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(source.db_error_looks PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.db_error_looks)
+    # source.sqlite_one_door — NOQT-DATABASE-1 stage 3: `sqlite3_` only in src/data/db/ (the layer) and tests/db/,
+    # QtSql nowhere in src/ or tests/, no Qt6Sql on a link line of the configured build, no tests/ include under src/,
+    # the layer's private state.h only at the door. Reads the tree and build.ninja; its controls in the script.
+    add_test(NAME source.sqlite_one_door
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/sqlite_one_door.py" "${CMAKE_SOURCE_DIR}"
+                     "${CMAKE_BINARY_DIR}")
+    set_tests_properties(source.sqlite_one_door PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.sqlite_one_door)
     add_test(NAME source.no_raw_sheets
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_raw_sheets.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(source.no_raw_sheets PROPERTIES TIMEOUT 60 LABELS "hygiene")
@@ -958,7 +964,7 @@ jah_builds(none ROWS source.no_glsl_path source.fork_stamp source.no_raw_transac
     source.one_asset_name_write source.one_save_door source.one_undo_push source.db_pointers_initialised
     source.panel_rows_guarded source.bake_key_guard source.no_engine_transform_reads source.one_readfile
     source.assimp_import_only source.one_material_resolve source.photon_never_pinned source.material_page_identity
-    source.no_live_read_at_write source.db_error_looks source.no_raw_sheets source.shader_cache_key source.bake_key_versioned
+    source.no_live_read_at_write source.db_error_looks source.sqlite_one_door source.no_raw_sheets source.shader_cache_key source.bake_key_versioned
     source.gpu_table_strides source.code_rows gate.serve_red source.row_budget source.timeout_cap
     tooling.gpu_lock_fifo tooling.row_lock_env tooling.gpu_lock_sweep tooling.gpu_lock_holds tooling.gpu_lock_mark
     tooling.evidence_cap source.debug_hot_loops tooling.width_pair.plan tooling.width_pair.judge tooling.width_pair.refuse
