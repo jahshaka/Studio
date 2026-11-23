@@ -24,7 +24,6 @@ For more information see the LICENSE file
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/core/geometry/trimesh.h"
 #include "irisgl/core/viewport.h" 
-#include "irisgl/core/geometry/trimesh.h"
 
 
 // TAKING A CAMERA OVER: read its heading, write nothing.
@@ -202,7 +201,7 @@ void PlayerMouseController::doScenePicking(const std::shared_ptr<iris::SceneNode
             auto a = invTransform * segStart;
             auto b = invTransform * segEnd;
 
-            QList<iris::TriangleIntersectionResult> results;
+            std::vector<iris::TriangleIntersectionResult> results;
             if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
                 for (auto triResult : results) {
                     // convert hit to world space

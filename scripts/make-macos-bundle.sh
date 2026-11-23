@@ -116,7 +116,7 @@ ditto "$BUILD_DIR/bin/media"    "$CONTENTS/Resources/media"
 check "Resources/{app,scenes,media} present"
 
 # --- 3. Symlinks back into MacOS/ -------------------------------------------
-# IrisUtils::getAbsoluteAssetPath and the engine media probe both key off
+# AppPaths::shipped and the engine media probe both key off
 # applicationDirPath() == Contents/MacOS. codesign seals these as symlinks and
 # --deep --strict accepts them (MACOS_BUNDLE_SPEC §2.2), so no source changes.
 step "3. Contents/MacOS symlinks into Resources"

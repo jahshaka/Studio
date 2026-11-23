@@ -182,7 +182,7 @@ static void compareMesh(const iris::MeshPtr &parsed, const iris::MeshPtr &baked,
         CHECK(parsed->triMesh->triangles.size() == baked->triMesh->triangles.size(),
               qUtf8Printable(label + ": trimesh triangle count"));
         bool same = parsed->triMesh->triangles.size() == baked->triMesh->triangles.size();
-        for (int t = 0; same && t < parsed->triMesh->triangles.size(); ++t) {
+        for (int t = 0; same && t < int(parsed->triMesh->triangles.size()); ++t) {
             const iris::Triangle &x = parsed->triMesh->triangles[t];
             const iris::Triangle &y = baked->triMesh->triangles[t];
             same = x.a == y.a && x.b == y.b && x.c == y.c && x.normal == y.normal;

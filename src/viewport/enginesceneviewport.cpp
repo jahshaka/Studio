@@ -1821,7 +1821,7 @@ bool EngineSceneViewport::snapDragToVertexUnderCursor()
     auto meshNode = std::static_pointer_cast<iris::MeshNode>(best.node);
     auto mesh = meshNode->getMesh();
     if (!mesh || !mesh->getTriMesh() ||
-        best.triangleIndex >= mesh->getTriMesh()->triangles.size())
+        best.triangleIndex >= int(mesh->getTriMesh()->triangles.size()))
         return false;
     const iris::Triangle &tri = mesh->getTriMesh()->triangles[best.triangleIndex];
     const iris::Mat4 &xf = meshNode->getGlobalTransform();

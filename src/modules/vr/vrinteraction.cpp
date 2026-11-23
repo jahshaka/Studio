@@ -136,7 +136,7 @@ bool triangleNormal(const ScenePick &pick, const iris::Vec3 &direction, iris::Ve
     const auto meshNode = std::static_pointer_cast<iris::MeshNode>(pick.node);
     const auto mesh = meshNode->getMesh();
     if (!mesh || !mesh->getTriMesh() ||
-        pick.triangleIndex >= mesh->getTriMesh()->triangles.size())
+        pick.triangleIndex >= int(mesh->getTriMesh()->triangles.size()))
         return false;
     const iris::Triangle &tri = mesh->getTriMesh()->triangles[pick.triangleIndex];
     const iris::Mat4 &xf = meshNode->getGlobalTransform();
