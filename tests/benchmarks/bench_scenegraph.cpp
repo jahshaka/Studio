@@ -412,7 +412,7 @@ static size_t applyStaticTags(SynthScene &s)
     // single ascending pass is topological.
     for (size_t i = 0; i < s.all.size(); ++i) {
         const iris::SceneNodePtr &n = s.all[i];
-        const bool wantStatic = !n->getName().startsWith(QLatin1Char('d'));
+        const bool wantStatic = n->getName().empty() || n->getName()[0] != 'd';
         if (wantStatic) {
             // canBeStatic() first, so an 's' node under a 'd' ancestor is
             // SKIPPED rather than refused — a refusal is a warning per node,
@@ -477,7 +477,7 @@ static void buildLattice(SynthScene &s, int n)
             node = mn;
         }
         // THE STATIC/DYNAMIC TAG (see header): name prefix, deterministic.
-        node->setName(QString(dynamic ? "d%1" : "s%1").arg(i));
+        node->setName((QString(dynamic ? "d%1" : "s%1").arg(i)).toStdString());
 
         const int parentIdx = (i / branch) - 1;
         const iris::Vec3 parentWorld = parentIdx >= 0 ? world[size_t(parentIdx)] : iris::Vec3(0, 0, 0);
@@ -515,7 +515,7 @@ static void buildReparentFixture(SynthScene &s, int subtreeSize)
         mn->setMesh(gCube);
         mn->setMaterial(gMaterial);
         mn->setLocalScale(iris::Vec3(0.4f, 0.4f, 0.4f));
-        mn->setName(QString("s_frag%1").arg(i));
+        mn->setName((QString("s_frag%1").arg(i)).toStdString());
         mn->setLocalPos(iris::Vec3(float(i % 10) * 0.6f, float((i / 10) % 10) * 0.6f, 0.0f));
         // An 8-ary tree ROOTED AT nodes[0] — every node but the root has a
         // parent inside the fragment, so all `subtreeSize` of them travel
@@ -545,7 +545,7 @@ static iris::ScenePtr buildAnimRig(int n, std::vector<iris::SceneNodePtr> &out)
         auto mn = iris::MeshNode::create();
         mn->setMesh(gCube);
         mn->setMaterial(gMaterial);
-        mn->setName(QString("d_bone%1").arg(i));
+        mn->setName((QString("d_bone%1").arg(i)).toStdString());
         mn->setLocalScale(iris::Vec3(0.25f, 0.25f, 0.25f));
         mn->setLocalPos(iris::Vec3(0.12f, 0.05f, 0.0f));
 
@@ -1016,7 +1016,7 @@ int main(int argc, char **argv)
                     mn->setLocalPos(iris::Vec3((float(gx) - 3.5f) * spacing,
                                                (float(gy) - 1.5f) * spacing,
                                                (float(gz) - 3.5f) * spacing));
-                    mn->setName(QString("s%1").arg(i));
+                    mn->setName((QString("s%1").arg(i)).toStdString());
                     doc->getRootNode()->addChild(mn, false);
                 }
                 SceneMirror mirror(es);

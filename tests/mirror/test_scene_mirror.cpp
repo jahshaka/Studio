@@ -2440,7 +2440,7 @@ int main(int argc, char **argv)
         QVector<iris::MeshNodePtr> copies;
         for (int i = 0; i < 16; ++i) {
             auto n2 = iris::MeshNode::create();
-            n2->setName(QStringLiteral("shared-%1").arg(i));
+            n2->setName((QStringLiteral("shared-%1").arg(i)).toStdString());
             n2->setMesh(shared);
             n2->setMaterial(iris::PbrMaterial::create());
             n2->setLocalPos(iris::Vec3(0.0f, -50.0f - i, 0.0f));   // out of frame

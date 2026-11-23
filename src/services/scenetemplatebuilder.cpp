@@ -104,7 +104,7 @@ iris::SceneNodePtr buildFloor(SceneTemplate kind, Database *db, Project *project
         // origin — a 500 m square standing in for terrain (Terra later). 500 m
         // is exactly the dynamic shadows' reach (OgreEngine's shadow far).
         auto group = iris::SceneNode::create();
-        group->setName(QStringLiteral("World Floor"));
+        group->setName((QStringLiteral("World Floor")).toStdString());
         group->setPickable(false);         // locked like the floors it holds
         const int n = scenetemplate::kWorldTilesPerSide;
         const float s = scenetemplate::kFloorSize;
@@ -146,7 +146,7 @@ iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
-    dlight->setName(QString::fromLatin1(scenetemplate::kSunName));
+    dlight->setName(QString::fromLatin1(scenetemplate::kSunName).toStdString());
     dlight->setLocalPos(iris::Vec3(scenetemplate::kSunPosition[0], scenetemplate::kSunPosition[1],
                                    scenetemplate::kSunPosition[2]));
     // THE SUN HIGH AND BEHIND THE DEFAULT CAMERA (SKY-DEFAULTS-1; Unreal's default

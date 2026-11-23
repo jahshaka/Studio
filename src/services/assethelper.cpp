@@ -274,7 +274,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         // the file's base name). assimp names every FBX root "RootNode", so three
         // placed models were three rows of "RootNode" in the outliner.
         const QString assetName = QFileInfo(filePath).baseName();
-        if (!assetName.isEmpty()) node->setName(assetName);
+        if (!assetName.isEmpty()) node->setName(assetName.toStdString());
     }
 
     if (modelStats && ssource->hasScene())

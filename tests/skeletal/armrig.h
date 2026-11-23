@@ -91,7 +91,7 @@ inline iris::AnimationPtr buildSwingClip(float degrees, float length = 1.0f)
 inline iris::MeshNodePtr buildArmNode(const iris::MeshPtr &mesh, const QString &name = "arm")
 {
     auto arm = iris::MeshNode::create();
-    arm->setName(name);
+    arm->setName(name.toStdString());
     arm->setMesh(mesh);
     auto mat = iris::PbrMaterial::create();
     mat->setBaseColor(iris::SrgbColor(255, 0, 0));

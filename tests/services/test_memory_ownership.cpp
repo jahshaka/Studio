@@ -85,9 +85,9 @@ static QVector<std::weak_ptr<iris::SceneNode>> openSession(int count)
         // audit named is observable here: releasing the payload releases the
         // tree under it.
         auto root = iris::MeshNode::create();
-        root->setName(QStringLiteral("asset%1").arg(i));
+        root->setName((QStringLiteral("asset%1").arg(i)).toStdString());
         auto part = iris::MeshNode::create();
-        part->setName(QStringLiteral("asset%1-part").arg(i));
+        part->setName((QStringLiteral("asset%1-part").arg(i)).toStdString());
         root->addChild(std::static_pointer_cast<iris::SceneNode>(part));
         watches.append(std::weak_ptr(part));
 
@@ -206,22 +206,22 @@ static GraphWatches buildWorld(const iris::ScenePtr &scene)
     w.root = std::weak_ptr(root);
 
     auto mid = iris::SceneNode::create();
-    mid->setName(QStringLiteral("mid"));
+    mid->setName((QStringLiteral("mid")).toStdString());
     root->addChild(mid);
     w.mid = std::weak_ptr(mid);
 
     auto leaf = iris::SceneNode::create();
-    leaf->setName(QStringLiteral("leaf"));
+    leaf->setName((QStringLiteral("leaf")).toStdString());
     mid->addChild(leaf);
     w.leaf = std::weak_ptr(leaf);
 
     auto mesh = iris::MeshNode::create();
-    mesh->setName(QStringLiteral("mesh"));
+    mesh->setName((QStringLiteral("mesh")).toStdString());
     leaf->addChild(std::static_pointer_cast<iris::SceneNode>(mesh));
     w.mesh = std::weak_ptr(mesh);
 
     auto light = iris::LightNode::create();
-    light->setName(QStringLiteral("light"));
+    light->setName((QStringLiteral("light")).toStdString());
     mid->addChild(std::static_pointer_cast<iris::SceneNode>(light));
     w.light = std::weak_ptr(light);
 

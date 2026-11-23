@@ -73,7 +73,7 @@ Built buildShells(unsigned seed, bool bake)
                b.cutout(kRho, kRho, kRho, 1.0f, 8), true, true);
     auto lamp = iris::LightNode::create();
     lamp->setLightType(iris::LightType::Point);
-    lamp->setName(QStringLiteral("lamp"));
+    lamp->setName((QStringLiteral("lamp")).toStdString());
     b.built().doc->getRootNode()->addChild(lamp);
     lamp->setLocalPos(V(-7, 1, 7));
     lamp->setPropertyValue("intensity", iris::lens::kDefaultLampIntensity);

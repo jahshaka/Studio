@@ -433,8 +433,8 @@ void AvatarPreviewModel::collectRig()
                     ++mMeshCount;
                     mVertexCount += mesh->numVerts;
                     if (mesh->hasSkeleton())
-                        for (const auto &name : mesh->getSkeleton()->boneMap.keys())
-                            boneNames.insert(name);
+                        for (const auto &entry : mesh->getSkeleton()->boneMap)
+                            boneNames.insert(QString::fromStdString(entry.first));
                 }
             }
             for (const auto &child : node->children()) scanMeshes(child);
@@ -450,13 +450,13 @@ void AvatarPreviewModel::collectRig()
     std::function<void(const iris::SceneNodePtr &, const QString &)> walk =
         [&](const iris::SceneNodePtr &node, const QString &boneAncestor) {
             QString nextAncestor = boneAncestor;
-            if (boneNames.contains(node->name)) {
+            if (boneNames.contains(QString::fromStdString(node->name))) {
                 BoneNode bone;
                 bone.node = node.get();
-                bone.name = node->name;
+                bone.name = QString::fromStdString(node->name);
                 bone.parent = boneAncestor;
                 mBoneNodes.append(bone);
-                nextAncestor = node->name;
+                nextAncestor = QString::fromStdString(node->name);
             }
             for (const auto &child : node->children()) walk(child, nextAncestor);
         };
@@ -481,7 +481,7 @@ void AvatarPreviewModel::captureRestPose()
     if (!mFragment) return;
     std::function<void(const iris::SceneNodePtr &)> walk =
         [&](const iris::SceneNodePtr &node) {
-            mNodeNames.insert(node->name);
+            mNodeNames.insert(QString::fromStdString(node->name));
             for (const auto &child : node->children()) walk(child);
         };
     walk(mFragment);
@@ -498,10 +498,10 @@ QString AvatarPreviewModel::rootMotionChannel(const iris::SkeletalAnimationPtr &
     queue.append(mFragment.get());
     for (int i = 0; i < queue.size(); ++i) {
         auto *node = queue[i];
-        const auto it = skel->boneAnimations.constFind(node->name);
-        if (it != skel->boneAnimations.constEnd() && !!it.value() &&
-            it.value()->posKeys->keys.size() > 1)
-            return node->name;
+        const auto it = skel->boneAnimations.find(node->name);
+        if (it != skel->boneAnimations.cend() && !!it->second &&
+            it->second->posKeys->keys.size() > 1)
+            return QString::fromStdString(node->name);
         for (const auto &child : node->children()) queue.append(child.get());
     }
     return QString();
@@ -529,13 +529,14 @@ iris::AnimationPtr AvatarPreviewModel::buildClipAnimation(const iris::SkeletalAn
     // (a jump still leaves the ground) and its rotation, but its HORIZONTAL
     // translation is pinned to the first key. The other channels are shared,
     // not copied — only one BoneAnimation is ever rebuilt.
-    auto source = skel->boneAnimations.value(rootChannel);
+    const auto found = skel->boneAnimations.find(rootChannel.toStdString());
+    auto source = found != skel->boneAnimations.end() ? found->second : nullptr;   // QMap::value's null for a miss
     auto stripped = new iris::BoneAnimation();
     for (const auto *key : source->rotKeys->keys) stripped->rotKeys->addKey(key->value, key->time);
     for (const auto *key : source->scaleKeys->keys) stripped->scaleKeys->addKey(key->value, key->time);
-    const iris::Vec3 anchor = source->posKeys->keys.isEmpty()
+    const iris::Vec3 anchor = source->posKeys->keys.empty()
                                  ? iris::Vec3()
-                                 : source->posKeys->keys.first()->value;
+                                 : source->posKeys->keys.front()->value;
     for (const auto *key : source->posKeys->keys)
         stripped->posKeys->addKey(iris::Vec3(anchor.x(), key->value.y(), anchor.z()), key->time);
 
@@ -545,7 +546,7 @@ iris::AnimationPtr AvatarPreviewModel::buildClipAnimation(const iris::SkeletalAn
     inPlace->assetGuid = skel->assetGuid;
     inPlace->declaredLength = skel->declaredLength;
     inPlace->boneAnimations = skel->boneAnimations;
-    inPlace->boneAnimations[rootChannel] = std::shared_ptr<iris::BoneAnimation>(stripped);
+    inPlace->boneAnimations[rootChannel.toStdString()] = std::shared_ptr<iris::BoneAnimation>(stripped);
     return finish(iris::Animation::createFromSkeletalAnimation(inPlace));
 }
 

@@ -107,12 +107,24 @@
 #include "../support/timingbars.h"
 #include "cutcurve_stock.h"
 
+// The bake's payload checksum's hash, for bake.round_trip's COST line only (the bake itself inlines it in meshbake.cpp).
+#define XXH_INLINE_ALL
+#include "irisgl/thirdparty/xxhash/xxhash.h"
+
 static int failures = 0;
 static int checks = 0;
 #define CHECK(cond, msg) do { ++checks; if (cond) { /* quiet */ } \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 #define CHECK_LOUD(cond, msg) do { ++checks; if (cond) std::printf("ok:   %s\n", msg); \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
+
+/// A std map's entry or a default-constructed one (a null pointer for a missing channel): what QMap::value(k) answered.
+template <typename Map>
+static typename Map::mapped_type mappedOr(const Map &m, const typename Map::key_type &k)
+{
+    const auto it = m.find(k);
+    return it == m.end() ? typename Map::mapped_type() : it->second;
+}
 
 static QString fixture(const QString &name)
 {
@@ -224,24 +236,26 @@ static void compareAnimations(const QMap<QString, iris::SkeletalAnimationPtr> &p
         const auto &pa = it.value();
         const auto &ba = other.value();
         CHECK(pa->name == ba->name, qUtf8Printable(label + ": clip name"));
-        CHECK(pa->boneAnimations.keys() == ba->boneAnimations.keys(),
+        CHECK(pa->boneAnimations.size() == ba->boneAnimations.size() &&
+                  std::equal(pa->boneAnimations.cbegin(), pa->boneAnimations.cend(), ba->boneAnimations.cbegin(),
+                             [](const auto &x, const auto &y) { return x.first == y.first; }),
               qUtf8Printable(label + ": channel names"));
-        for (auto b = pa->boneAnimations.constBegin(); b != pa->boneAnimations.constEnd(); ++b) {
-            const auto ob = ba->boneAnimations.constFind(b.key());
-            if (ob == ba->boneAnimations.constEnd()) continue;
-            bool same = b.value()->posKeys->keys.size() == ob.value()->posKeys->keys.size()
-                        && b.value()->rotKeys->keys.size() == ob.value()->rotKeys->keys.size()
-                        && b.value()->scaleKeys->keys.size() == ob.value()->scaleKeys->keys.size();
-            for (int k = 0; same && k < b.value()->posKeys->keys.size(); ++k)
-                same = b.value()->posKeys->keys[k]->value == ob.value()->posKeys->keys[k]->value
-                       && b.value()->posKeys->keys[k]->time == ob.value()->posKeys->keys[k]->time;
-            for (int k = 0; same && k < b.value()->rotKeys->keys.size(); ++k)
-                same = b.value()->rotKeys->keys[k]->value == ob.value()->rotKeys->keys[k]->value
-                       && b.value()->rotKeys->keys[k]->time == ob.value()->rotKeys->keys[k]->time;
-            for (int k = 0; same && k < b.value()->scaleKeys->keys.size(); ++k)
-                same = b.value()->scaleKeys->keys[k]->value == ob.value()->scaleKeys->keys[k]->value
-                       && b.value()->scaleKeys->keys[k]->time == ob.value()->scaleKeys->keys[k]->time;
-            CHECK(same, qUtf8Printable(label + ": every key of " + b.key()));
+        for (auto b = pa->boneAnimations.cbegin(); b != pa->boneAnimations.cend(); ++b) {
+            const auto ob = ba->boneAnimations.find(b->first);
+            if (ob == ba->boneAnimations.cend()) continue;
+            bool same = b->second->posKeys->keys.size() == ob->second->posKeys->keys.size()
+                        && b->second->rotKeys->keys.size() == ob->second->rotKeys->keys.size()
+                        && b->second->scaleKeys->keys.size() == ob->second->scaleKeys->keys.size();
+            for (int k = 0; same && k < b->second->posKeys->keys.size(); ++k)
+                same = b->second->posKeys->keys[k]->value == ob->second->posKeys->keys[k]->value
+                       && b->second->posKeys->keys[k]->time == ob->second->posKeys->keys[k]->time;
+            for (int k = 0; same && k < b->second->rotKeys->keys.size(); ++k)
+                same = b->second->rotKeys->keys[k]->value == ob->second->rotKeys->keys[k]->value
+                       && b->second->rotKeys->keys[k]->time == ob->second->rotKeys->keys[k]->time;
+            for (int k = 0; same && k < b->second->scaleKeys->keys.size(); ++k)
+                same = b->second->scaleKeys->keys[k]->value == ob->second->scaleKeys->keys[k]->value
+                       && b->second->scaleKeys->keys[k]->time == ob->second->scaleKeys->keys[k]->time;
+            CHECK(same, qUtf8Printable(label + ": every key of " + QString::fromStdString(b->first)));
         }
     }
 }
@@ -259,8 +273,8 @@ static void compareFragment(const iris::SceneNodePtr &parsed, const iris::SceneN
     // legitimately differ there. What matters is that both sides are unnamed,
     // or that both carry the SAME authored name.
     static const QRegularExpression unnamed(QStringLiteral("^SceneNode\\d+$"));
-    const bool bothUnnamed = unnamed.match(parsed->name).hasMatch() &&
-                             unnamed.match(baked->name).hasMatch();
+    const bool bothUnnamed = unnamed.match(QString::fromStdString(parsed->name)).hasMatch() &&
+                             unnamed.match(QString::fromStdString(baked->name)).hasMatch();
     CHECK(bothUnnamed || parsed->name == baked->name, qUtf8Printable(label + ": node name"));
     CHECK(parsed->getLocalPos() == baked->getLocalPos(), qUtf8Printable(label + ": local pos"));
     CHECK(parsed->getLocalRot() == baked->getLocalRot(), qUtf8Printable(label + ": local rot"));
@@ -1185,7 +1199,7 @@ static void surfaceCards()
         const iris::MeshPtr mesh = testmesh::load(path);
         if (!!mesh) {
             iris::MeshBake::buildCards(mesh, 0);
-            CHECK_LOUD(mesh->cards.isEmpty() && mesh->cardCoverage == 0.0f,
+            CHECK_LOUD(mesh->cards.empty() && mesh->cardCoverage == 0.0f,
                        "maxCards 0 authors no cards at all — and says so, rather than a box");
             float previous = -1.0f;
             bool monotone = true;
@@ -1217,7 +1231,7 @@ static void surfaceCards()
             for (const iris::MeshPtr &mesh : rigged.meshes) {
                 if (!mesh || !mesh->getSkeleton()) continue;
                 anySkinned = true;
-                if (!mesh->cards.isEmpty()) skinnedHaveNoCards = false;
+                if (!mesh->cards.empty()) skinnedHaveNoCards = false;
             }
             if (anySkinned)
                 CHECK_LOUD(skinnedHaveNoCards, "a skinned mesh gets no cards");
@@ -1294,7 +1308,7 @@ static void surfaceCards()
         bool bounded = true, covered = true, underCeiling = true;
         for (int n : { 120, 180, 360, 700 }) {
             const iris::MeshPtr mesh = crumpledGrid(n);
-            CHECK(mesh->lodIndices.isEmpty(), "the synthetic grid carries no LOD chain");
+            CHECK(mesh->lodIndices.empty(), "the synthetic grid carries no LOD chain");
             QElapsedTimer timer;
             timer.start();
             iris::MeshBake::buildCards(mesh, iris::kDefaultMaxCards);
@@ -1394,7 +1408,7 @@ static void primitivesBaked()
         const int levels = int(mesh->lodIndices.size()) + 1;
         std::printf("      %-12s %7d %6d %6d %6s %-9.6g %s\n", qUtf8Printable(name), tris, levels,
                     int(mesh->cards.size()), mesh->clusterDag.isEmpty() ? "no" : "yes",
-                    mesh->lodBounds.isEmpty() ? 0.0 : double(mesh->lodBounds.first()),
+                    mesh->lodBounds.empty() ? 0.0 : double(mesh->lodBounds.front()),
                     qUtf8Printable(guid.right(4)));
 
         // THE CHAIN, for a mesh big enough to have one. The bake's own floor is
@@ -1417,7 +1431,7 @@ static void primitivesBaked()
         }
         // CARDS and the cluster DAG: every shipped mesh gets both (each refuses
         // only a skinned mesh, and none of these is skinned).
-        CHECK_LOUD(!mesh->cards.isEmpty(), qUtf8Printable(name + ": it carries surface cards"));
+        CHECK_LOUD(!mesh->cards.empty(), qUtf8Printable(name + ": it carries surface cards"));
         for (const iris::MeshCard &card : mesh->cards)
             CHECK(int(card.lodLevel) < levels,
                   qUtf8Printable(name + ": every card names a level the chain HAS"));
@@ -1940,10 +1954,10 @@ const float *positionsOf(const iris::MeshPtr &m, size_t *nv, int *comps)
 {
     for (const iris::VertexBufferPtr &vb : m->getVertexBuffers()) {
         if (!vb || !vb->data || vb->dataSize <= 0) continue;
-        const QList<iris::VertexAttribute> a = vb->vertexLayout.getAttribs();
-        if (a.isEmpty() || a.first().usage != iris::VertexAttribUsage::Position) continue;
-        if (a.size() != 1 || a.first().count < 3) return nullptr;   // interleaved: not a layout the bake reads
-        *comps = a.first().count;
+        const std::vector<iris::VertexAttribute> a = vb->vertexLayout.getAttribs();
+        if (a.empty() || a.front().usage != iris::VertexAttribUsage::Position) continue;
+        if (a.size() != 1 || a.front().count < 3) return nullptr;   // interleaved: not a layout the bake reads
+        *comps = a.front().count;
         *nv = size_t(vb->dataSize) / (sizeof(float) * size_t(*comps));
         return reinterpret_cast<const float *>(vb->data);
     }
@@ -2186,9 +2200,9 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         long long bytesPerVertex = 0;
         for (const iris::VertexBufferPtr &vb : m->getVertexBuffers()) {
             if (!vb || !vb->data || vb->vertexLayout.getAttribs().size() != 1) continue;
-            const int comps = vb->vertexLayout.getAttribs().first().count;
+            const int comps = vb->vertexLayout.getAttribs().front().count;
             bytesPerVertex += 4 * comps;
-            if (vb->vertexLayout.getAttribs().first().usage == iris::VertexAttribUsage::Position)
+            if (vb->vertexLayout.getAttribs().front().usage == iris::VertexAttribUsage::Position)
                 nv0 = size_t(vb->dataSize) / (sizeof(float) * size_t(comps));
         }
         bool cardClass = false;
@@ -2528,7 +2542,7 @@ static int dagDepths(const QStringList &paths)
             Row r;
             r.name = QStringLiteral("%1#%2").arg(QFileInfo(path).fileName()).arg(i);
             r.tris = 0ull;
-            if (dag.clusters.isEmpty()) {
+            if (dag.clusters.empty()) {
                 const iris::IndexBufferPtr ib = m->getIndexBuffer();
                 const unsigned long long t =
                     (!!ib && ib->data) ? (unsigned long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0ull;
@@ -2730,8 +2744,8 @@ static void bakeDeterminism(const QString &part = QString(), const QString &refR
             if (run == 0) {
                 meshes = model.meshes.size();
                 for (const iris::MeshPtr &m : model.meshes) {
-                    if (!m->lodIndices.isEmpty()) ++chained;
-                    if (!m->clusterDag.groups.isEmpty()) ++dags;
+                    if (!m->lodIndices.empty()) ++chained;
+                    if (!m->clusterDag.groups.empty()) ++dags;
                 }
             }
         }
@@ -2937,10 +2951,10 @@ static void clipBake()
         const auto &x2 = doubled.value(it.key());
         if (!id || !x2) { identityExact = scaledExact = false; break; }
         identityExact = identityExact && id->source == walk && x2->source == walk;
-        for (auto b = from->boneAnimations.constBegin(); b != from->boneAnimations.constEnd(); ++b) {
-            const auto f = b.value();
-            const auto i1 = id->boneAnimations.value(b.key());
-            const auto i2 = x2->boneAnimations.value(b.key());
+        for (auto b = from->boneAnimations.cbegin(); b != from->boneAnimations.cend(); ++b) {
+            const auto f = b->second;
+            const auto i1 = mappedOr(id->boneAnimations, b->first);
+            const auto i2 = mappedOr(x2->boneAnimations, b->first);
             if (!i1 || !i2) { identityExact = scaledExact = false; continue; }
             for (int k = 0; k < f->posKeys->keys.size(); ++k, ++posKeys) {
                 const iris::Vec3 v = f->posKeys->keys[k]->value;
@@ -2987,7 +3001,7 @@ static void clipBake()
             bool hasPos = false;
             for (const auto &a : c.animations)
                 for (const auto &bone : a->boneAnimations)
-                    hasPos = hasPos || !bone->posKeys->keys.isEmpty();
+                    hasPos = hasPos || !bone.second->posKeys->keys.empty();
             std::printf("info: %s: declared unit %.4f m, %d clip(s), position keys %s\n",
                         qUtf8Printable(rel), c.declaredUnitScale, int(c.animations.size()),
                         hasPos ? "yes" : "no");
@@ -3013,22 +3027,22 @@ static void clipBake()
             for (auto it = parsed.constBegin(); same && it != parsed.constEnd(); ++it) {
                 const auto b = baked.value(it.key());
                 if (!b) { same = false; break; }
-                for (auto bone = it.value()->boneAnimations.constBegin();
-                     same && bone != it.value()->boneAnimations.constEnd(); ++bone) {
-                    const auto mine = b->boneAnimations.value(bone.key());
-                    if (!mine || mine->posKeys->keys.size() != bone.value()->posKeys->keys.size()) {
+                for (auto bone = it.value()->boneAnimations.cbegin();
+                     same && bone != it.value()->boneAnimations.cend(); ++bone) {
+                    const auto mine = mappedOr(b->boneAnimations, bone->first);
+                    if (!mine || mine->posKeys->keys.size() != bone->second->posKeys->keys.size()) {
                         same = false;
                         break;
                     }
-                    for (int k = 0; k < bone.value()->posKeys->keys.size(); ++k, ++compared) {
-                        const iris::Vec3 p = bone.value()->posKeys->keys[k]->value;
+                    for (int k = 0; k < bone->second->posKeys->keys.size(); ++k, ++compared) {
+                        const iris::Vec3 p = bone->second->posKeys->keys[k]->value;
                         const iris::Vec3 q = mine->posKeys->keys[k]->value;
                         const float tol = 1e-4f * std::max(1.0f, p.length());
                         worst = std::max(worst, (p - q).length());
                         same = same && (p - q).length() <= tol;
                     }
-                    for (int k = 0; same && k < bone.value()->rotKeys->keys.size(); ++k)
-                        same = same && mine->rotKeys->keys.size() == bone.value()->rotKeys->keys.size();
+                    for (int k = 0; same && k < bone->second->rotKeys->keys.size(); ++k)
+                        same = same && mine->rotKeys->keys.size() == bone->second->rotKeys->keys.size();
                 }
             }
             CHECK_LOUD(same && compared > 0,
@@ -3257,9 +3271,158 @@ static void asyncLanding()
     AssetStorePaths::setRootOverride(QString());
 }
 
+// ---- bake.round_trip (NOQT-DOCUMENT-1 stage 5, the 5-bake commit) ---------------------------------------------------
+// THE BAKE's FORWARD LAWS, the row that replaces "the bytes equal what the old code wrote": (1) what we bake reads back
+// EQUAL to the parse, field for field (roundTrip over the seven fixtures: meshes, skeletons and their bone names, every
+// clip and channel name, every key, the fragment's node names); (2) a NON-ASCII name (2-, 3- and 4-byte UTF-8) on a node, a
+// clip, a channel and a bone survives the bake exactly; (3) THE PAYLOAD CHECKSUM: one byte flipped at the payload's
+// first byte, its middle, its last and inside the checksum is REFUSED by name; the untouched blob loads (the control);
+// (4) THE THREE INDEX GUARDS: an index of 0x80000000 in the triangle index buffer, a LOD level and the cluster DAG's
+// vertices is REFUSED (each `int(x) >= count` passed it); the untouched model loads.
+static iris::MeshBake::Model bakeTwoObjects(const QTemporaryDir &scratch)
+{
+    const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("0123456789abcdef").repeated(4));
+    return iris::MeshBake::buildFromFile(writeTwoObjectObj(scratch.path()), fp, scratch.path());
+}
+
+static int roundTripRow()
+{
+    std::printf("== 1. what we bake reads back equal to the parse ==\n");
+    const char *fixtures[] = {"tests/importer/fixtures/scaled_two_meshes.glb", "tests/importer/fixtures/textured_pbr_quad.glb",
+                              "tests/importer/fixtures/ticks_anim.glb", "tests/importer/fixtures/colored_quad.ply",
+                              "tests/importer/fixtures/tetra_normals.stl", "app/models/axis_cube.obj", "app/models/axis_sphere.obj"};
+    for (const char *f : fixtures) roundTrip(QString::fromLatin1(f));
+
+    std::printf("== 2. a non-ASCII name survives the bake exactly ==\n");
+    QTemporaryDir scratch;
+    const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("0123456789abcdef").repeated(4));
+    iris::MeshBake::Model m = iris::MeshBake::buildFromFile(fixture(QStringLiteral("tests/importer/fixtures/ticks_anim.glb")),
+                                                            fp, scratch.path());
+    CHECK_LOUD(m.valid, "the fixture bakes (ticks_anim.glb)");
+    if (!m.valid) { std::printf("FAILED: %d of %d check(s)\n", failures, checks); return 1; }
+    const std::string nodeName = "W\xC3\xBCrfel \xE2\x98\x83 \xF0\x9F\x98\x80";   // U+00FC, U+2603, U+1F600
+    const std::string clipName = "Clip \xE2\x98\x83 \xF0\x9F\x98\x80", channelName = "Kn\xC3\xB6" "chel \xF0\x9F\x98\x80";
+    m.root.name = QString::fromStdString(nodeName);   // the bake's own node record (the importer's): what the fragment names
+    auto clip = iris::SkeletalAnimation::create();
+    clip->name = clipName;
+    auto *channel = new iris::BoneAnimation();
+    channel->posKeys->addKey(iris::Vec3(1.0f, 2.0f, 3.0f), 0.5);
+    clip->addBoneAnimation(channelName, channel);
+    m.animations.insert(QString::fromStdString(clipName), clip);
+    const QByteArray blob = iris::MeshBake::serialize(m);
+    const iris::MeshBake::Model back = iris::MeshBake::deserialize(blob, fp);
+    CHECK_LOUD(back.valid && back.root.name.toStdString() == nodeName, "the node's 2-, 3- and 4-byte name reads back exactly");
+    const auto clipBack = back.animations.value(QString::fromStdString(clipName));
+    CHECK_LOUD(clipBack && clipBack->name == clipName && clipBack->boneAnimations.size() == 1 &&
+                   clipBack->boneAnimations.count(channelName) == 1 &&
+                   clipBack->boneAnimations.at(channelName)->posKeys->keys.size() == 1,
+               "the clip's name, its key and its channel's name read back exactly");
+    int namesBack = (back.valid && back.root.name.toStdString() == nodeName) + (clipBack && clipBack->name == clipName) +
+                    (clipBack && clipBack->boneAnimations.count(channelName) == 1);
+    {
+        // A BONE's name: a skinned fixture's first bone renamed (the bone map is rebuilt from the names on the read).
+        QTemporaryDir rigDir;
+        iris::MeshBake::Model rig = iris::MeshBake::buildFromFile(
+            fixture(QStringLiteral("tests/importer/fixtures/orphan_skin_vertex.fbx")), fp, rigDir.path());
+        bool renamed = false;
+        for (const iris::MeshPtr &mesh : rig.meshes)
+            if (!renamed && mesh->getSkeleton() && !mesh->getSkeleton()->bones.empty()) {
+                mesh->getSkeleton()->bones.front()->name = channelName;
+                renamed = true;
+            }
+        CHECK_LOUD(rig.valid && renamed, "the skinned fixture bakes with a skeleton to rename (orphan_skin_vertex.fbx)");
+        const iris::MeshBake::Model rigBack = iris::MeshBake::deserialize(iris::MeshBake::serialize(rig), fp);
+        bool boneBack = false;
+        for (const iris::MeshPtr &mesh : rigBack.meshes)
+            if (mesh->getSkeleton() && mesh->getSkeleton()->getBone(channelName) &&
+                mesh->getSkeleton()->bones.front()->name == channelName)
+                boneBack = true;
+        CHECK_LOUD(rigBack.valid && boneBack, "the bone's non-ASCII name reads back and the bone map finds it");
+        namesBack += boneBack;
+    }
+    std::printf("info: non-ASCII names round-tripped: %d of 4 (the 4-byte sequence among them: %s)\n", namesBack,
+                nodeName.find("\xF0\x9F\x98\x80") != std::string::npos ? "yes" : "no");
+
+    std::printf("== 3. the payload checksum refuses a flipped byte by name ==\n");
+    CHECK_LOUD(iris::MeshBake::deserialize(blob, fp).valid, "the untouched blob loads (the control)");
+    const int last = int(blob.size()) - 9;   // the payload's last byte: the 8 after it are the checksum
+    const int places[] = {8, int(blob.size()) / 2, last, int(blob.size()) - 1};
+    const char *named[] = {"the payload's first byte", "the payload's middle byte", "the payload's last byte",
+                           "a byte of the checksum itself"};
+    for (int k = 0; k < 4; ++k) {
+        QByteArray flipped = blob;
+        flipped[places[k]] = char(flipped[places[k]] ^ 0x01);
+        const iris::MeshBake::Model r = iris::MeshBake::deserialize(flipped, fp);
+        CHECK_LOUD(!r.valid && r.refusal == "its checksum does not match",
+                   qUtf8Printable(QStringLiteral("a flipped byte at %1 is refused: \"its checksum does not match\"")
+                                      .arg(QString::fromLatin1(named[k]))));
+    }
+
+    {
+        // THE CHECKSUM's COST (WALL, an info line, no law: a test counts no clock): XXH3 over this blob and over 64 MiB
+        // (a large model's bake), each the median of 5 passes.
+        auto medianMs = [](const QByteArray &b) {
+            std::vector<double> ms;
+            for (int i = 0; i < 5; ++i) {
+                QElapsedTimer t;
+                t.start();
+                volatile XXH64_hash_t h = XXH3_64bits(b.constData(), size_t(b.size()));
+                (void)h;
+                ms.push_back(double(t.nsecsElapsed()) / 1e6);
+            }
+            std::sort(ms.begin(), ms.end());
+            return ms[2];
+        };
+        const QByteArray big(64 * 1024 * 1024, '\x5a');
+        std::printf("info: the checksum's cost (WALL, median of 5): %.3f ms over this %d-byte blob, %.2f ms over 64 MiB\n",
+                    medianMs(blob), int(blob.size()), medianMs(big));
+    }
+
+    std::printf("== 4. an index of 0x80000000 is refused at each of the three guards ==\n");
+    {
+        QTemporaryDir d;
+        iris::MeshBake::Model control = bakeTwoObjects(d);
+        CHECK_LOUD(control.valid && iris::MeshBake::deserialize(iris::MeshBake::serialize(control), fp).valid,
+                   "the untouched two-object model loads (the control)");
+    }
+    for (int which = 0; which < 3; ++which) {
+        QTemporaryDir d;
+        iris::MeshBake::Model bad = bakeTwoObjects(d);
+        bool planted = false;
+        for (const iris::MeshPtr &mesh : bad.meshes) {
+            if (planted) break;
+            if (which == 0) {
+                const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
+                if (ib && ib->data && ib->dataSize >= int(sizeof(unsigned))) {
+                    const unsigned huge = 0x80000000u;
+                    std::memcpy(ib->data, &huge, sizeof(huge));
+                    planted = true;
+                }
+            } else if (which == 1 && !mesh->lodIndices.empty() && !mesh->lodIndices.front().empty()) {
+                mesh->lodIndices.front().front() = 0x80000000u;
+                planted = true;
+            } else if (which == 2 && !mesh->clusterDag.vertices.empty()) {
+                mesh->clusterDag.vertices.front() = 0x80000000u;
+                planted = true;
+            }
+        }
+        const char *where[] = {"the triangle index buffer", "a LOD level", "the cluster DAG's vertices"};
+        CHECK_LOUD(planted, qUtf8Printable(QStringLiteral("the model carries %1 to plant in").arg(QString::fromLatin1(where[which]))));
+        if (!planted) continue;
+        CHECK_LOUD(!iris::MeshBake::deserialize(iris::MeshBake::serialize(bad), fp).valid,
+                   qUtf8Printable(QStringLiteral("an index of 0x80000000 in %1 is refused").arg(QString::fromLatin1(where[which]))));
+    }
+
+    if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+    else          std::printf("ALL %d CHECKS PASSED\n", checks);
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--round-trip")) return roundTripRow();
 
     // `--cards` is the meshbake.cards (archived: archive/tests/meshbake) suite; with no argument the binary runs
     // everything meshbake.roundtrip (archived: archive/tests/meshbake) has always run (plus the card SERIALIZER

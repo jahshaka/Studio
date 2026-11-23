@@ -93,7 +93,7 @@ Built buildSeam(unsigned seed, bool bake)
     // lane between A and B at 17 m - its range reaches the gable, the parapet and the seam
     auto lamp = iris::LightNode::create();
     lamp->setLightType(iris::LightType::Point);
-    lamp->setName(QStringLiteral("lamp"));
+    lamp->setName((QStringLiteral("lamp")).toStdString());
     b.built().doc->getRootNode()->addChild(lamp);
     lamp->setLocalPos(V(-16.5f, 17.0f, 5.0f));
     lamp->setPropertyValue("intensity", iris::lens::kDefaultLampIntensity);

@@ -63,6 +63,15 @@
       "file": "LICENSE.md"
     },
     {
+      "id": "xxhash",
+      "name": "xxHash",
+      "role": "Checksums every baked mesh (.jmb) so a corrupt bake is refused by name instead of being read as data.",
+      "homepage": "https://github.com/Cyan4973/xxHash",
+      "licence": "BSD-2-Clause",
+      "path": "irisgl/thirdparty/xxhash",
+      "file": "LICENSE"
+    },
+    {
       "id": "quickjs-ng",
       "name": "QuickJS-ng",
       "role": "Runs the JavaScript of the engine's own script host (jahengine and the engine's test scripts).",

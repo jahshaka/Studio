@@ -368,7 +368,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
                                  const QSet<QString> *omitted)
 {
 	sceneNodeObj["guid"] = sceneNode->getGUID();
-    sceneNodeObj["name"] = sceneNode->getName();
+    sceneNodeObj["name"] = QString::fromStdString(sceneNode->getName());
     sceneNodeObj["attached"] = sceneNode->isAttached();
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
     sceneNodeObj["pickable"] = sceneNode->isPickable();
@@ -672,8 +672,8 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
             // the next open could not find the model and the character stood in
             // its bind pose. No path is written: the reader derives it from the
             // guid through the store, wherever the data root lives.
-            if (!skelAnim->assetGuid.isEmpty()) skelObj["guid"] = skelAnim->assetGuid;
-            skelObj["name"] = skelAnim->name;
+            if (!skelAnim->assetGuid.empty()) skelObj["guid"] = QString::fromStdString(skelAnim->assetGuid);
+            skelObj["name"] = QString::fromStdString(skelAnim->name);
             animObj["skeletalAnimation"] = skelObj;
         }
 

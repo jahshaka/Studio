@@ -79,7 +79,7 @@ QJsonArray lightsOf(const iris::SceneNodePtr &root)
                 auto l = std::static_pointer_cast<iris::LightNode>(c);
                 QJsonObject o;
                 o["parent"] = path;
-                o["name"] = l->getName();
+                o["name"] = QString::fromStdString(l->getName());
                 o["type"] = int(l->lightType);
                 o["intensity"] = double(l->intensity);
                 o["color"] = iris::toQColor(l->color).name();
@@ -117,7 +117,7 @@ int attachLights(const iris::SceneNodePtr &root, const QJsonArray &lights)
         }
         if (!parent) continue;
         auto l = iris::LightNode::create();
-        l->setName(o["name"].toString());
+        l->setName(o["name"].toString().toStdString());
         l->setLightType(iris::LightType(o["type"].toInt()));
         l->intensity = float(o["intensity"].toDouble());
         l->color = iris::toSrgbColor(QColor(o["color"].toString()));
@@ -385,7 +385,7 @@ iris::SceneNodePtr loadModel(const QString &pathIn, const QString &dataRoot, Loa
     r.animatedNodes = iris::playNodeChannels(node).nodes;
     r.fragmentMs = msSince(t0);
     r.triangles = trianglesOf(node, r.meshes);
-    if (node->getName().isEmpty()) node->setName(fi.completeBaseName());
+    if (node->getName().empty()) node->setName(fi.completeBaseName().toStdString());
     r.ok = true;
     return node;
 }
@@ -419,7 +419,7 @@ bool addBasicWorld(const iris::ScenePtr &doc, const QString &binDir, const QStri
         return false;
     }
     auto floor = std::static_pointer_cast<iris::MeshNode>(floorFrag);
-    floor->setName(QStringLiteral("Floor"));
+    floor->setName((QStringLiteral("Floor")).toStdString());
     floor->setLocalScale(iris::Vec3(kFloorSize * 0.5f, kFloorThickness * 0.5f, kFloorSize * 0.5f));
     floor->setLocalPos(iris::Vec3(0, -kFloorThickness * 0.5f, 0));
     floor->setShadowCastingEnabled(false);
@@ -451,7 +451,7 @@ void addSkyAndLights(const iris::ScenePtr &doc, bool wantSun)
         auto sun = iris::LightNode::create();
         sun->setLightType(iris::LightType::Directional);
         doc->getRootNode()->addChild(sun);
-        sun->setName(QStringLiteral("Directional Light"));
+        sun->setName((QStringLiteral("Directional Light")).toStdString());
         sun->setLocalPos(kSunPosition);
         sun->setLocalRot(iris::Quat::fromEulerAngles(kSunPitchDegrees, 0, 0));
         sun->setPropertyValue("intensity", 1.0f);
@@ -459,7 +459,7 @@ void addSkyAndLights(const iris::ScenePtr &doc, bool wantSun)
     auto sky = iris::LightNode::create();
     sky->setLightType(iris::LightType::Sky);
     doc->getRootNode()->addChild(sky);
-    sky->setName(QStringLiteral("Sky Light"));
+    sky->setName((QStringLiteral("Sky Light")).toStdString());
     sky->setLocalPos(iris::Vec3(-4, 4, 0));
     sky->setPropertyValue("intensity", 1.0f);
     sky->setPropertyValue("lightColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));

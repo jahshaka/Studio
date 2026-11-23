@@ -41,7 +41,7 @@ iris::MeshNodePtr makePanel(const iris::MeshPtr &mesh, const iris::PbrMaterialPt
     auto node = iris::MeshNode::create();
     node->setMesh(mesh);
     node->setMaterial(mat);
-    node->setName(QLatin1String(name));
+    node->setName(name);
     node->setPickable(false);
     node->isBuiltIn = true;
     node->setShadowCastingEnabled(false);
@@ -114,7 +114,7 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     ceiling->setRoughnessFactor(0.8f);
 
     auto group = iris::SceneNode::create();
-    group->setName(QStringLiteral("avatar-space"));
+    group->setName((QStringLiteral("avatar-space")).toStdString());
     group->setPickable(false);
     group->isBuiltIn = true;
 

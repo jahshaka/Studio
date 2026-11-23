@@ -173,7 +173,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     nodeProperties = node ? node->getProperties() : iris::PropertyRows();
     if (!!node) {
         scene = node->getScene();
-        ui->sceneNodeName->setText(node->name);
+        ui->sceneNodeName->setText(QString::fromStdString(node->name));
 
         // NO auto-create here (anim-lane finding, 2026-09-04). Selecting a node
         // used to mint an empty "Animation" on it, and SceneWriter serializes
@@ -589,7 +589,7 @@ void AnimationWidget::updateCreationWidgetMessage(iris::SceneNodePtr node)
         createAnimWidget->hideButton();
     } else {
         createAnimWidget->showButton();
-        createAnimWidget->setButtonText("Create Animation for "+node->getName());
+        createAnimWidget->setButtonText("Create Animation for " + QString::fromStdString(node->getName()));
     }
 }
 

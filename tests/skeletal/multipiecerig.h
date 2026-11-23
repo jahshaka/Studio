@@ -177,7 +177,7 @@ inline iris::MeshPtr buildPieceMesh(const PieceSpec &piece)
 
     auto skel = iris::Skeleton::create();
     for (const char *bn : piece.bones) {
-        auto bone = iris::Bone::create(QString::fromLatin1(bn));
+        auto bone = iris::Bone::create(QString::fromLatin1(bn).toStdString());
         bone->meshSpacePoseMatrix = bindMeshSpace(bn);
         bone->inverseMeshSpacePoseMatrix = bone->meshSpacePoseMatrix.inverted();
         skel->addBone(bone);
@@ -186,7 +186,7 @@ inline iris::MeshPtr buildPieceMesh(const PieceSpec &piece)
     for (const char *bn : piece.bones) {
         const char *parent = nearestPresentParent(piece, bn);
         if (!parent) continue;
-        skel->getBone(QString::fromLatin1(parent))->addChild(skel->getBone(QString::fromLatin1(bn)));
+        skel->getBone(QString::fromLatin1(parent).toStdString())->addChild(skel->getBone(QString::fromLatin1(bn).toStdString()));
     }
     mesh->setSkeleton(skel);
     return mesh;
@@ -214,18 +214,18 @@ inline Character buildCharacter(const QString &name)
 {
     Character c;
     c.root = iris::SceneNode::create();
-    c.root->setName(name);
+    c.root->setName(name.toStdString());
 
     // The bone scene nodes: ONE tree per character, under the root, named after
     // the union bones — ClipExtractor resolves a clip's channels through these.
     for (const BoneSpec &b : bones()) {
         auto node = iris::SceneNode::create();
-        node->setName(QString::fromLatin1(b.name));
+        node->setName(QString::fromLatin1(b.name).toStdString());
         const BoneSpec *parent = b.parent ? boneSpec(b.parent) : nullptr;
         node->setLocalPos(iris::Vec3(b.x - (parent ? parent->x : 0.0f),
                                      b.y - (parent ? parent->y : 0.0f),
                                      b.z - (parent ? parent->z : 0.0f)));
-        c.boneNodes.insert(node->getName(), node);
+        c.boneNodes.insert(QString::fromStdString(node->getName()), node);
     }
     for (const BoneSpec &b : bones()) {
         const iris::SceneNodePtr &node = c.boneNodes[QString::fromLatin1(b.name)];
@@ -236,7 +236,7 @@ inline Character buildCharacter(const QString &name)
     const QVector<iris::MeshPtr> &meshes = sharedPieceMeshes();
     for (int i = 0; i < pieces().size(); ++i) {
         auto mn = iris::MeshNode::create();
-        mn->setName(QString::fromLatin1(pieces()[i].name));
+        mn->setName(QString::fromLatin1(pieces()[i].name).toStdString());
         mn->setMesh(meshes[i]);                     // clones the rig template per node
         auto mat = iris::PbrMaterial::create();
         mat->setBaseColor(iris::SrgbColor(220, 60, 60));
@@ -261,7 +261,7 @@ inline iris::AnimationPtr buildCharacterClip(float length = 1.0f)
         ba->rotKeys->addKey(iris::Quat::fromAxisAndAngle(x, y, z, deg), length);
         ba->scaleKeys->addKey(iris::Vec3(1, 1, 1), 0.0f);
         ba->scaleKeys->addKey(iris::Vec3(1, 1, 1), length);
-        skelAnim->addBoneAnimation(QString::fromLatin1(bone), ba);
+        skelAnim->addBoneAnimation(QString::fromLatin1(bone).toStdString(), ba);
     };
     swing("spine", iris::Vec3(0, 1, 0), 0, 0, 1, 25.0f);
     swing("head", iris::Vec3(0, 0.5f, 0), 1, 0, 0, 20.0f);

@@ -1796,7 +1796,7 @@ QVariantMap AssetsApi::preview(const QVariantMap &options)
     }
     EngineAssetScene *scene = viewer->assetScene();
     auto subject = scene->subject();
-    out["subject"] = subject ? subject->getName() : QString();
+    out["subject"] = subject ? QString::fromStdString(subject->getName()) : QString();
 
     const iris::AABB bounds = scene->subjectBounds();
     if (bounds.getMin().x() <= bounds.getMax().x()) {

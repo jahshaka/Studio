@@ -200,8 +200,8 @@ int main(int argc, char **argv)
                 for (const auto &vb : meshNode->getMesh()->getVertexBuffers()) {
                     if (!vb) continue;
                     const auto attribs = vb->vertexLayout.getAttribs();
-                    if (!attribs.isEmpty() &&
-                        attribs.first().usage == iris::VertexAttribUsage::Color)
+                    if (!attribs.empty() &&
+                        attribs.front().usage == iris::VertexAttribUsage::Color)
                         documentHasColour = true;
                 }
             }

@@ -239,14 +239,14 @@ iris::MeshPtr Builder::mesh(const Arrays &a)
         iris::MeshBake::buildCards(m, iris::kDefaultMaxCards);
         mBuilt.bakeMs += nowMs() - t0;
         // THE BAKE'S PRODUCTS, hashed: the level table and the DAG (its clusters and groups are padding-free PODs)
-        for (const QVector<quint32> &level : m->lodIndices)
-            mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(level.constData()), level.size() * qsizetype(sizeof(quint32))));
+        for (const std::vector<quint32> &level : m->lodIndices)
+            mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(level.data()), level.size() * qsizetype(sizeof(quint32))));
         const iris::MeshClusterDag &dag = m->clusterDag;
-        mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(dag.clusters.constData()),
+        mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(dag.clusters.data()),
                                          dag.clusters.size() * qsizetype(sizeof(iris::MeshClusterDag::Cluster))));
-        mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(dag.groups.constData()),
+        mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(dag.groups.data()),
                                          dag.groups.size() * qsizetype(sizeof(iris::MeshClusterDag::Group))));
-        mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(dag.vertices.constData()),
+        mBakeHash.addData(QByteArrayView(reinterpret_cast<const char *>(dag.vertices.data()),
                                          dag.vertices.size() * qsizetype(sizeof(quint32))));
         mBakeHash.addData(dag.triangles);
     }
@@ -339,7 +339,7 @@ int Builder::instance(const iris::MeshPtr &m, const QString &name, const QString
                       bool twoSided)
 {
     auto node = iris::MeshNode::create();
-    node->setName(name);
+    node->setName(name.toStdString());
     node->setMesh(m);
     node->setLocalPos(pos);
     node->setLocalRot(iris::Quat::fromEulerAngles(0.0f, yaw, 0.0f));

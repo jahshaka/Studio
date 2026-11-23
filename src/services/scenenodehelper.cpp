@@ -25,7 +25,7 @@ iris::MeshNodePtr SceneNodeHelper::createBasicMeshNode(
     node->setMesh(PrimitiveAssets::mesh(meshSeed, db));
     node->meshPath = meshSeed;
     node->meshIndex = 0;
-    node->setName(meshName);
+    node->setName(meshName.toStdString());
     node->setGUID(meshGuid);
     node->isBuiltIn = true;
     return node;

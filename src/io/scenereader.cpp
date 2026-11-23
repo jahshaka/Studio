@@ -732,7 +732,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const QString rootGuid = rootNode["guid"].toString();
         if (!rootGuid.isEmpty()) scene->getRootNode()->setGUID(rootGuid);
         const QString rootName = rootNode["name"].toString();
-        if (!rootName.isEmpty()) scene->getRootNode()->setName(rootName);
+        if (!rootName.isEmpty()) scene->getRootNode()->setName(rootName.toStdString());
         readAnimationData(rootNode, scene->getRootNode());
     }
 
@@ -856,7 +856,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     readAnimationData(nodeObj,sceneNode);
 
     //read name
-    sceneNode->name = nodeObj["name"].toString("");
+    sceneNode->name = (nodeObj["name"].toString("")).toStdString();
     // A NODE WITHOUT A GUID IS UNADDRESSABLE — no script verb, no MCP tool, no
     // per-node DB row and no undo command can name it — so one is MINTED here
     // rather than carried through as "".
@@ -909,7 +909,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         if (!iris::mobilityFromName(nodeObj["mobility"].toString(), mobility)) {
             qWarning("SceneReader: node '%s' carries an unknown mobility '%s' — resolving it "
                      "automatically instead.",
-                     qUtf8Printable(sceneNode->getName()),
+                     sceneNode->getName().c_str(),
                      qUtf8Printable(nodeObj["mobility"].toString()));
             mobility = iris::Mobility::Auto;
         }
@@ -1004,7 +1004,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
             } else {
                 qWarning("SceneReader: node '%s' has an invalid locomotion asset (%s) — "
                          "falling back to the generated default",
-                         qUtf8Printable(sceneNode->getName()), qUtf8Printable(err));
+                         sceneNode->getName().c_str(), qUtf8Printable(err));
                 loco->setDefaultAsset(roles, mp.walkSpeed, mp.runSpeed);
             }
         } else {
@@ -1148,7 +1148,7 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
             const QJsonObject skelAnim = animObj.value(QLatin1String("skeletalAnimation")).toObject();
             auto skel = this->getSkeletalAnimation(skelAnim.value(QLatin1String("guid")).toString(),
                                                    skelAnim.value(QLatin1String("name")).toString(),
-                                                   sceneNode->getName());
+                                                   QString::fromStdString(sceneNode->getName()));
             animation->setSkeletalAnimation(skel);
         }
 
@@ -1600,7 +1600,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
         (float) nodeObj["gravityComplement"].toDouble(particleNode->gravityComplement));
     particleNode->setBlendMode(nodeObj["blendMode"].toBool(particleNode->useAdditive));
     particleNode->setLife((float) nodeObj["lifeLength"].toDouble(particleNode->lifeLength));
-    particleNode->setName(nodeObj["name"].toString());
+    particleNode->setName(nodeObj["name"].toString().toStdString());
     particleNode->setSpeed((float) nodeObj["speed"].toDouble(particleNode->speed));
 
     // ---- ParticleFX2 keys (PARTICLES_FX2_SPEC §5) --------------------------
@@ -1902,7 +1902,7 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
         if (baked) {
             meshList = baked->meshes;
             animationss = baked->animations;
-            for (auto &anim : animationss) anim->source = filePath;
+            for (auto &anim : animationss) anim->source = filePath.toStdString();
             meshes.insert(cacheKey, meshList);
             assimpScenes.insert(cacheKey);
             animations.insert(cacheKey, animationss);
@@ -2029,8 +2029,8 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(const QString &asse
         // driver (rule 1), so the node does not settle into the static graph class while it waits.
         if (MeshBakeStore::bakePending(path)) {
             auto placeholder = iris::SkeletalAnimation::create();
-            placeholder->name = animName;
-            placeholder->assetGuid = assetGuid;
+            placeholder->name = animName.toStdString();
+            placeholder->assetGuid = assetGuid.toStdString();
             JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("scene reader: the clip '%1' on '%2' waits for its model's bake — "
                                                                              "bound when it lands").arg(animName, nodeName));
             return placeholder;
@@ -2045,7 +2045,7 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(const QString &asse
                         .arg(QStringList(clips.keys()).join(QStringLiteral(", "))));
     iris::SkeletalAnimationPtr found = clips.value(animName);
 
-    found = iris::SkeletalAnimation::referencedAs(found, assetGuid);
-    found->source = path;
+    found = iris::SkeletalAnimation::referencedAs(found, assetGuid.toStdString());
+    found->source = path.toStdString();
     return found;
 }

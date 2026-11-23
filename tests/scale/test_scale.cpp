@@ -389,7 +389,7 @@ static void lightListArms(Env &env)
     auto lamp = [&](const QString &name, iris::Vec3 pos, float intensity, float range) {
         auto l = iris::LightNode::create();
         l->setLightType(iris::LightType::Point);
-        l->setName(name);
+        l->setName(name.toStdString());
         l->setLocalPos(pos);
         env.doc->getRootNode()->addChild(l);
         l->setPropertyValue("intensity", intensity);
@@ -539,7 +539,7 @@ static void lightListArms(Env &env)
         const float areaI = k * fillerI / (dF * dF) * (r2 + dF * dF) / r2;
         auto area = iris::LightNode::create();
         area->setLightType(iris::LightType::Area);
-        area->setName(QStringLiteral("area"));
+        area->setName((QStringLiteral("area")).toStdString());
         area->setLocalPos(iris::Vec3(0.0f, 2.0f, -1.5f));
         env.doc->getRootNode()->addChild(area);
         area->setPropertyValue("intensity", areaI);
@@ -549,7 +549,7 @@ static void lightListArms(Env &env)
         auto spot = [&](const QString &name, float x) {
             auto l = iris::LightNode::create();
             l->setLightType(iris::LightType::Spot);
-            l->setName(name);
+            l->setName(name.toStdString());
             l->setLocalPos(iris::Vec3(x, g0.cascades[0].centre.y, g0.cascades[0].centre.z));
             // a light shines along its -Y (the document convention): a +90 degree roll aims it +x
             l->setLocalRot(iris::Quat::fromEulerAngles(0.0f, 0.0f, 90.0f));
@@ -784,7 +784,7 @@ static int lightsMain()
         for (int i = 0; i < fillers; ++i) {
             auto l = iris::LightNode::create();
             l->setLightType(iris::LightType::Point);
-            l->setName(QStringLiteral("filler%1").arg(i));
+            l->setName((QStringLiteral("filler%1").arg(i)).toStdString());
             // NEAR: an 8 x 8 lattice at a 0.5 m pitch, 1.5 m above the eye's own spot —
             // every range sphere (3 m) holds the eye, so it reaches the box cascade 0 is
             // centred on whatever the box's quantisation. FAR: D1's 40 m placement.
@@ -907,7 +907,7 @@ static int lightsCostMain()
             const float a = 6.2831853f * float(i) / float(cluster);
             auto l = iris::LightNode::create();
             l->setLightType(iris::LightType::Point);
-            l->setName(QStringLiteral("cluster%1").arg(i));
+            l->setName((QStringLiteral("cluster%1").arg(i)).toStdString());
             l->setLocalPos(iris::Vec3(eye.x() + 3.0f * std::cos(a), 3.0f, eye.z() + 3.0f * std::sin(a)));
             env.doc->getRootNode()->addChild(l);
             l->setPropertyValue("intensity", 0.5f);

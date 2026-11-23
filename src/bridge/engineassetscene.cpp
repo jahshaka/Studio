@@ -214,7 +214,7 @@ iris::SceneNodePtr EngineAssetScene::setMaterialSubject(iris::MaterialPtr materi
     auto sphere = previewSphere();
     if (sphere) matball->setMesh(sphere);
     matball->setLocalPos(iris::Vec3(0, 0, 0));
-    matball->setName(name);
+    matball->setName(name.toStdString());
     matball->setPickable(false);
     matball->setShadowCastingEnabled(true);
     if (material) matball->setMaterial(material);

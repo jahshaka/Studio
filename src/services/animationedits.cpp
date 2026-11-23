@@ -56,7 +56,7 @@ bool putKey(iris::FloatKeyFrame *frame, double time, float value)
 /// calculateAnimationLength believes it). Put it back to the honest answer.
 void refreshFrameLength(iris::FloatKeyFrame *frame)
 {
-    frame->length = frame->keys.isEmpty() ? 0.0f : float(frame->keys.last()->time);
+    frame->length = frame->keys.empty() ? 0.0f : float(frame->keys.back()->time);
 }
 
 }   // namespace

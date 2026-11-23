@@ -66,7 +66,7 @@ iris::ScenePtr sceneWithChildren(int n, QList<iris::SceneNodePtr> &out)
     auto scene = iris::Scene::create();
     for (int i = 0; i < n; ++i) {
         auto node = iris::SceneNode::create();
-        node->setName(QStringLiteral("child%1").arg(i));
+        node->setName((QStringLiteral("child%1").arg(i)).toStdString());
         scene->getRootNode()->addChild(node, false);
         out.append(node);
     }
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
         QList<iris::SceneNodePtr> kids;
         auto scene = sceneWithChildren(3, kids);
         auto copy = iris::SceneNode::create();
-        copy->setName(QStringLiteral("copy"));
+        copy->setName((QStringLiteral("copy")).toStdString());
 
         QUndoStack stack;
         push(stack, new AddSceneNodeCommand(scene->getRootNode(), copy, /*position=*/1),
@@ -291,11 +291,11 @@ int main(int argc, char **argv)
     {
         auto scene = iris::Scene::create();
         auto sun = iris::LightNode::create();
-        sun->setName(QStringLiteral("Sun"));
+        sun->setName((QStringLiteral("Sun")).toStdString());
         sun->lightType = iris::LightType::Directional;
         scene->getRootNode()->addChild(sun);
         auto second = iris::LightNode::create();
-        second->setName(QStringLiteral("Moon"));
+        second->setName((QStringLiteral("Moon")).toStdString());
         second->lightType = iris::LightType::Directional;
         second->forwardShadingPriority = 1;
         scene->getRootNode()->addChild(second);
@@ -332,9 +332,9 @@ int main(int argc, char **argv)
     {
         auto scene = iris::Scene::create();
         auto first = iris::CameraNode::create();
-        first->setName(QStringLiteral("Camera"));
+        first->setName((QStringLiteral("Camera")).toStdString());
         auto second = iris::CameraNode::create();
-        second->setName(QStringLiteral("Camera2"));
+        second->setName((QStringLiteral("Camera2")).toStdString());
 
         QUndoStack stack;
         push(stack, new AddSceneNodeCommand(scene->getRootNode(), first), &services);
@@ -359,7 +359,7 @@ int main(int argc, char **argv)
 
         // A NON-CAMERA ADD IS NOT A CAMERA ADD (the branch's other side).
         auto plain = iris::SceneNode::create();
-        plain->setName(QStringLiteral("Empty"));
+        plain->setName((QStringLiteral("Empty")).toStdString());
         push(stack, new AddSceneNodeCommand(scene->getRootNode(), plain), &services);
         CHECK(scene->getActiveCamera() == first, "adding a non-camera node changes nothing");
 
@@ -376,9 +376,9 @@ int main(int argc, char **argv)
         stack.redo();
         CHECK(scene->getActiveCameraGuid().isEmpty(), "camera delete/redo: cleared again");
         auto group = iris::SceneNode::create();
-        group->setName(QStringLiteral("Group"));
+        group->setName((QStringLiteral("Group")).toStdString());
         auto nested = iris::CameraNode::create();
-        nested->setName(QStringLiteral("Nested"));
+        nested->setName((QStringLiteral("Nested")).toStdString());
         group->addChild(nested);
         push(stack, new AddSceneNodeCommand(scene->getRootNode(), group), &services);
         CHECK(scene->getActiveCamera() == nested,
