@@ -139,6 +139,7 @@
 #include <cstdio>
 #include <fstream>
 #include <functional>
+#include <optional>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -364,7 +365,8 @@ int main(int argc, char **argv)
             if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return o; }
             Engine *e = engine.get();
             e->setRayTracing(true);
-            e->setFramePace(FramePace::Streaming);
+            // every frame of this run on the Streaming pace; given back (Complete) before the engine goes, below
+            std::optional<enginetest::StreamingPace> streaming(std::in_place, e);
             e->setArm("rays.buildHold", kHoldForever);
             e->setArm("rays.buildHoldIds", kReaderBuilds);   // both routes owed: the ahead pass AND the request-only decode
             if (aheadOff) e->setArm("shaders.aheadPassOff", 1.0);
@@ -399,6 +401,7 @@ int main(int argc, char **argv)
                         aheadOff ? "OFF" : "ON ", quietAt + 1, o.pictureFrame, o.frames, o.aheadRun, o.overOwn, o.promoted,
                         o.skips, o.placeholders);
             drop(e, r);
+            streaming.reset();   // the pace given back while the engine lives
             engine.reset();
             return o;
         };
@@ -432,7 +435,8 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->setRayTracing(true);
-    e->setFramePace(FramePace::Streaming);   // in force until set again: every frame of the row
+    // every frame of the row on the Streaming pace (the engine holds a pace until set again); .complete gives it back
+    std::optional<enginetest::StreamingPace> streaming(std::in_place, e);
     int frames = 0;
     char w[320];
     const auto inFlight = [&]() { return e->published().shaders.rayBuildsInFlight; };
@@ -648,7 +652,7 @@ int main(int argc, char **argv)
 
     // ---- .complete: a Complete frame of an asynchronous room never joins; a synchronous room does (the control) -------
     if (mode == "complete") {
-        e->setFramePace(FramePace::Complete);
+        streaming.reset();   // Complete given back: every frame of .complete is Complete
         e->setArm("rays.buildHold", kHoldForever);
         e->setArm("rays.buildHoldIds", kReaderBuilds);
         for (const bool async : { true, false }) {

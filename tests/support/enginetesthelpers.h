@@ -424,7 +424,11 @@ template <class E> void frames(E &&e, int n, const FrameInput &rec) { frames(std
 /// Complete back, their comments saying the engine resets it - it does not). Engine::setFramePace holds a pace for every
 /// frame until it is set again (Engine.h), and frames() above never touches it. While a StreamingPace lives the frames
 /// run Streaming (a compile may land a frame later); at its end Complete - every test's pace outside such a stretch and
-/// the engine's own default - so a later law never inherits a pace it did not ask for.
+/// the engine's own default - so a later law never inherits a pace it did not ask for. Complete is given back, not "the
+/// previous pace": the engine has no getter. So a Streaming stretch can never be nested inside another pace by this
+/// guard: a test that needs a pace other than Complete around one cannot use it (none does), and the only other pace
+/// is Streaming itself. A test sets Streaming ONLY through this guard (source.testing_rules R20); destroy it while its
+/// engine lives (an engine reset first would leave it a dangling engine).
 struct StreamingPace {
     Engine *engine = nullptr;
     explicit StreamingPace(Engine *e) : engine(e) { if (engine) engine->setFramePace(FramePace::Streaming); }

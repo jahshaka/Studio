@@ -108,6 +108,11 @@ tree and the build's registration, each with its name in the failure line:
      Ubuntu `sh` is dash, and a bash-only construct ($'...', [[ ]], arrays, pipefail) in it fails or does something else
      there. Such a row is registered `COMMAND bash <script>`. WHY: rtreflect.sky_invariant.first/.hold never ran (dash broke
      its $'...', e806ae21a on photon-7-9a), and 47 rows ran a bash script under dash, each one bash-only line from a red.
+  R20 A TEST SETS THE STREAMING PACE ONLY THROUGH enginetest::StreamingPace (SHADER-SYSTEM-1 7.0's final read, reader 25,
+     2026-11-23). Engine::setFramePace holds a pace until it is set again and enginetest::frames never touches it; four rows
+     set Streaming with "the engine resets it" and every later law of theirs ran Streaming unasked (gi.screen_bind's (4) and
+     (6), gi.async_arm_cold's Complete-frame control). A test source (tests/**, its comments and strings blanked) that calls
+     setFramePace(FramePace::Streaming) is RED; the guard (tests/support/enginetesthelpers.h) sets it and gives Complete back.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -586,6 +591,17 @@ def _bash_script(path, first_line=None):
     return bool(_BASH_SHEBANG.match(first_line))
 
 
+R20_STREAMING = re.compile(r"setFramePace\s*\(\s*(?:[\w:]*::)?FramePace::Streaming\s*\)")
+R20_GUARD = "tests/support/enginetesthelpers.h"
+
+
+def r20_bad(files):
+    """R20: [path:line] of every setFramePace(FramePace::Streaming) in a test's CODE outside the guard's own header.
+    `files`: {relative path: text}."""
+    return ["%s:%d" % (f, t[:m.start()].count("\n") + 1) for f, t in sorted(files.items()) if f != R20_GUARD
+            for m in R20_STREAMING.finditer(_r10_blank(t))]
+
+
 def r19_bad(tests, first_line=None):
     """R19: [`row (script)`] - a row whose argv hands a bash-shebang script to sh / dash, anywhere in it (a `-c` string is
     no script). `first_line` (the suites'): {path: its first line} instead of the files."""
@@ -866,6 +882,12 @@ def the_rules_catch():
                            t19("n", "sh", "/s/n.sh"), t19("x", "/s/b.sh")], fl),
           "R19 flags a bash-shebang script handed to sh or dash (at any place in the argv), never one under bash, a POSIX "
           "script under sh, a -c string or a script run by its own shebang")
+    check(r20_bad({"tests/a.cpp": "x;\n    e->setFramePace(FramePace::Streaming);\n",
+                   "tests/b.cpp": "// e->setFramePace(FramePace::Streaming);\nconst enginetest::StreamingPace s(e);\n"
+                                  "e->setFramePace(FramePace::Complete);\n",
+                   R20_GUARD: "engine->setFramePace(FramePace::Streaming);\n"}) == ["tests/a.cpp:2"],
+          "R20 flags a test's setFramePace(FramePace::Streaming) in code, never one in a comment, the guard, a Complete "
+          "or the guard's own header")
     bare = 'add_test(NAME a.b COMMAND x)\nset_tests_properties(a.b PROPERTIES\n    RUN_SERIAL TRUE)'
     other = '# RUN_SERIAL: x.y compiles shaders\nadd_test(NAME x.y COMMAND x)\n' + bare
     check(r4_bad("t", bare, set()) == ["t:3 (a.b)"] and not r4_bad("t", "# RUN_SERIAL: it compiles shaders\n" + bare, set())
@@ -1483,6 +1505,15 @@ def main(source, build):
     bad = r19_bad(tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     check(not bad, "R19 a bash script runs under bash: no row hands a bash-shebang script to sh / dash (registered COMMAND "
           "bash) (%d under sh: %s)" % (len(bad), bad[:12]))
+    r20_files = {}
+    for root, _, names in os.walk(os.path.join(source, "tests")):
+        for n in names:
+            if n.endswith((".cpp", ".h", ".hpp")):
+                fp = os.path.join(root, n)
+                r20_files[os.path.relpath(fp, source)] = open(fp, errors="replace").read()
+    bad = r20_bad(r20_files)
+    check(not bad, "R20 a test sets the Streaming pace only through enginetest::StreamingPace, which gives Complete back "
+          "(%d by hand: %s)" % (len(bad), bad[:12]))
     rp = os.path.join(source, ROUTES_PENDING)
     if not os.path.isfile(rp):
         check(False, "R16 %s exists (the routes ratchet)" % ROUTES_PENDING)
