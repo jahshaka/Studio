@@ -22,6 +22,9 @@ each of the five filters, in colour types 6 and 2 (a decode equal to the source;
 byte of a copy refused by its CRC. ANY fault (a dead server, a line that is not JSON, a malformed answer) is a named FAIL and
 the last line is always the verdict; on a failure both children's own output (the server's stderr, the script run's
 stdout and stderr) is printed before it.
+THE ROW IS COLD (tests/engine/CMakeLists.txt says why: a displayless boot refuses a displayed boot's pipeline cache): the
+warm-up's cold-on runs THIS driver once, uncapped, to its own end, so jahengine's displayless pipelines are in the driver's
+cache when the capped run comes.
 Run: mcp_engine_session.py <jahengine> [--self-test]
 """
 import base64
@@ -279,7 +282,9 @@ def main():
         failures += 0 if ok else 1
 
     jahengine = sys.argv[1]
-    # the row's own directory, made fresh, under the row's own HOME (jah_gpu_row's fresh home; the working directory without one)
+    # the row's own directory, made fresh, under $HOME - the rig's home in a row run (rig.sh run: <data root>/home; a COLD
+    # row has no fresh_home wrapper, and fresh_home.sh sets no HOME either), the warm-up's own home in its cold-on prime;
+    # the working directory without one
     root = os.path.join(os.environ.get("HOME") or os.getcwd(), "mcp_engine_session.d")
     shutil.rmtree(root, ignore_errors=True)
     os.makedirs(root)
