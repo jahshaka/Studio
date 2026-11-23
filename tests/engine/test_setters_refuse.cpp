@@ -126,16 +126,22 @@ int setters(Engine &e)
               "directional light reads none; THE CONTROL: a light with no profile is set silently");
         s->removeLight(live);
     }
-    // 4. A PARTICLE SYSTEM's MISSING COLOUR RAMP: setParticleSystem REFUSED naming the file
+    // 4. A PARTICLE SYSTEM's MISSING COLOUR RAMP: setParticleSystem REFUSED naming the file; a ramp affector with an EMPTY
+    //    path is "no ramp image yet" - a legal record (engine.particles.set sends every ramp so; the path comes by its
+    //    own `files` command) - ACCEPTED, no error (the lead, 2026-11-23)
     {
         ParticleSystemDesc d;
         d.emitters.push_back(ParticleEmitterDesc{});
         ParticleAffectorDesc ramp;
         ramp.kind = ParticleAffectorDesc::Kind::ColourRamp;
-        ramp.colourRampPath = "/no/such/dir/ramp.png";
         d.affectors.push_back(ramp);
+        const bool empty = s->setParticleSystem(live, d);
+        const std::string emptyErr = e.takeLastError();
+        d.affectors[0].colourRampPath = "/no/such/dir/ramp.png";
         const bool set = s->setParticleSystem(live, d);
         const std::string err = e.takeLastError();
+        check(empty && emptyErr.empty(), "A RAMP AFFECTOR WITH AN EMPTY PATH (no ramp image yet) is ACCEPTED: "
+                                         "setParticleSystem true, no error ('" + emptyErr + "')");
         check(!set && err.find("ramp.png") != std::string::npos,
               "A MISSING PARTICLE COLOUR RAMP: setParticleSystem is REFUSED naming it ('" + err + "')");
         s->removeParticleSystem(live);
