@@ -671,11 +671,13 @@ jah_gpu_row(script.trace_rays_mask CLASS engine FRAMES 4
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(script.trace_rays_mask PROPERTIES TIMEOUT 60 LABELS "engine")
 
-# script.reflector_attach_quiet (SCRIPT-IN-ENGINE-1 2f, the train's card: P14, the lead's ruling) — A MESH ATTACHED TO AN
-# ARMED REFLECTOR THAT CANNOT RE-ARM PUBLISHES NO REFUSAL: attachMesh answers true and leaves no error (OgreMaterials.cpp's
-# restore), so input.messagesRefused does not move and reflectorArms reads 1 -> 1; THE CONTROL: arming the same two-sided
-# mesh is refused in the reflector's own words. A script run by jahengine. 7 frames.
-jah_gpu_row(script.reflector_attach_quiet CLASS engine FRAMES 7
+# script.reflector_attach_quiet (SCRIPT-IN-ENGINE-1 2f, the train's card: P14, the lead's ruling) — A MESH ATTACHED TO A
+# REFLECTOR THAT CANNOT RE-ARM LEAVES NO ERROR: engine.node.attachMesh on a flagged reflector node made two-sided answers
+# true, leaves the engine's error sink empty and publishes no refusal (OgreMaterials.cpp attachMesh's restore: the mirror
+# retries its pushes), its re-arm truly failed (active planes 0); THE CONTROL: the plate un-flagged and armed again is
+# refused in the reflector's own words. (A verb that DISARMS an armed reflector leaves the reflector's refusal by design:
+# CULL-TWIN-DEBTS-1, engine.planar_asan.) A script run by jahengine. 10 frames (3 + 3 + 3 + 1).
+jah_gpu_row(script.reflector_attach_quiet CLASS engine FRAMES 10
          COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/script_reflector_attach_quiet.js" --name script.reflector_attach_quiet
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(script.reflector_attach_quiet PROPERTIES TIMEOUT 60 LABELS "engine")
