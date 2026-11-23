@@ -1,0 +1,13 @@
+engine.shaders.wait Engine::waitForAsyncShaders
+engine.shaders.placeholdersOnly Engine::setAsyncShaderPlaceholdersOnly
+engine.shaders.saveCache Engine::saveShaderCache
+engine.shaders.flushCache Engine::flushShaderCache
+engine.shaders.prepareRays Engine::prepareRayPipelines
+engine.shaders.progress Engine::shaderBuildProgress
+engine.display.setPeriod Engine::setDisplayPeriod
+engine.takeLastError Engine::takeLastError
+engine.textureMemory Engine::textureMemory
+engine.validation Engine::validation
+engine.publishRenderStats Engine::publishRenderStats
+engine.publishShadowStatus Engine::publishShadowStatus
+engine.rayQueryAvailable Engine::rayQueryAvailable
