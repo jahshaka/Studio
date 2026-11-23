@@ -1,22 +1,26 @@
-// script.reflector_attach_quiet — A MESH ATTACHED TO AN ARMED REFLECTOR THAT CANNOT RE-ARM PUBLISHES NO REFUSAL
-// (SCRIPT-IN-ENGINE-1 2f, the train's card: P14, the lead's ruling - a law no other row guards). Run by jahengine.
+// script.reflector_attach_quiet — A VERB THAT SUCCEEDS ON AN ARMED REFLECTOR's NODE LEAVES NO ERROR, EVEN WHEN THE
+// REFLECTOR CANNOT RE-ARM (SCRIPT-IN-ENGINE-1 2f, the train's card: P14 and its class, the lead's rulings - a law no
+// other row guards). Run by jahengine.
 //
-// THE LAW (irisgl engine/src/OgreMaterials.cpp, attachMesh's end): a reflector node whose mesh is swapped re-derives its
-// plane from the new geometry; when that fails the node simply stops reflecting - the REFLECTOR's state (the published
-// facts), never attachMesh's error: attachMesh answers true and leaves NO error (`mError = before`), so the record route
-// publishes no refusal for it (OgreEngine::applySceneMessage publishes an accepted message that left an error as
-// REFUSED: SCRIPT-IN-ENGINE-1 2e e1). A regression floods the app's error pump at every sync of such a node.
-// THE FIXTURE: planar reflections at budget 1, a thin plate armed as the reflector (published reflectorArms 1), then its
-// node made two-sided (engine.node.setFaceCull "twoSided": the node wears its material's TWO-SIDED cull twin) and a new
-// mesh attached - the re-arm FAILS (planar::isTwoSided: a two-sided mirror fills its own reflection with itself).
-// THE LAW READ: attachMesh answers true and leaves the engine's error sink EMPTY (engine.takeLastError: the script host
-// calls the engine directly, so the sink is where a left error lands - on the record route the same error is the
-// published refusal); the published refusal count (input.messagesRefused) does not move and reflectorArms reads 1 -> 1
-// three frames later.
+// THE LAW (TRUE LEAVES NO ERROR, SCRIPT-IN-ENGINE-1 2e e1): a node that is a planar reflector re-derives its plane when its
+// geometry or the cull it wears changes; when the re-arm fails the node simply stops reflecting - the REFLECTOR's state,
+// never the verb's error: the verb answers success and leaves the engine's error sink as it was (OgreMaterials.cpp
+// attachMesh's `mError = before`; OgrePlanar.cpp rederiveReflector and rebuildPlanar the same), so the record route
+// publishes no refusal for it (OgreEngine::applySceneMessage publishes an accepted message that left an error as REFUSED).
+// A regression floods the app's error pump at every sync of such a node.
+// THE FIXTURE: planar reflections at budget 1, a thin plate armed as the reflector (one active plane), then
+//   (1) engine.node.setFaceCull(plate, "twoSided"): the node wears its material's TWO-SIDED cull twin and the re-arm FAILS
+//       (planar::isTwoSided: a two-sided mirror fills its own reflection with itself) - the arm is truly lost: the active
+//       planes read 1 -> 0;
+//   (2) engine.node.attachMesh on the same (flagged, two-sided) node: its re-arm fails the same way.
+// THE LAW READ, for each verb: it succeeds, the engine's error sink is EMPTY after it (engine.takeLastError: the script host
+// calls the engine directly, so the sink is where a left error lands - on the record route the same error is the published
+// refusal), and the published refusal count (input.messagesRefused) does not move. reflectorArms is printed (what it reads).
 // THE CONTROL (the path really ran): the same node, un-flagged and asked to arm again by engine.planar.setReflector, is
 // REFUSED in the reflector's own words ("two-sided") - answered false with them, or published as a refusal carrying them.
-// RED ONCE (kept: spikes/script-in-engine-1/red-once/script.reflector_attach_quiet.restore_removed.txt): the restore
-// removed in a scratch engine arm - the attach's error published, the count moves.
+// RED ONCE (kept): attachMesh's restore removed in a scratch engine arm
+// (spikes/script-in-engine-1/red-once/script.reflector_attach_quiet.restore_removed.txt) and setFaceCull at the tip before
+// its fix (script.reflector_attach_quiet.face_cull_before_fix.txt) - the verb's error left in the sink.
 
 const view = engine.view.createOffscreen({name: "reflquiet", width: 64, height: 64, background: [0, 0, 0, 1]});
 const scene = engine.scene.create("reflquiet");
@@ -35,31 +39,44 @@ host.check({ok: engine.planar.setReflector(scene, plate, {on: true}), what: "the
 engine.frames(3);
 
 const refused = () => engine.published({select: ["input"]}).input.messagesRefused;
-const arms = () => engine.scene.published(scene, {select: ["facts"]}).facts.reflectorArms;
-const refused0 = refused(), arms0 = arms();
-host.check({ok: arms0 === 1, what: "the reflector is armed before the swap (reflectorArms " + arms0 + ")"});
+const facts = () => engine.scene.published(scene, {select: ["facts", "activePlanarReflectors"]});
+const before = facts(), refused0 = refused();
+host.check({ok: before.activePlanarReflectors === 1, what: "the reflector is armed before the verbs (active planes " +
+            before.activePlanarReflectors + ", reflectorArms " + before.facts.reflectorArms + ")"});
 
+// (1) setFaceCull "twoSided" on the armed reflector's node
+engine.takeLastError();                 // the engine's one error sink, emptied before the verb
 engine.node.setFaceCull(scene, plate, "twoSided");
-const material = engine.material.createPbr(scene, {roughness: 0.1, metalness: 1});
-const sink0 = engine.takeLastError();   // the engine's one error sink, emptied before the attach
-const attached = engine.node.attachMesh(scene, plate, {mesh: cube, material});
-const sink1 = engine.takeLastError();   // what the attach left in it (the script host calls the engine directly)
+const sinkCull = engine.takeLastError();
 engine.frames(3);
-const refused1 = refused(), arms1 = arms();
-host.check({ok: attached === true && sink1 === "" && refused1 === refused0 && arms1 === arms0,
-            what: "a two-sided mesh attached to the armed reflector: attachMesh " + attached + ", the error it left '" + sink1 +
-                  "' (the sink before: '" + sink0 + "'), published refusals " + refused0 + " -> " + refused1 +
-                  ", reflectorArms " + arms0 + " -> " + arms1});
+const afterCull = facts(), refusedCull = refused();
+host.check({ok: sinkCull === "" && refusedCull === refused0 && afterCull.activePlanarReflectors === 0,
+            what: "(1) setFaceCull twoSided on the armed reflector: the error it left '" + sinkCull + "', published refusals " +
+                  refused0 + " -> " + refusedCull + "; the arm truly lost: active planes " + before.activePlanarReflectors +
+                  " -> " + afterCull.activePlanarReflectors + " (reflectorArms " + before.facts.reflectorArms + " -> " +
+                  afterCull.facts.reflectorArms + ")"});
 
-// THE CONTROL: the reflector's own refusal for this mesh, by its words (off first: a node already flagged answers
-// true without measuring, OgrePlanar.cpp setNodePlanarReflector)
+// (2) attachMesh on the same flagged, two-sided node
+const material = engine.material.createPbr(scene, {roughness: 0.1, metalness: 1});
+engine.takeLastError();
+const attached = engine.node.attachMesh(scene, plate, {mesh: cube, material});
+const sinkAttach = engine.takeLastError();
+engine.frames(3);
+const afterAttach = facts(), refusedAttach = refused();
+host.check({ok: attached === true && sinkAttach === "" && refusedAttach === refusedCull,
+            what: "(2) attachMesh on the flagged two-sided reflector: answered " + attached + ", the error it left '" + sinkAttach +
+                  "', published refusals " + refusedCull + " -> " + refusedAttach + " (active planes " +
+                  afterAttach.activePlanarReflectors + ", reflectorArms " + afterAttach.facts.reflectorArms + ")"});
+
+// THE CONTROL: the reflector's own refusal for this mesh, by its words (off first: a node already flagged answers true
+// without measuring, OgrePlanar.cpp setNodePlanarReflector)
 host.check({ok: engine.planar.setReflector(scene, plate, {on: false}), what: "the plate un-flagged"});
 const armed = engine.planar.setReflector(scene, plate, {on: true});
 const said = host.lastError();
 engine.frames(1);
 const pub = engine.published({select: ["refusals", "input"]});
 const texts = (pub.refusals || []).map(r => r.text || JSON.stringify(r));
-const published = pub.input.messagesRefused > refused1 && texts.some(t => t.includes("two-sided"));
+const published = pub.input.messagesRefused > refusedAttach && texts.some(t => t.includes("two-sided"));
 host.check({ok: (armed === false && said.includes("two-sided")) || published,
             what: "THE CONTROL: arming the two-sided mesh is refused in the reflector's words (answer " + armed + ", '" + said +
-                  "'; published " + (pub.input.messagesRefused - refused1) + " " + JSON.stringify(texts.slice(-1)) + ")"});
+                  "'; published " + (pub.input.messagesRefused - refusedAttach) + " " + JSON.stringify(texts.slice(-1)) + ")"});
