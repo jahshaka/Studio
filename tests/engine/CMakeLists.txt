@@ -733,7 +733,16 @@ jah_no_display(engine.png_pixels)
 # types 2 and 6) to engine.picture.bytes exactly, and `jahengine --script` running the same calls hashes the same picture;
 # the server exits 0 at stdin's end. It prints the PNG's bytes and the alpha's min / max. mcp_engine_session.py says the
 # laws (its decoder's self-test first). Two boots of 90 frames.
+# COLD (its warm state is its OWN, primed by the warm-up's cold-on: frame.monitor_pop's declaration, copied): the row's law
+# boots WITHOUT A DISPLAY, and on this card and driver the device's pipelineCacheUUID differs without one
+# (spikes/g1-train/TRAP-pipeline-uuid.md), so the shared engine cache - written by displayed boots - is refused ("Pipeline
+# cache outdated, not loaded") and every ray pipeline went to the driver's compiler: TIMEOUT 60.1 s twice on G1-TRAIN's
+# check, nothing stored. The cold-on boot (scripts/warm-app-cache.sh, tests/support/warm_cold_rows.sh) runs THIS command
+# once, UNCAPPED, the driver's per-executable disk cache ON: the same driver, so the same displayless children; its end is
+# the driver's own (the lockstep frames join the ray compiles before readPixels answers), and it stores jahengine's
+# pipelines in the box's driver cache, which this capped run then reads. No shared engine cache, no wrapper.
 jah_gpu_row(mcp.engine_session CLASS engine FRAMES 180
+         COLD "its law boots without a display: the shared cache is a displayed boot's (another pipelineCacheUUID), so its pipelines are primed displayless by the cold-on boot into the driver's cache"
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/mcp_engine_session.py" $<TARGET_FILE:jahengine>
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mcp.engine_session PROPERTIES TIMEOUT 60 LABELS "engine")
