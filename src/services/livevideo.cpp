@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QVideoFrame>
 #include <QVideoSink>
 
+#include "services/imagedecode.h"
 #include "services/livetextures.h"
 
 namespace {
@@ -69,9 +70,11 @@ void LiveVideoBinding::onFrame(const QVideoFrame &frame)
     // for.
     if (image.width() != w || image.height() != h)
         image = image.scaled(w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    if (image.format() != QImage::Format_RGBA8888)
-        image = image.convertToFormat(QImage::Format_RGBA8888);
-    if (!LiveTextureCatalog::write(liveGuid, image, &lastError)) return;
+    // NO COPY OF OURS (the owner's bar): the conversion to RGBA8888 the frame always needed (toImage gives RGB32 or
+    // ARGB32_Premultiplied) is ONE pass that writes into `spare`, the buffer the texture handed back last frame;
+    // the write then swaps it in. The passes a frame pays are the ones it paid before NOQT-DOCUMENT-1 stage 3.
+    if (!imagedecode::intoImage(image, spare)) return;
+    if (!LiveTextureCatalog::write(liveGuid, spare, &lastError)) return;
     ++frameCount;
     // WHERE THE CLIP IS, on an unwrapped timeline (a loop's wraps counted): the
     // stepped clock compares its target with it.

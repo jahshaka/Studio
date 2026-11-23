@@ -294,7 +294,10 @@ void apply(const iris::ScenePtr &scene)
         sky = iris::LiveTextures::create(QString::fromLatin1(kSkyGuid),
                                          QStringLiteral("Preview studio environment"),
                                          kWidth, kHeight, false);
-        if (sky) sky->writeLive(imagedecode::toImage(image()));
+        if (sky) {
+            iris::Image frame = imagedecode::toImage(image());   // once a process, not a frame
+            sky->writeLive(frame);
+        }
     }
     if (sky) {
         scene->setSkyTexture(sky);

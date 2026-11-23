@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "irisgl/document/assets/livetextures.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "services/imagedecode.h"
 
 QVector<LiveTextureCatalog::Record> &LiveTextureCatalog::rows()
 {
@@ -53,7 +52,7 @@ QString LiveTextureCatalog::create(const QString &name, int width, int height, b
     return guid;
 }
 
-bool LiveTextureCatalog::write(const QString &guid, const QImage &rgba, QString *error)
+bool LiveTextureCatalog::write(const QString &guid, iris::Image &rgba, QString *error)
 {
     auto refuse = [error](const QString &message) {
         if (error) *error = message;
@@ -62,12 +61,12 @@ bool LiveTextureCatalog::write(const QString &guid, const QImage &rgba, QString 
     iris::Texture2DPtr tex = iris::LiveTextures::find(guid);
     if (!tex) return refuse(QStringLiteral("no live texture '%1'").arg(guid));
     if (rgba.isNull()) return refuse(QStringLiteral("the image is empty"));
-    if (rgba.width() != tex->getWidth() || rgba.height() != tex->getHeight())
+    if (rgba.width != tex->getWidth() || rgba.height != tex->getHeight())
         return refuse(QStringLiteral("live texture '%1' is %2x%3 and cannot resize — "
                                      "destroy it and create a %4x%5 one instead")
                           .arg(guid).arg(tex->getWidth()).arg(tex->getHeight())
-                          .arg(rgba.width()).arg(rgba.height()));
-    if (!tex->writeLive(imagedecode::toImage(rgba))) return refuse(QStringLiteral("the write was refused"));
+                          .arg(rgba.width).arg(rgba.height));
+    if (!tex->writeLive(rgba)) return refuse(QStringLiteral("the write was refused"));
     return true;
 }
 
