@@ -1109,7 +1109,13 @@ class Selection:
         for n, t in inv.items():
             self.by_dir[t["dir"]].append(n)
             self.by_prefix[n.split(".", 1)[0]].append(n)
-        self.mods = {n: script_modules(t["script"]) for n, t in inv.items() if t["script"] and not t["arms"]}
+        # THE APP's MODULES ARE THE APP's (SCRIPT-IN-ENGINE-1 2f, the train's card): a script the APP runs calls the
+        # app's ApiModules (node.create, scene.addLight); a script a COMPILED host runs (jahengine, jahlab: the engine's own
+        # script host, linking no src/scripting) calls the engine's commands (engine.node.create) whose middle word only
+        # LOOKS like a module - read as one, every jahengine row rode a document/physics rule's [module node]
+        # (gate.selection's BULLET-BATCHING-1 replay, spikes/script-in-engine-1/train/gate-selection-module-node.txt)
+        self.mods = {n: script_modules(t["script"]) for n, t in inv.items()
+                     if t["script"] and not t["arms"] and t.get("kind", "app") != "compiled"}
         # A HARNESS that drives the app over MCP (compiled with JAHSHAKA_BINARY; open.responsive,
         # avatar.responsive, scripting.e2e.texture_missing, ...) calls verbs by name in its own
         # source ("avatar.importAvatar(..."): those are its modules, so an API change selects it
