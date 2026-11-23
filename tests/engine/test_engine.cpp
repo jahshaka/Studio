@@ -2960,14 +2960,24 @@ void texture_cache_keys_on_colour_space() {
     CHECK_MSG(srgb != linear,
               "the same file in two colour spaces is TWO textures, not one "
               "(got id %u twice)", srgb);
-    // Dedup still works WITHIN a colour space — the fix must not turn every
-    // load into a new texture.
-    CHECK_MSG(s->loadTexture(path, true) == srgb, "an sRGB reload dedups to the sRGB texture");
-    CHECK_MSG(s->loadTexture(path, false) == linear, "a linear reload dedups to the linear one");
-    // And the index stays in step: destroying one leaves the other findable.
+    // DEDUP WITHIN A COLOUR SPACE (re-derived 2026-11-23, SCRIPT-IN-ENGINE-1 2c's reverse alias: every load answers
+    // its OWN id - a second loader given the first's id lost its texture to the first's destroy): a reload is a NEW
+    // id of the SAME GPU texture - the texture manager's count (Engine::textureMemory, one entry a GPU texture) does
+    // not move, so there is still no duplicate upload; destroying one id keeps the other alive.
+    std::vector<TextureMemoryEntry> before, after;
+    REQUIRE(fx.e->textureMemory(before));
+    const TextureId srgbAgain = s->loadTexture(path, true), linearAgain = s->loadTexture(path, false);
+    REQUIRE(fx.e->textureMemory(after));
+    CHECK_MSG(srgbAgain != 0 && srgbAgain != srgb && linearAgain != 0 && linearAgain != linear &&
+                  after.size() == before.size(),
+              "a reload in each colour space is a NEW id (%u, %u) of the SAME texture (%zu GPU textures before, %zu after)",
+              srgbAgain, linearAgain, before.size(), after.size());
+    // And the index stays in step: destroying one leaves the other alive and findable.
     CHECK(s->destroyTexture(srgb));
-    CHECK_MSG(s->loadTexture(path, false) == linear,
-              "destroying the sRGB texture did not evict the linear one's index entry");
+    CHECK(s->destroyTexture(linearAgain));
+    CHECK_MSG(s->texturePresence(srgbAgain) == Scene::Presence::Present && s->texturePresence(linear) == Scene::Presence::Present,
+              "destroying one id of a texture keeps its other id alive (sRGB %u, linear %u)", srgbAgain, linear);
+    CHECK(s->destroyTexture(srgbAgain));
     const TextureId srgb2 = s->loadTexture(path, true);
     CHECK_MSG(srgb2 != 0 && srgb2 != linear, "and the sRGB one loads again as its own texture");
     // DESTROY BEFORE DELETING THE FILE. Ogre keeps a texture-metadata cache

@@ -138,8 +138,8 @@ void casesMaterial(Fixture &f)
             {f.none.call("engine.material.setPbr", {scene, mat, obj({{"ior", Value(0.0)}})}), "params.ior 0 is outside >= 1"},
             {f.none.call("engine.material.createUnlit", {scene, obj({{"colour", nums({1, 1, 1})}})}),
              "unlit.colour must hold 4 elements (it holds 3)"},
-            {f.none.call("engine.material.createUnlit", {scene, obj({{"colour", nums({1, 1, 2, 1})}})}),
-             "unlit.colour[2] 2 is outside 0..1"},
+            {f.none.call("engine.material.createUnlit", {scene, obj({{"colour", nums({1, 1, -2, 1})}})}),
+             "unlit.colour[2] -2 is outside >= 0"},
             {f.none.call("engine.material.setShadingModel", {scene, mat, obj({{"model", Value("toon")}})}),
              "shading.model 'toon' is not one of"},
             {f.none.call("engine.material.setTexture", {scene, mat, obj({{"slot", Value("occlusion")}})}),
@@ -285,6 +285,43 @@ void casesMaterial(Fixture &f)
               ") and the decal image (" + std::to_string(loadedDecal) + ") absent, the atlas " + std::to_string(handedBefore) +
               " -> " + std::to_string(handedDuring) + " -> " + std::to_string(handedAfter));
     f.engine->destroyScene(handed);
+
+    // THE REVERSE ALIAS (the audit's worth-a-look 1): a script loads a path into a handed-in scene FIRST, its owner loads
+    // the same path after (id 0: the engine's own reserve) and binds it; the host ends - the owner's texture lives on
+    Scene *first = f.engine->createScene("q-reverse");
+    const MaterialId ownerMat2 = first->createPbrMaterial(PbrParams());
+    TextureId scriptTex = 0, ownerTex = 0, ownerDecal = 0, scriptDecal = 0;
+    std::string unbound, bound;   // the owner's material as its live datablock holds it (Scene::dumpMaterial), compared whole
+    {
+        Host run;
+        run.setConsole([](const std::string &) {});
+        makeEngineCommands(run, f.engine, "", false);
+        const Value hs(run.registry().hold("scene", std::shared_ptr<Scene>(first, [](Scene *) {})));
+        const Result t = run.call("engine.texture.load", {hs, obj({{"path", Value(tga)}, {"srgb", Value(true)}})});
+        const Result d = run.call("engine.texture.loadDecal", {hs, obj({{"path", Value(tga)}, {"kind", Value("diffuse")}})});
+        scriptTex = t.value.isNull() ? 0 : Call::idOf(t.value);
+        scriptDecal = d.value.isNull() ? 0 : Call::idOf(d.value);
+        ownerTex = first->loadTexture(tga, true);
+        ownerDecal = first->loadDecalTexture(tga, DecalMap::Diffuse);
+        unbound = first->dumpMaterial(ownerMat2);
+        first->setPbrTexture(ownerMat2, PbrTextureSlot::Albedo, ownerTex);
+        bound = first->dumpMaterial(ownerMat2);
+    }
+    const std::string afterHost = first->dumpMaterial(ownerMat2);
+    std::printf("Q: THE REVERSE ALIAS: the script's texture %u, the owner's %u (after the host: %s); the script's decal image "
+                "%u, the owner's %u (after the host: %s)\n", scriptTex, ownerTex,
+                first->texturePresence(ownerTex) == Scene::Presence::Present ? "alive" : "GONE", scriptDecal, ownerDecal,
+                first->decalTexturePresence(ownerDecal) == Scene::Presence::Present ? "alive" : "GONE");
+    check(scriptTex && ownerTex && ownerTex != scriptTex && first->texturePresence(ownerTex) == Scene::Presence::Present &&
+              scriptDecal && ownerDecal && ownerDecal != scriptDecal &&
+              first->decalTexturePresence(ownerDecal) == Scene::Presence::Present,
+          "THE REVERSE ALIAS: a path a script loaded FIRST into a handed-in scene, then its owner, is the owner's own id "
+          "(" + std::to_string(ownerTex) + ", the script's " + std::to_string(scriptTex) + ") and outlives the host's end "
+          "- the texture and the decal image");
+    check(!bound.empty() && bound != unbound && afterHost == bound,
+          "THE REVERSE ALIAS's MATERIAL: the owner's material still holds its texture after the host's end (its live "
+          "datablock unchanged; THE CONTROL: binding the texture changed it)");
+    f.engine->destroyScene(first);
     std::remove(tga);
 }
 
