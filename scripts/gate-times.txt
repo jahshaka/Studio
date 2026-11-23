@@ -705,5 +705,5 @@ db.failed_opens 0.53  solo 2026-11-23 at 216507f6b (spec.sh reprice, run 2026112
 mcp.engine_session 5.19  solo 2026-11-23 at 86b75f99d (spec.sh reprice, run 20261123T195316-86b75f99d-p321482)
 bake.round_trip 0.39  solo 2026-11-23 at 216507f6b (spec.sh reprice, run 20261123T235741-216507f6b-p1150272)
 db.layer_guard 0.07  solo 2026-11-23 at 216507f6b (spec.sh reprice, run 20261123T235744-216507f6b-p1150552)
-source.db_error_looks 0.03  solo 2026-11-23 at 216507f6b (spec.sh reprice, run 20261123T235824-216507f6b-p1151924)
+source.db_error_looks 0.25  solo 2026-11-24 at 79cc32f39 (spec.sh reprice, run 20261124T003554-79cc32f39-p1966628)
 source.sqlite_one_door 0.36  solo 2026-11-23 at 216507f6b (spec.sh reprice, run 20261123T235825-216507f6b-p1151957)
