@@ -23,8 +23,8 @@
 #                    no hand list to go stale: REPRICE-1's final read), and what that content leaves out - the vendored
 #                    assimp's pin - plus <tests>/seed-key-inputs.txt's lines (tests/CMakeLists.txt: the bake producer, the
 #                    shipped meshes and the seed code by content; inside `content` now, kept by the list). NOTHING - no key,
-#                    no template made or copied - when the list is missing, or the stamp is missing, unsettled (content ?)
-#                    or STALE (a binary not built from that content).
+#                    no template made or copied - when the list is missing, or the stamp is missing, unsettled (content ?),
+#                    STALE (a binary not built from that content), or claims neither `all` nor the app (the list's `app`).
 #
 # A HOME MADE FROM THE TEMPLATE boots with its 17 rows, their sources and their bakes already in the store: seedAll plans
 # every row SEEDED and creates none, no line - and it checks each row's STORED SOURCE against the shipped bytes (a row
@@ -39,6 +39,10 @@ seed_key() {   # <tests dir>: the seed key, or nothing
     bf="$1/../BUILT_FROM"
     built=$(sed -n 's/^content=\([0-9a-f]\{16\}\)$/\1/p' "$bf" 2>/dev/null | head -1)
     { [ -n "$built" ] && grep -qx 'stale=0' "$bf" && grep -qx 'stale_fork=0' "$bf"; } || return 0
+    # THE STAMP MUST CLAIM THE APP (REPRICE-1's confirming read): a by-reach stamp names the whole tree's content while it
+    # claims only the targets it built - the content is the seeding binary's only when the stamp claims `all` or the app
+    app=$(sed -n 's/^app //p' "$inputs" | head -1); claims=",$(sed -n 's/^targets=//p' "$bf" | head -1),"
+    case "$claims" in *,all,*|*",$app,"*) [ -n "$app" ] || return 0 ;; *) return 0 ;; esac
     root=$(sed -n 's/^root //p' "$inputs" | head -1)
     {
         echo "built $built"

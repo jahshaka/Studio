@@ -20,12 +20,16 @@ foreach(_t text files signal bound)
     add_test(NAME core.${_t} COMMAND test_core_${_t} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
 endforeach()
 # core.guid: the form over 100,000 drawn, and every stored key of the seeded template library (tests/.seedhome, the warm-up's):
-# the text form for all, newGuid's form for every key that is not a shipped fixed id (read from src/data/primitives.h)
+# the text form for all, newGuid's form for every key that is not a shipped fixed id (read from src/data/primitives.h), and
+# the template made by THIS build's app (its stamp is this build's seed key: never a pass on another build's library)
 add_test(NAME core.guid
          COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/guid_library.py $<TARGET_FILE:test_core_guid>
                  ${CMAKE_BINARY_DIR}/tests/.seedhome/data/JahLibrary.db ${CMAKE_SOURCE_DIR}/src/data/primitives.h
+                 ${CMAKE_SOURCE_DIR}/tests/support/seed_home.sh
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
-# its binary is on its command line; the seeded library it reads is the warm-up's (tests/support/seed_home.sh), no build target
-jah_builds(none ROWS core.guid)
+# THE TEMPLATE IS ITS CALL's OWN (REPRICE-1, the final read of e7b84cd73): the row names the app-off boot, whose warm-up makes
+# the template (scripts/warm-app-cache.sh, seed_home.sh make), and builds the app that seeds it - so it is no `code` row
+set_tests_properties(core.guid PROPERTIES JAH_BOOTS "app-off")
+jah_builds(${CMAKE_PROJECT_NAME} ROWS core.guid)
 set_tests_properties(core.text core.files core.guid core.signal core.bound PROPERTIES TIMEOUT 60 LABELS "core")
 jah_no_display(core.text core.files core.guid core.signal core.bound)

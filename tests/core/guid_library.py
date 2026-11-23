@@ -7,8 +7,13 @@
      not a shipped fixed id has the GENERATED form above - those counted == 17 (the 17 shipped meshes' members). The
      shipped fixed ids are READ from their one table, src/data/primitives.h (every guid-text literal of the file; > 0 read,
      or FAIL), never listed here. No template is a FAIL, never a pass over zero rows.
-usage: guid_library.py <test_core_guid> <JahLibrary.db> <src/data/primitives.h>
+  3. THE TEMPLATE IS THIS BUILD's (REPRICE-1, the final read of e7b84cd73: the row passed on a template another content's
+     binary had made): its stamp (<tests>/.seedhome/seed-key) must be this build's seed key (seed_home.sh key: the seeding
+     binary's content identity) - a stamp of another key, no stamp or no key is a FAIL, said, never a pass on another
+     build's library. (The row names the app-off boot: its call's warm-up makes the template from this build's app.)
+usage: guid_library.py <test_core_guid> <JahLibrary.db> <src/data/primitives.h> <tests/support/seed_home.sh>
 """
+import os
 import re
 import sqlite3
 import subprocess
@@ -21,10 +26,23 @@ WANT_GENERATED = 17
 
 
 def main():
-    if len(sys.argv) != 4:
-        print('usage: guid_library.py <test_core_guid> <JahLibrary.db> <src/data/primitives.h>')
+    if len(sys.argv) != 5:
+        print('usage: guid_library.py <test_core_guid> <JahLibrary.db> <src/data/primitives.h> <tests/support/seed_home.sh>')
         return 2
     fails = []
+    tests = os.path.dirname(os.path.dirname(os.path.dirname(sys.argv[2])))
+    k = subprocess.run(['sh', sys.argv[4], 'key', tests], capture_output=True, text=True)
+    key = k.stdout.strip() if k.returncode == 0 else ''
+    try:
+        stamp = open(os.path.join(tests, '.seedhome', 'seed-key'), encoding='utf-8').readline().strip()
+    except OSError:
+        stamp = ''
+    if not key or stamp != key:
+        print('FAIL the template is not this build\'s: its stamp %s, this build\'s seed key %s - the warm-up\'s app-off boot '
+              'makes it from this build\'s app (spec.sh test; by hand tests/support/seed_home.sh make)'
+              % (stamp[:16] or 'missing', key[:16] or 'none (the build names no settled content, or not the app)'), flush=True)
+        print('core.guid: FAILED (1)')
+        return 1
     shipped = set(LITERAL.findall(open(sys.argv[3], encoding='utf-8').read()))
     if not shipped:
         fails.append('no shipped fixed id read from %s (the table moved?)' % sys.argv[3])

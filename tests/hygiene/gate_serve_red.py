@@ -283,7 +283,8 @@ if gg.data_set(rowj("parent"), gg.build_roots(parent), {})["hash"] == dh[0]:
 # checks): tests/support/seed_home.sh `key` = the seeding binary's content identity (BUILT_FROM `content=`, made here by the
 # tree's own cmake/built_from.py over a toy git source) + the vendored pin. Two seeds at one key hash ONE; an edit of the
 # importer MOVES the key, and the template made before it is NO TEMPLATE (never served) until re-made, then a NEW hash; no
-# stamp, a stamp without its template, an unsettled (stale) build: no template (red on b71613aa2's code:
+# stamp, a stamp without its template, an unsettled (stale) build, a stamp that claims neither `all` nor the app (a by-reach
+# pass that did not build the seeding binary): no template (red on b71613aa2's code:
 # spikes/reprice-1/red-once/gate.serve_red.txt)
 import subprocess  # noqa: E402
 sr, sb = os.path.join(t, "seed"), os.path.join(t, "seed", "build-linux")
@@ -295,18 +296,20 @@ open(os.path.join(sr, "src", "table.h"), "w").write("the shipped table")
 open(imp, "w").write("out.meshGuid = iris::newGuid();\n")
 open(os.path.join(sr, ".gitignore"), "w").write("build-linux/\n")
 open(os.path.join(sb, "CMakeCache.txt"), "w").write("CMAKE_HOME_DIRECTORY:INTERNAL=%s\nCMAKE_CACHEFILE_DIR:INTERNAL=%s\n" % (sr, sb))
-open(os.path.join(sb, "tests", "seed-key-inputs.txt"), "w").write("root %s\nfile src/table.h\n" % sr)
-git = lambda *a: subprocess.run(["git", "-C", sr, "-c", "user.name=toy", "-c", "user.email=toy@toy", *a], capture_output=True)  # noqa: E731
+open(os.path.join(sb, "tests", "seed-key-inputs.txt"), "w").write("root %s\napp Jahshaka\nfile src/table.h\n" % sr)
+GENV = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")   # (the box's git config never reaches the toy)
+git = lambda *a: subprocess.run(["git", "-C", sr, "-c", "user.name=toy", "-c", "user.email=toy@toy", *a], capture_output=True, env=GENV)  # noqa: E731
 git("init", "-q"); git("add", "-A"); git("commit", "-qm", "toy")
 sdb, skey = os.path.join(sb, "tests", ".seedhome", "data", "JahLibrary.db"), os.path.join(sb, "tests", ".seedhome", "seed-key")
 srow = {"name": "core.seeded", "properties": [], "command": ["/usr/bin/python3", sdb, os.path.join(sr, "src", "table.h")]}
 
 
-def built(extra=""):
-    """The build's stamp as the tree's cmake/built_from.py writes it for the toy source as it is now (+ `extra` lines)."""
+def built(extra="", targets="all"):
+    """The build's stamp as the tree's cmake/built_from.py writes it for the toy source as it is now (`extra` in place of its
+    stale=0 line), claiming `targets` (cmake/BuiltFrom.cmake's targets= line)."""
     out = subprocess.run([sys.executable, "-I", os.path.join(src, "cmake", "built_from.py"), sr, sb], capture_output=True,
-                         text=True).stdout
-    open(os.path.join(sb, "BUILT_FROM"), "w").write(out.replace("stale=0\n", extra or "stale=0\n"))
+                         text=True, env=GENV).stdout
+    open(os.path.join(sb, "BUILT_FROM"), "w").write(out.replace("stale=0\n", extra or "stale=0\n") + "targets=%s\n" % targets)
 
 
 def key():
@@ -334,6 +337,9 @@ seed("created 02:31:00 guid 91c0aa2e"); s4 = hashed()  # (re-made at the new key
 os.remove(sdb); s5 = hashed()
 open(sdb, "w").write("x"); os.remove(skey); s6 = hashed()
 seed("created 02:40:00 guid 77aa"); built("stale=1\n"); s7 = hashed()
+built(targets="IrisCore,test_core_guid"); k8 = key()                  # a by-reach stamp that did not build the app
+built(targets="IrisCore,Jahshaka"); k9 = key()                        # one that did
+seed("created 02:50:00 guid 88bb"); built(targets="IrisCore,test_core_guid"); s10 = hashed()
 for name, ok_ in (("two seeds at ONE key (their wall clock and guids differ): ONE data hash (both its files in it: %s)" % s1[2],
                    bool(k1) and s1[0] is not None and s1[0] == s2[0] and len(s1[2]) == 2),
                   ("an EDIT of the importer (assetimporters.cpp) MOVES the seed key (%s -> %s)" % (k1[:12], k2[:12]),
@@ -343,7 +349,10 @@ for name, ok_ in (("two seeds at ONE key (their wall clock and guids differ): ON
                   ("re-made at the new key: a NEW data hash", s4[0] is not None and s4[0] != s1[0]),
                   ("a stamp WITHOUT its template: no template: " + str(s5[1]), s5[0] is None and "no template" in str(s5[1])),
                   ("NO STAMP: no template: " + str(s6[1]), s6[0] is None and "no template" in str(s6[1])),
-                  ("an UNSETTLED build (stale=1): no key, no template: " + str(s7[1]), s7[0] is None and "no settled content" in str(s7[1]))):
+                  ("an UNSETTLED build (stale=1): no key, no template: " + str(s7[1]), s7[0] is None and "no settled content" in str(s7[1])),
+                  ("a stamp that claims neither `all` nor the app has NO key; one that claims the app has the all-stamp's key",
+                   k8 == "" and bool(k9) and k9 == k2),
+                  ("a template under such a stamp is no template: " + str(s10[1]), s10[0] is None and "no settled content" in str(s10[1]))):
     print(("ok   " if ok_ else "FAIL ") + "the seeded template: " + name)
     if not ok_:
         fails.append("the seeded template: " + name)

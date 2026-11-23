@@ -954,7 +954,9 @@ endfunction()
 # when it is asked (so an edit moves the key at once, no re-configure needed for a file's bytes):
 #   producer  irisgl's JAHSHAKA_MESH_BAKE_PRODUCER_ID - the bake producer: kFormatVersion's file and every bake-producing
 #             source by content (DOCS/traps/ENGINE.md "THE BAKE KEY");
-#   git       the assimp pin (its submodule's HEAD) - the importer the seed's parse runs;
+#   app       the app target - the stamp must claim it (or `all`): the binary that seeds is the build's own app;
+#   git       the assimp and meshoptimizer pins (their submodules' HEADs) - the importer the seed's parse runs and the
+#             bake's remap: vendored trees, outside BUILT_FROM's content (seed_home.sh's key opens with that content);
 #   file      the 17 shipped source meshes (read from the seed table src/data/primitives.h, ":/x" shipping as "app/x"),
 #             the seed table itself, the seed and import code, the library DB's schema, and the assimp patch stack.
 # The LIST is configure-time (primitives.h is a configure dependency, so a new seed row re-lists); the bytes are live.
@@ -965,7 +967,7 @@ endif()
 file(READ "${CMAKE_SOURCE_DIR}/src/data/primitives.h" _jah_prims)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/data/primitives.h")
 string(REGEX MATCHALL "\"(:/|app/)[^\"]+\\.(obj|fbx|glb|gltf|dae)\"" _jah_meshes "${_jah_prims}")
-set(_jah_seed_inputs "root ${CMAKE_SOURCE_DIR}\nproducer ${_jah_bake_key}\ngit irisgl/thirdparty/assimp\n")
+set(_jah_seed_inputs "root ${CMAKE_SOURCE_DIR}\napp ${CMAKE_PROJECT_NAME}\nproducer ${_jah_bake_key}\ngit irisgl/thirdparty/assimp\ngit irisgl/thirdparty/meshoptimizer\n")
 set(_jah_seed_n 0)
 foreach(_m IN LISTS _jah_meshes)
     string(REPLACE "\"" "" _m "${_m}")
