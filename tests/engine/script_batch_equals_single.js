@@ -17,7 +17,7 @@ function twin(name) {
     engine.view.setScene(view, {scene});
     engine.scene.setAmbient(scene, {upper: [0.6, 0.6, 0.65], lower: [0.1, 0.08, 0.06]});
     const cube = engine.mesh.unitCube(scene);
-    const material = engine.material.createPbr(scene, {albedo: [0.8, 0.5, 0.3], roughness: 0.8});
+    const material = engine.material.createPbr(scene, {albedo: [0.8, 0.5, 0.3, 1], roughness: 0.8});
     const nodes = [];
     for (let i = 0; i <= N; ++i) {
         const node = engine.node.create(scene);

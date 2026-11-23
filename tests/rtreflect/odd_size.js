@@ -21,9 +21,9 @@ const cube = engine.mesh.unitCube(scene);
 const floor = engine.node.create(scene), wall = engine.node.create(scene);
 host.check({
     ok: engine.node.attachMesh(scene, floor, {mesh: cube,
-            material: engine.material.createPbr(scene, {albedo: [0.9, 0.9, 0.9], metalness: 1.0, roughness: 0.2})}) &&
+            material: engine.material.createPbr(scene, {albedo: [0.9, 0.9, 0.9, 1], metalness: 1.0, roughness: 0.2})}) &&
         engine.node.attachMesh(scene, wall, {mesh: cube,
-            material: engine.material.createPbr(scene, {albedo: [0, 0, 0], emissive: [0.9, 0.6, 0.2], roughness: 1.0})}),
+            material: engine.material.createPbr(scene, {albedo: [0, 0, 0, 1], emissive: [0.9, 0.6, 0.2, 1], roughness: 1.0})}),
     what: "the floor and the wall exist"});
 engine.node.setTransform(scene, floor, {position: [0, -0.1, 0], scale: [40, 0.2, 40]});
 engine.node.setTransform(scene, wall, {position: [0, 3, -8], scale: [40, 6, 0.5]});

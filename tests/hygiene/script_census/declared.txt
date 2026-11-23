@@ -7,3 +7,4 @@ Engine::rayTracing the ray switch's read: NO-RAY-CUT-1 stage 2 deletes it
 Engine::createView takes a NativeWindowHandle (Engine.h): a script has none; the lab hands its view in by lab.view()
 Engine::setFreeRunning nothing to act on without a render thread: jahengine's host is lockstep only
 Engine::setFramePace nothing to act on without a render thread: jahengine's host is lockstep only
+Engine::latchSnapshot lockstep latches every frame as it returns (RenderThread.cpp:323, :341) and a process without a render thread reads the newest (SyncGetters.h:43-45): nothing for a script to latch; a render-thread boot of the host would give it a meaning: then it is wrapped

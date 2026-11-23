@@ -23,7 +23,7 @@ const cube = engine.mesh.unitCube(scene);
 
 const hub = engine.node.create(scene);
 engine.node.attachMesh(scene, hub, {
-    mesh: cube, material: engine.material.createPbr(scene, {albedo: [0.9, 0.5, 0.2], roughness: 0.6, emissive: [0.5, 0.18, 0.04]})});
+    mesh: cube, material: engine.material.createPbr(scene, {albedo: [0.9, 0.5, 0.2, 1], roughness: 0.6, emissive: [0.5, 0.18, 0.04, 1]})});
 engine.node.setTransform(scene, hub, {position: [0, 1, 0], scale: [2, 2, 2]});
 
 // the spiral's cubes, each its own colour round the hue circle
@@ -33,7 +33,7 @@ for (let i = 0; i < N; ++i) {
     const albedo = [0.5 + 0.4 * Math.cos(h), 0.5 + 0.4 * Math.cos(h - 2.094), 0.5 + 0.4 * Math.cos(h + 2.094)];
     const node = engine.node.create(scene);
     engine.node.attachMesh(scene, node, {
-        mesh: cube, material: engine.material.createPbr(scene, {albedo, roughness: 0.5, emissive: albedo.map(c => 0.15 * c)})});
+        mesh: cube, material: engine.material.createPbr(scene, {albedo: [...albedo, 1], roughness: 0.5, emissive: [...albedo.map(c => 0.15 * c), 1]})});
     nodes.push(node);
 }
 

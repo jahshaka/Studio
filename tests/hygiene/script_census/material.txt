@@ -1,0 +1,12 @@
+engine.material.createPbr Scene::createPbrMaterial
+engine.material.setPbr Scene::setPbrMaterial
+engine.material.createUnlit Scene::createUnlitMaterial
+engine.material.setShadingModel Scene::setShadingModel
+engine.material.assign Scene::setNodeMaterial
+engine.material.setTexture Scene::setPbrTexture
+engine.material.destroy Scene::destroyMaterial
+engine.texture.create Scene::createTexture
+engine.texture.load Scene::loadTexture
+engine.texture.destroy Scene::destroyTexture
+engine.texture.loadDecal Scene::loadDecalTexture
+engine.texture.destroyDecal Scene::destroyTexture
