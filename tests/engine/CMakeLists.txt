@@ -227,6 +227,28 @@ jah_gpu_row(sky.ibl_async_lands CLASS engine FRAMES 200
          COMMAND test_engine_ibl_async_lands
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.ibl_async_lands PROPERTIES TIMEOUT 60 LABELS "engine")
+# sky.atmosphere_deferred_layout (SHADER-SYSTEM-1 7.0; the train's validation red) - A VIEW DRAWN WHILE THE ATMOSPHERE's
+# TABLES ARE DEFERRED IS VALID VULKAN AND SAMPLES A DEFINED PLACEHOLDER: no shader cache, an asynchronous offscreen view on
+# the Streaming pace, the service held 20 ms a job, an atmosphere sky; under the validation layer (its presence proved in
+# the binary, JAH_EXPECT_VALIDATION): the deferral met, the sky pixel (0,0,0) before the first build, the tables land, and
+# no "Validation Error" in the run (test_engine_atmosphere_deferred_layout.cpp says the laws).
+add_executable(test_engine_atmosphere_deferred_layout test_engine_atmosphere_deferred_layout.cpp)
+set_target_properties(test_engine_atmosphere_deferred_layout PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_atmosphere_deferred_layout PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_atmosphere_deferred_layout PRIVATE JahshakaEngine)
+add_dependencies(test_engine_atmosphere_deferred_layout JahshakaEngineMedia)
+jah_gpu_row(sky.atmosphere_deferred_layout CLASS engine FRAMES 200
+         COLD "the table jobs' permutations must be cold in the process: the fixture's shaderCacheOff"
+         COMMAND test_engine_atmosphere_deferred_layout
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(sky.atmosphere_deferred_layout PROPERTIES TIMEOUT 60 LABELS "engine"
+    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_EXPECT_VALIDATION=1"
+    FAIL_REGULAR_EXPRESSION "Validation Error")
 # engine.smaa_up_front (SHADER-SYSTEM-1 7a, the SMAA item) - NO SMAA PROGRAM IS COMPILED IN A FRAME: its own shader
 # cache, emptied at every run (an app's first launch), an offscreen Live view compiling in the background with the chain allowed offscreen; SMAA asked at preset 2, then 0, after
 # the chain settled: 0 shaders compiled off the background compiler in either phase (every preset compiled where the

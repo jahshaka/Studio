@@ -673,3 +673,4 @@ gi.route_landing.gather 5.70  by hand (ctest -V, load 17.9, 2026-11-23; a solo r
 gi.route_landing.order 3.98  by hand (ctest -V in hold ss7-b11-rows, the count law, load 8.1, 2026-11-23; a solo record owed)
 gi.route_landing.capture 4.75  by hand (ctest -V in hold ss7-b11-rows, load 8.1, 2026-11-23; a solo record owed)
 gi.route_landing.ahead_picture 2.74  by hand (ctest -V in hold ss7-b11-ahead2, COLD, load 3.3, 2026-11-23; a solo record owed)
+sky.atmosphere_deferred_layout 1.25  by hand (spec.sh reprice, 2026-11-23)
