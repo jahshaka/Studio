@@ -14,8 +14,12 @@
 // it the pipeline is requested on the background compiler like any other permutation (law 1's deferrals then > 0).
 // THE SCRIPT: one engine on the arm's cache, an offscreen
 // Live view in asynchronous mode, every frame on the Streaming pace; one scene - a floor, a box, a shadowing sun - with
-// the voxel GI on (High, bounces on). Frames until the arm is bound, the background compiler holds nothing and no frame
-// owes a deferred dispatch, or the cap.
+// the voxel GI on (High, bounces on). The scene traces, so the view GATHERS (detail::chainGiRoutes, GiChainRules.h: every
+// view of a ray scene, a Live offscreen one too - ROUTE-ROWS-1 stage 0): the arm the laws hold is the gather's, its ray
+// pipelines apart (the ray tier's builds on its workers: laws 1-2 read HlmsCompute's counters, OgreEngine.cpp's
+// asyncShaderStats, and law 3's wait leaves them out - AsyncShaderStats::pending counts them, rayBuildsInFlight
+// subtracts them). Frames until the arm is bound, the background compiler holds nothing and no frame owes a deferred
+// dispatch, or the cap.
 // THE LAWS:
 //  (1) the deferred path ran: the fork's deferred dispatches (AsyncShaderStats::computeDeferred) > 0 (the cold arm, F7:
 //      else the row proves nothing);
@@ -90,8 +94,8 @@ int main(int argc, char **argv)
     ok = ok && scene->setGlobalIllumination(gi);
     CHECK(ok, "the scene built: a floor, a box, a sun, the voxel GI (%s)", e->lastError().c_str());
     if (!ok) return 1;
-    // THE DECLARED ROUTE (CODING_RULES § 6): a Live offscreen view runs the screen integrate; the scene's cards and store
-    enginetest::declareRoutes(view, scene, enginetest::Routes().integrate().cards().store(),
+    // THE DECLARED ROUTE (CODING_RULES § 6): a ray scene's every view gathers (ROUTE-ROWS-1 stage 0); the cards and store
+    enginetest::declareRoutes(view, scene, enginetest::Routes().gather().cards().store(),
                               (std::string(row) + "'s view").c_str());
 
     const auto frame = [&]() {
@@ -134,7 +138,7 @@ int main(int argc, char **argv)
             GiParams lo = gi;
             lo.quality = GiQuality::Low;
             built = built && ss->setGlobalIllumination(lo);
-            enginetest::declareRoutes(sv, ss, enginetest::Routes().integrate().cards().store(),
+            enginetest::declareRoutes(sv, ss, enginetest::Routes().gather().cards().store(),
                                       "gi.async_arm_cold's control view");
         }
         const AsyncShaderStats c0 = e->published().shaders;
