@@ -2065,18 +2065,40 @@ static int lockedPositionsKept()
 }
 
 /// `--dag-stats-result` (the row bake.dag_stats_result, NOQT-CORE-1 stage 2): THE CLUSTER DAG's STATS ARE A RESULT OF
-/// THE BAKE (a tool reads them on the Model, never from the bake's log line): a bake of scaled_two_meshes.glb carries ONE
-/// ClusterDagStats a mesh, each describing the DAG its own mesh carries (clusters and groups equal to the mesh's
-/// clusterDag) with its time measured (msTotal > 0 for a mesh with a DAG); a READ of that bake's blob carries none (the
-/// stats describe the run, never serialized). CONTROL: at least one mesh has a DAG (clusters > 0).
+/// THE BAKE (a tool reads them on the Model, never from the bake's log line): a bake of a two-object OBJ written here -
+/// a 2-triangle quad FIRST (aiScene mesh 0) and a 12 x 12 grid of 288 triangles SECOND (mesh 1), so the two DAGs differ
+/// in clusters and the bake pool, which hands the BIGGEST mesh out first, runs them in the other order - carries ONE
+/// ClusterDagStats a mesh, IN aiScene MESH ORDER, each describing the DAG its own mesh carries (clusters and groups equal
+/// to the mesh's clusterDag) with its time measured (msTotal > 0 for a mesh with a DAG); a READ of that bake's blob
+/// carries none (the stats describe the run, never serialized). CONTROLS: at least one mesh has a DAG (clusters > 0), and
+/// the two meshes' cluster counts DIFFER (so stats stored in the pool's task order, or swapped, cannot pass).
+static QString writeTwoObjectObj(const QString &dir)
+{
+    QString obj = QStringLiteral("o quad\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3\nf 1 3 4\no grid\n");
+    const int n = 12;   // n x n quads, 2 n^2 = 288 triangles: over one cluster's 128
+    for (int y = 0; y <= n; ++y)
+        for (int x = 0; x <= n; ++x)
+            obj += QStringLiteral("v %1 %2 5\n").arg(x * 0.1).arg(y * 0.1);
+    const int base = 4;   // the quad's four vertices come first (OBJ indices are 1-based and file-global)
+    for (int y = 0; y < n; ++y)
+        for (int x = 0; x < n; ++x) {
+            const int a = base + y * (n + 1) + x + 1, b = a + 1, c = a + n + 1, d = c + 1;
+            obj += QStringLiteral("f %1 %2 %3\nf %2 %4 %3\n").arg(a).arg(b).arg(c).arg(d);
+        }
+    const QString path = dir + QStringLiteral("/two_objects.obj");
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly) || f.write(obj.toUtf8()) <= 0) return QString();
+    return path;
+}
+
 static int dagStatsResult()
 {
-    const QString path = fixture(QStringLiteral("tests/importer/fixtures/scaled_two_meshes.glb"));
-    const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("0123456789abcdef").repeated(4));
     QTemporaryDir scratch;
+    const QString path = writeTwoObjectObj(scratch.path());
+    const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("0123456789abcdef").repeated(4));
     const iris::MeshBake::Model m = iris::MeshBake::buildFromFile(path, fp, scratch.path());
-    CHECK_LOUD(m.valid && !m.meshes.isEmpty(), "scaled_two_meshes.glb bakes");
-    if (!m.valid || m.meshes.isEmpty()) { std::printf("FAILED: %d of %d check(s)\n", failures, checks); return 1; }
+    CHECK_LOUD(!path.isEmpty() && m.valid && m.meshes.size() == 2, "the two-object OBJ bakes to two meshes");
+    if (!m.valid || m.meshes.size() != 2) { std::printf("FAILED: %d of %d check(s)\n", failures, checks); return 1; }
     char msg[200];
     std::snprintf(msg, sizeof(msg), "one ClusterDagStats a mesh (%zu stats, %d meshes)", m.dagStats.size(),
                   int(m.meshes.size()));
@@ -2095,6 +2117,9 @@ static int dagStatsResult()
     }
     std::snprintf(msg, sizeof(msg), "the control: a mesh with a DAG (%d)", withDag);
     CHECK_LOUD(withDag > 0, msg);
+    const int c0 = int(m.meshes.at(0)->clusterDag.clusters.size()), c1 = int(m.meshes.at(1)->clusterDag.clusters.size());
+    std::snprintf(msg, sizeof(msg), "the control: the two meshes' DAGs differ in clusters (%d, %d)", c0, c1);
+    CHECK_LOUD(c0 != c1, msg);
     std::snprintf(msg, sizeof(msg), "each mesh's stats are its own DAG's (%d unequal)", unequal);
     CHECK_LOUD(unequal == 0, msg);
     std::snprintf(msg, sizeof(msg), "each DAG's time is measured (%d with msTotal 0)", untimed);

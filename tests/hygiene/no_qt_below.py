@@ -197,11 +197,14 @@ def qtstd_includers(files):
 TARGET = 'IrisCore'
 QT_ARG = re.compile(r'/[qQ]t[56]?(?:/|$)|/Qt[A-Z][A-Za-z0-9]*(?:/|$)|/Qt/\d|_autogen(?:/|$)|^-DQT_|^-DQ_')
 QT_SYMBOL = re.compile(r'\bQ[A-Z][a-z]\w*|\bQ_[A-Z_]+|\bQT_\w+|\bqt_\w+')
-# one copy in a process (T4): the file primitives, the guid engine, and the log - every iris::log:: symbol but its two
-# TYPES (a type holds no state, and a sink's std::function handler names Severity in every image that installs a sink)
-STATEFUL = re.compile(r'\biris::files::|\biris::newGuid\b|\biris::log::(?!Severity\b|Sink\b)')
+# one copy in a process (T4): the file primitives, the guid engine, and the log - every iris::log:: symbol but its
+# Severity TYPE (a type holds no state, and a sink's std::function handler names Severity in every image that installs a
+# sink; the Sink alias never appears in a demangled name: it is spelled out as the std::function it names)
+STATEFUL = re.compile(r'\biris::files::|\biris::newGuid\b|\biris::log::(?!Severity\b)')
 IMAGES = ('Jahshaka', 'libIrisGL*.so', 'jahengine', 'jahlab')    # under <build>/bin: every image that links IrisCore
-DEFINED = re.compile(r'^\s*(?:[0-9a-fA-F]+\s+)?[TtDdBbRrWwVvGgSs]\s+\S')
+# nm's defined kinds: text, data, bss, read-only, weak, small data/bss, and `u` (GNU unique: a static local of an inline
+# function or template, which a second image would hold its own copy of)
+DEFINED = re.compile(r'^\s*(?:[0-9a-fA-F]+\s+)?[TtDdBbRrWwVvGgSsu]\s+\S')
 STD_HEADERS = set('''algorithm any array atomic barrier bit bitset cassert cctype cerrno cfenv cfloat charconv chrono cinttypes
 climits clocale cmath codecvt compare complex concepts condition_variable coroutine csetjmp csignal cstdarg cstddef cstdint
 cstdio cstdlib cstring ctime cuchar cwchar cwctype deque exception execution expected filesystem format forward_list fstream
@@ -444,9 +447,11 @@ def self_test():
             'bin/libIrisGLd.so': '0000 b iris::files::stagingTempPath(std::filesystem::path const&)::sSerial\n'
                                  '0000 T iris::newGuid[abi:cxx11]()\n0000 T iris::newGuidance()\n'
                                  '0000 T iris::log::info(std::basic_string_view<char, std::char_traits<char> >)\n'
-                                 '0000 t iris::log::(anonymous namespace)::state()\n'}
+                                 '0000 t iris::log::(anonymous namespace)::state()\n'
+                                 # a GNU unique (`u`) static local of an inline stateful function: defined, reds
+                                 '0000 u iris::files::inlineCounter()::sCount\n'}
     got = t4_bad(imgs)
-    if [i for i, _ in got] != ['bin/Jahshaka'] + ['bin/libIrisGLd.so'] * 4 or \
+    if [i for i, _ in got] != ['bin/Jahshaka'] + ['bin/libIrisGLd.so'] * 5 or \
             any(w in l for _, l in got for w in ('newGuidance', 'notify', 'trim', ' U ', '_Function_handler')):
         bad.append('T4 read the images wrong: %r' % got)
     # T3: core/ and the standard library pass; a Qt header, a header outside core/, a missing header each red
