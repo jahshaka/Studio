@@ -700,3 +700,4 @@ log.iris_forwarded.fresh_home 0.02  solo 2026-11-23 at cc360096d (spec.sh repric
 app.qtstd 0.00  solo 2026-11-23 at 00e078ad0 (spec.sh reprice, run 20261123T173252-00e078ad0-p932222)
 document.property_rows 0.27  solo 2026-11-23 at 00e078ad0 (spec.sh reprice, run 20261123T173254-00e078ad0-p933183)
 document.fragment_codecs 0.01  solo 2026-11-23 at 00e078ad0 (spec.sh reprice, run 20261123T173253-00e078ad0-p932606)
+engine.png_pixels 0.02  solo 2026-11-23 at b317ae3c8 (spec.sh reprice, run 20261123T175800-b317ae3c8-p2052663)
