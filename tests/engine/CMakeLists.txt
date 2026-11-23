@@ -619,6 +619,7 @@ set_target_properties(test_setters_refuse PROPERTIES CXX_STANDARD 17 AUTOMOC OFF
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_link_libraries(test_setters_refuse PRIVATE JahshakaEngine)
+target_include_directories(test_setters_refuse PRIVATE ${CMAKE_SOURCE_DIR})   # irisgl/mirror/scenecommands.h: the app's route
 target_compile_definitions(test_setters_refuse PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_setters_refuse JahshakaEngineMedia)
