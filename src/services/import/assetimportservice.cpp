@@ -117,8 +117,8 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
         db::Statement any(conn, "SELECT COUNT(*) FROM assets WHERE listed = 0");
         db::Error e;
         const bool counted = any.step(&e);
-        if (e || !counted) {   // the count unread is no "none" (the error tested first: the look)
-            if (readOk) *readOk = false;
+        if (e.code || !counted) {   // the count unread is no "none"
+            if (readOk && (e || !counted)) *readOk = false;   // the look only when asked: unasked, the mark stands
             return QString();
         }
         if (any.int64(0) == 0) return QString();   // none unlisted: a normal import
@@ -167,7 +167,7 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
         match.bindInt(2, request.home.stored());
         db::Error e;
         if (!match.step(&e)) {
-            if (e && readOk) *readOk = false;   // a failed read is no "no match"
+            if (readOk && e) *readOk = false;   // a failed read is no "no match"
             return QString();
         }
         guid = dbqt::text(match, 0);

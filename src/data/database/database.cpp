@@ -2038,8 +2038,8 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid, bool *read
                   "WHERE PA.asset_guid = ? ORDER BY P.name");
     dbqt::bindText(query, 1, guid);
     const bool pinsRan = executeAndCheckQuery(query, "FetchAssetPins");
-    if (query.failed() || !pinsRan) {   // failed() first: the look (the layer guard)
-        if (readOk) *readOk = false;
+    if (query.mFailed || !pinsRan) {   // the decision is no look (the final read's note 1)
+        if (readOk && (query.failed() || !pinsRan)) *readOk = false;   // the look only when asked
         return pins;
     }
 
@@ -2090,8 +2090,10 @@ int Database::countAssetPins(const QString &guid, bool *readOk)
                   "WHERE PA.asset_guid = ?");
     dbqt::bindText(query, 1, guid);
     const bool countRan = executeAndCheckQuery(query, "CountAssetPins");
-    if (query.failed() || !countRan || !query.next()) {   // failed() first: the look (the layer guard)
-        if (readOk) *readOk = false;   // a FAILED count, never "no pins": the delete paths read it as a veto
+    const bool counted = !query.mFailed && countRan && query.next();   // the decision is no look (the final read's note 1)
+    if (!counted) {
+        // a FAILED count, never "no pins": the delete paths read it as a veto; the look only when asked
+        if (readOk && (query.failed() || !counted)) *readOk = false;
         return 0;
     }
     return int(query.int64(0));
@@ -3638,9 +3640,9 @@ bool Database::checkIfDependencyExists(const QString& depender, const QString& d
 	dbqt::bindText(query, 2, dependee);
 	db::Error error;
 	if (query.step(&error)) return query.int64(0) != 0;
-	if (error) {
+	if (error.code) {
 		JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error fetching a record " + dbqt::describe(error));
-		if (readOk) *readOk = false;   // a failed read is no "no edge"
+		if (readOk && error) *readOk = false;   // a failed read is no "no edge"; the look only when asked
 	}
 	return false;
 }
@@ -4115,8 +4117,9 @@ bool Database::hasDependencies(const QString &guid, bool *readOk)
     dbqt::bindText(query, 1, guid);
     // A COUNT ALWAYS ANSWERS A ROW: no row is a FAILED read, never "no dependencies" (the confirm's F3).
     const bool countRan = executeAndCheckQuery(query, "HasDependencies");
-    if (query.failed() || !countRan || !query.next()) {   // failed() first: the look (the layer guard)
-        if (readOk) *readOk = false;
+    const bool counted = !query.mFailed && countRan && query.next();   // the decision is no look (the final read's note 1)
+    if (!counted) {
+        if (readOk && (query.failed() || !counted)) *readOk = false;   // the look only when asked
         return false;
     }
     return (query.int64(0) != 0);

@@ -121,7 +121,7 @@ bool tableExists(db::Connection &conn, const char *name, bool *readOk = nullptr)
     q.bindText(1, name);
     db::Error e;
     if (q.step(&e)) return true;
-    if (e && readOk) *readOk = false;
+    if (readOk && e) *readOk = false;
     return false;
 }
 
@@ -144,7 +144,7 @@ QSet<QString> stringSet(db::Connection &conn, const char *sql, bool *readOk)
         const QString value = dbqt::text(q, 0);
         if (!value.isEmpty()) out.insert(value);
     }
-    if (e) *readOk = false;
+    if (readOk && e) *readOk = false;
     return out;
 }
 
