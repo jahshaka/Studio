@@ -1,0 +1,1 @@
+# the picture family wraps no engine verb: a held picture (engine.picture.*) or radiance picture (engine.radiance.*) is the host's own, its reductions read it in place - no map line (accepted by the lead, 2026-11-23)
