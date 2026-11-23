@@ -26,8 +26,9 @@ For more information see the LICENSE file
 // GUI THREAD ONLY, like every other Qt Multimedia object in this tree. The
 // scripting host runs there, which is where the verbs call from.
 
+#include "irisgl/document/assets/image.h"
+
 #include <QElapsedTimer>
-#include <QImage>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -94,6 +95,9 @@ private:
     bool     looping = false;
     quint64  frameCount = 0;
     QString  lastError;
+    /// The frame buffer this binding converts into; after each write it holds the texture's previous frame
+    /// (LiveTextureCatalog::write swaps), so a playing video allocates nothing a frame.
+    iris::Image spare;
     // The stepped clock: the target time and the last landed frame, both on an
     // UNWRAPPED timeline (a looping clip's wraps counted), in microseconds.
     /// play() was the last of play/pause/stop (step() leaves it as it was).

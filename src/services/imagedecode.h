@@ -13,6 +13,7 @@
 
 #include <QImage>
 #include <QImageReader>
+#include <QPainter>
 #include <QString>
 
 #include <cstddef>
@@ -38,11 +39,49 @@ inline iris::Image toImage(const QImage &image)
     return out;
 }
 
+/// A FRAME INTO THE DOCUMENT's PIXELS IN ONE PASS (NOQT-DOCUMENT-1 stage 5, the owner's bar: a live frame costs no
+/// copy of ours): `src` is written into `dst`'s OWN buffer, the conversion to RGBA8888 being that pass (a QImage over
+/// dst's bytes, drawn with CompositionMode_Source: Qt's own conversion, no picture change). QVideoFrame::toImage
+/// gives RGB32 or ARGB32_Premultiplied, never RGBA8888 (spikes/noqt-document-1/s5/toimage-format.txt), so the
+/// convertToFormat pass a frame always paid is the one that now writes into our memory. dst is (re)sized only when
+/// its size differs: a producer that keeps one Image and hands it to Texture2D::writeLive (which hands the previous
+/// frame back) allocates nothing a frame. False for a null src.
+inline bool intoImage(const QImage &src, iris::Image &dst)
+{
+    if (src.isNull()) return false;
+    const int w = src.width();
+    const int h = src.height();
+    const std::size_t row = std::size_t(w) * 4u;
+    if (dst.width != w || dst.height != h || dst.rgba.size() != row * std::size_t(h)) {
+        dst.width = w;
+        dst.height = h;
+        dst.rgba.resize(row * std::size_t(h));
+    }
+    if (src.format() == QImage::Format_RGBA8888) {
+        for (int y = 0; y < h; ++y)
+            std::memcpy(dst.rgba.data() + row * std::size_t(y), src.constScanLine(y), row);
+        return true;
+    }
+    QImage target(dst.rgba.data(), w, h, int(row), QImage::Format_RGBA8888);
+    QPainter painter(&target);
+    painter.setCompositionMode(QPainter::CompositionMode_Source);
+    painter.drawImage(0, 0, src);
+    return true;
+}
+
 /// The document's pixels -> a QImage (RGBA8888, its own copy). A null Image gives a null QImage.
 inline QImage toQImage(const iris::Image &image)
 {
     if (image.isNull()) return QImage();
     return QImage(image.rgba.data(), image.width, image.height, image.width * 4, QImage::Format_RGBA8888).copy();
+}
+
+/// The document's pixels VIEWED as a QImage (RGBA8888, NO copy): valid while `image` lives unchanged; a write to the
+/// QImage detaches it (Qt copies then). For a reader only. A null Image gives a null QImage.
+inline QImage view(const iris::Image &image)
+{
+    if (image.isNull()) return QImage();
+    return QImage(image.rgba.data(), image.width, image.height, image.width * 4, QImage::Format_RGBA8888);
 }
 
 /// The probe: a HEADER read (QImageReader::canRead), never a decode - a scene open probes every map it binds.

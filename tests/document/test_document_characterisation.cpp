@@ -24,6 +24,7 @@
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
+#include <QColor>
 #include <QFile>
 #include <QImage>
 #include <QSet>
@@ -33,6 +34,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <cstring>
 
 #include <functional>
 #include "irisgl/irisglfwd.h"
@@ -134,18 +136,41 @@ int main(int argc, char **argv)
     faces[3] = iris::Image::filled(4, 4, 0, 0, 0, 255);
     CHECK(!iris::Texture2D::createCubeMap(std::move(faces)), "cubemap: faces of different sizes refuse the cube");
 
-    // --- A live texture's frame, MOVED in: the frame a producer writes IS the frame the texture holds (a video
-    // pays no copy at the document's door), and the generation moves.
+    // --- A LIVE FRAME COSTS NO COPY OF OURS (NOQT-DOCUMENT-1 stage 5, the owner's bar). The producer converts its
+    // frame in ONE pass into its OWN buffer (imagedecode::intoImage), that buffer IS the one the texture holds after
+    // the write, and the write hands the texture's PREVIOUS buffer back: the next frame lands in it (no allocation, no
+    // zero fill). The conversion is Qt's own: equal to convertToFormat(RGBA8888) for the two formats
+    // QVideoFrame::toImage gives (RGB32, ARGB32_Premultiplied: spikes/noqt-document-1/s5/toimage-format.txt).
     {
         auto live = iris::Texture2D::createLive(QStringLiteral("characterisation-live"), QStringLiteral("live"), 4, 2, false);
-        iris::Image frame = iris::Image::filled(4, 2, 1, 2, 3, 255);
-        const std::uint8_t *handed = frame.rgba.data();
+        const std::uint8_t *born = live ? live->liveImage().rgba.data() : nullptr;
+        QImage first(4, 2, QImage::Format_RGB32);
+        first.fill(QColor(10, 20, 30));
+        QImage second(4, 2, QImage::Format_ARGB32_Premultiplied);
+        for (int y = 0; y < 2; ++y)
+            for (int x = 0; x < 4; ++x) second.setPixelColor(x, y, QColor(200, 100 + 10 * x, 50 * y, 60 + 40 * x));
+        iris::Image spare;
+        CHECK(imagedecode::intoImage(first, spare) && !spare.isNull(), "live frame: the first frame converts into the producer's buffer");
+        const std::uint8_t *filled = spare.rgba.data();
         const auto before = live ? live->liveGeneration() : 0;
-        CHECK(live && live->writeLive(std::move(frame)) && live->liveGeneration() == before + 1 &&
-              live->liveImage().rgba.data() == handed,
-              "live texture: the written frame's buffer IS the one handed in (moved, not copied)");
-        CHECK(live && !live->writeLive(iris::Image::filled(2, 2, 0, 0, 0, 255)),
-              "live texture: a different size is refused");
+        CHECK(live && live->writeLive(spare) && live->liveGeneration() == before + 1 &&
+              live->liveImage().rgba.data() == filled && spare.rgba.data() == born,
+              "live frame: the buffer the producer filled IS the texture's, and the texture's born buffer came back");
+        CHECK(imagedecode::intoImage(second, spare) && spare.rgba.data() == born,
+              "live frame: the second frame lands in the handed-back buffer (no allocation)");
+        CHECK(live && live->writeLive(spare) && live->liveImage().rgba.data() == born && spare.rgba.data() == filled,
+              "live frame: the second write swaps again: two buffers, ping-pong, none copied");
+        const QImage wantFirst = first.convertToFormat(QImage::Format_RGBA8888);
+        const QImage wantSecond = second.convertToFormat(QImage::Format_RGBA8888);
+        CHECK(live && std::memcmp(live->liveImage().rgba.data(), wantSecond.constBits(), 32) == 0 &&
+              std::memcmp(spare.rgba.data(), wantFirst.constBits(), 32) == 0,
+              "live frame: each frame's bytes are Qt's convertToFormat(RGBA8888) of it (RGB32, ARGB32_Premultiplied)");
+        CHECK(live && std::memcmp(live->liveImage().rgba.data(), spare.rgba.data(), 32) != 0,
+              "live frame (the control): two frames give two contents");
+        iris::Image wrong = iris::Image::filled(2, 2, 0, 0, 0, 255);
+        const std::uint8_t *wrongBuffer = wrong.rgba.data();
+        CHECK(live && !live->writeLive(wrong) && wrong.rgba.data() == wrongBuffer,
+              "live texture: a different size is refused, the caller's frame untouched");
     }
 
     // --- Document traversal works: this is what SceneMirror will walk

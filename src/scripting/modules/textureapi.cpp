@@ -13,8 +13,10 @@ For more information see the LICENSE file
 
 #include <QByteArray>
 #include <QColor>
-#include <QImage>
 
+#include <cstdint>
+
+#include "irisgl/document/assets/image.h"
 #include "scripting/modules/moduleshared.h"
 #include "services/livetextures.h"
 #include "services/livevideo.h"
@@ -23,13 +25,14 @@ using namespace scriptmod;
 
 namespace {
 
-/// The pixels a write was handed, as an RGBA8888 image of exactly w x h, or a
-/// null image with `error` set. THREE SPELLINGS, because the three callers a
-/// live texture has want different ones: an ARRAY of bytes (a script computing
-/// a pattern), a BASE64 string (a payload that came from somewhere else, e.g.
-/// an MCP tool call), and a COLOUR (the "fill it with this" case that would
-/// otherwise be a loop nobody enjoys writing).
-QImage imageFromJs(const QVariant &value, int w, int h, QString *error)
+/// The pixels a write was handed, as the document's RGBA image of exactly w x h
+/// (built straight into its own buffer: no QImage between), or a null image with
+/// `error` set. THREE SPELLINGS, because the three callers a live texture has
+/// want different ones: an ARRAY of bytes (a script computing a pattern), a
+/// BASE64 string (a payload that came from somewhere else, e.g. an MCP tool
+/// call), and a COLOUR (the "fill it with this" case that would otherwise be a
+/// loop nobody enjoys writing).
+iris::Image imageFromJs(const QVariant &value, int w, int h, QString *error)
 {
     const QVariant v = normalizeJs(value);
     const qsizetype need = qsizetype(w) * h * 4;
@@ -41,23 +44,21 @@ QImage imageFromJs(const QVariant &value, int w, int h, QString *error)
         // the shortest legal one is 4 characters of a 1x1 texture, and no
         // colour name is valid base64 of the right length for a real image.
         const QColor colour(s);
-        if (colour.isValid()) {
-            QImage filled(w, h, QImage::Format_RGBA8888);
-            filled.fill(colour);
-            return filled;
-        }
+        if (colour.isValid())
+            return iris::Image::filled(w, h, std::uint8_t(colour.red()), std::uint8_t(colour.green()),
+                                       std::uint8_t(colour.blue()), std::uint8_t(colour.alpha()));
         const QByteArray bytes = QByteArray::fromBase64(s.toLatin1());
         if (bytes.size() != need) {
             if (error)
                 *error = QStringLiteral("the base64 payload decodes to %1 bytes; %2x%3 RGBA "
                                         "needs %4").arg(bytes.size()).arg(w).arg(h).arg(need);
-            return QImage();
+            return iris::Image();
         }
-        QImage image(reinterpret_cast<const uchar *>(bytes.constData()), w, h,
-                     w * 4, QImage::Format_RGBA8888);
-        // DEEP COPY: the QByteArray dies with this scope and QImage's raw-data
-        // constructor does not own its buffer.
-        return image.copy();
+        iris::Image image;
+        image.width = w;
+        image.height = h;
+        image.rgba.assign(bytes.constBegin(), bytes.constEnd());
+        return image;
     }
 
     if (v.canConvert<QVariantList>()) {
@@ -67,19 +68,21 @@ QImage imageFromJs(const QVariant &value, int w, int h, QString *error)
                 *error = QStringLiteral("the pixel array has %1 entries; %2x%3 RGBA needs %4 "
                                         "(r, g, b, a per texel, row 0 at the top)")
                              .arg(list.size()).arg(w).arg(h).arg(need);
-            return QImage();
+            return iris::Image();
         }
-        QImage image(w, h, QImage::Format_RGBA8888);
-        uchar *out = image.bits();
+        iris::Image image;
+        image.width = w;
+        image.height = h;
+        image.rgba.resize(std::size_t(need));
         for (qsizetype i = 0; i < need; ++i)
-            out[i] = uchar(qBound(0, list.at(i).toInt(), 255));
+            image.rgba[std::size_t(i)] = std::uint8_t(qBound(0, list.at(i).toInt(), 255));
         return image;
     }
 
     if (error)
         *error = QStringLiteral("pixels must be an array of bytes, a base64 string or a "
                                 "colour to fill with");
-    return QImage();
+    return iris::Image();
 }
 
 } // namespace
@@ -192,7 +195,7 @@ bool TextureApi::write(const QString &guid, int width, int height, const QVarian
                                    "you want").arg(guid).arg(w).arg(h).arg(width).arg(height));
 
     QString error;
-    const QImage image = imageFromJs(rgba, w, h, &error);
+    iris::Image image = imageFromJs(rgba, w, h, &error);
     if (image.isNull()) return fail(QStringLiteral("texture.write: %1").arg(error));
     if (!LiveTextureCatalog::write(guid, image, &error))
         return fail(QStringLiteral("texture.write: %1").arg(error));

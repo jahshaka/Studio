@@ -842,7 +842,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
         if (scene->skyTexture && scene->skyTexture->isCubeMap() && scene->skyTexture->cubeFaces()) {
             const iris::Image *held = scene->skyTexture->cubeFaces();
             QImage faces[6];
-            for (int i = 0; i < 6; ++i) faces[i] = imagedecode::toQImage(held[i]);
+            for (int i = 0; i < 6; ++i) faces[i] = imagedecode::view(held[i]);   // read only: no copy of the faces
             stitched = stitchCubemapToEquirect(faces);
         } else {
             QImage faces[6];

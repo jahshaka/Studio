@@ -41,7 +41,8 @@ For more information see the LICENSE file
 // a project calls AssetManager::clearAssetList(), which would otherwise delete
 // a session identity that has nothing to do with the project.
 
-#include <QImage>
+#include "irisgl/document/assets/image.h"
+
 #include <QString>
 #include <QStringList>
 #include <QVariantMap>
@@ -67,7 +68,10 @@ public:
     /// Replaces the pixels and bumps the document generation the mirror
     /// watches. Refuses a size other than the one it was created with — the
     /// renderer's texture cannot resize, so that is destroy + create.
-    static bool write(const QString &guid, const QImage &rgba, QString *error = nullptr);
+    /// NO COPY: `rgba`'s buffer becomes the texture's and `rgba` receives the
+    /// previous frame (Texture2D::writeLive swaps): the producer's next frame
+    /// is written into memory it already has.
+    static bool write(const QString &guid, iris::Image &rgba, QString *error = nullptr);
 
     static bool exists(const QString &guid);
     /// {guid, name, width, height, mipmaps, generation, ref} — an empty map
