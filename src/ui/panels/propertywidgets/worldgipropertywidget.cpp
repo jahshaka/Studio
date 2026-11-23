@@ -557,7 +557,7 @@ void WorldGiPropertyWidget::endPhotonEdit(const QString &text)
     if (!scene || !services || !services->undo) return;
     const WorldModeCommand::Snapshot after = WorldModeCommand::capture(scene);
     // A press-and-release that moved nothing is not an edit.
-    if (after.rowValues == editBefore.rowValues && after.overrides == editBefore.overrides &&
+    if (after.rowValues == editBefore.rowValues && iris::sameMembers(after.overrides, editBefore.overrides) &&
         after.worldMode == editBefore.worldMode && after.photonTier == editBefore.photonTier)
         return;
     auto *cmd = new WorldModeCommand(text, scene, editBefore);

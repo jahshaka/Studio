@@ -75,7 +75,7 @@ target_include_directories(test_fragment_codecs PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_fragment_codecs PRIVATE IrisGL Qt6::Core)
+target_link_libraries(test_fragment_codecs PRIVATE IrisGL Qt6::Gui)   # Gui: commands/worldmodecommand.h's QUndoCommand (the snapshot's default)
 add_test(NAME document.fragment_codecs COMMAND test_fragment_codecs WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(document.fragment_codecs PROPERTIES LABELS "document" TIMEOUT 60)
 jah_no_display(document.fragment_codecs)

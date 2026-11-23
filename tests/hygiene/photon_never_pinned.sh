@@ -80,7 +80,9 @@ import os, re
 roots = ("src", "irisgl/document", "irisgl/core")
 allowed = {"src/io/scenereader.cpp", "src/commands/worldmodecommand.cpp",
            "irisgl/document/scenegraph/scene.cpp"}
-ins = re.compile(r"worldOverrides\s*(?:\.\s*(?:set|insert)\s*\(|\[)([^;]*?)(?:;)", re.S)
+# (and the Value Object's own mutable members: asObject().emplace_back(...) writes a pin no set( shows - the
+# lead's F11, NOQT-DOCUMENT-1 stage 4)
+ins = re.compile(r"worldOverrides\s*(?:\.\s*(?:set|insert)\s*\(|\[|\.\s*asObject\(\)\s*\.\s*(?:emplace_back|push_back|emplace|insert)\s*\()([^;]*?)(?:;)", re.S)
 assign = re.compile(r"worldOverrides\s*=(?!=)")
 out = []
 seen = set()

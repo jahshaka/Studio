@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "commands/worldmodecommand.h"
 
+#include "irisgl/document/properties/valueshapes.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
 
@@ -31,7 +32,7 @@ WorldModeCommand::Snapshot WorldModeCommand::capture(const iris::ScenePtr &scene
 bool WorldModeCommand::same(const Snapshot &a, const Snapshot &b)
 {
     return a.worldMode == b.worldMode && a.photonTier == b.photonTier &&
-           a.overrides == b.overrides && a.rowValues == b.rowValues &&
+           iris::sameMembers(a.overrides, b.overrides) && a.rowValues == b.rowValues &&   // the pins as a set (F12)
            a.cascadeSet == b.cascadeSet && a.cascadeInstanceCap == b.cascadeInstanceCap;
 }
 

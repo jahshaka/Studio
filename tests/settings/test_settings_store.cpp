@@ -173,6 +173,44 @@ int main(int argc, char **argv)
         s.shutdown();   // idempotent; the destructor calls it again
     }
 
+    // ---- §8 THE DOCUMENT's VIEW WRITES THE SAME FILE (NOQT-DOCUMENT-1 stage 4, the lead's F14) -----------------
+    // keyValues() is the std interface the InputMap writes through: a Value Array of Strings must reach the ini as
+    // the QStringList the QString API writes - the same BYTES - and read back as the same Array. The edge cases: an
+    // empty list, a comma, a quote and an empty string in one list, and a one-entry list.
+    {
+        const QString viaValue = dir.filePath("via_value.ini"), viaQt = dir.filePath("via_qt.ini");
+        const iris::Value empty(iris::Value::Array{});
+        const iris::Value awkward(iris::Value::Array{iris::Value("a,b"), iris::Value("q\"x"), iris::Value("")});
+        const iris::Value one(iris::Value::Array{iris::Value("Return")});
+        {
+            SettingsStore a(viaValue);
+            a.keyValues().setValue("input/Empty", empty);
+            a.keyValues().setValue("input/Awkward", awkward);
+            a.keyValues().setValue("input/One", one);
+            CHECK(a.flush(), "the document's view flushes");
+            SettingsStore b(viaQt);
+            b.setValue("input/Empty", QStringList());
+            b.setValue("input/Awkward", QStringList({ "a,b", "q\"x", "" }));
+            b.setValue("input/One", QStringList({ "Return" }));
+            CHECK(b.flush(), "the QString API flushes");
+        }
+        QFile fa(viaValue), fb(viaQt);
+        const QByteArray bytesA = fa.open(QIODevice::ReadOnly) ? fa.readAll() : QByteArray();
+        const QByteArray bytesB = fb.open(QIODevice::ReadOnly) ? fb.readAll() : QByteArray();
+        CHECK(!bytesA.isEmpty() && bytesA == bytesB, "the same bytes as the QStringList the QString API writes");
+        SettingsStore back(viaValue);
+        const auto readEmpty = back.keyValues().value("input/Empty");
+        const auto readAwkward = back.keyValues().value("input/Awkward");
+        const auto readOne = back.keyValues().value("input/One");
+        CHECK(readAwkward && *readAwkward == awkward, "a list with a comma, a quote and an empty string reads back equal");
+        // QSettings hands a one-entry list back as a QString (its reader, InputMap::fromValue, takes a String as one
+        // row: input.actions) and an empty list as an empty value: both present, both the same entries.
+        CHECK(readOne && (*readOne == one || *readOne == iris::Value("Return")),
+              "a one-entry list reads back as its one entry (an Array of it, or the String QSettings hands back)");
+        CHECK(readEmpty && (*readEmpty == empty || readEmpty->isNull() || *readEmpty == iris::Value("")),
+              "an empty list reads back present and empty");
+    }
+
     std::printf("%s (%d failure(s))\n", failures ? "FAIL" : "PASS", failures);
     return failures ? 1 : 0;
 }
