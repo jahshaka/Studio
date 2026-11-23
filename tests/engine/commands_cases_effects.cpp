@@ -309,7 +309,14 @@ void casesEffects(Fixture &f)
     const Result bc = h.call("engine.billboards.create", {s, n, obj({{"texture", tex}, {"capacity", Value(4)}})});
     const Result bs = h.call("engine.billboards.set", {s, n, obj({{"positions", nums({0, 1, 0, 1, 1, 0})}, {"sizes", nums({0.5, 2})}})});
     std::printf("Q: the headless engine's billboards: create %s, set %s\n", bc.message.c_str(), bs.message.c_str());
-    check(bc.value == Value(true) && bs.value == Value(true), "engine.billboards.create and set act on the headless engine");
+    // PAST THE SET'S CAPACITY (4): FAILED by the engine's words, naming the count and the capacity; THE CONTROL: the
+    // capacity itself (4 quads) is taken right after
+    const Result past = h.call("engine.billboards.set", {s, n, obj({{"positions", nums({0, 0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 4, 0, 0})}})});
+    const Result atCap = h.call("engine.billboards.set", {s, n, obj({{"positions", nums({0, 0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0})}})});
+    check(bc.value == Value(true) && bs.value == Value(true) &&
+              failedWith(past, "engine.billboards.set: setBillboards: 5 quads past the set's capacity 4") && atCap.value == Value(true),
+          "engine.billboards.create and set act on the headless engine; 5 quads on a set of 4 FAIL by the engine's words (" +
+              past.message + "), 4 are taken");
 
     // the planar reflections: the scene's (budget 0 here: a budget above 0 makes render targets, which the NULL
     // render system refuses - "Texture 'DepthBuffer_0': Invalid settings!", measured), and a reflector on a mesh that

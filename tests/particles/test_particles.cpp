@@ -98,8 +98,15 @@ int main(int argc, char **argv)
         std::printf("    engine billboards: %d bright pixels\n", lit);
         CHECK(lit > 50, "additive billboards render bright pixels on black");
 
+        // PAST THE CAPACITY (re-derived 2026-11-23, SCRIPT-IN-ENGINE-1 2c - the silent-setter class: the count was cut to
+        // the capacity and answered true): 200 quads on a set of 64 are REFUSED naming both, before anything is
+        // allocated, so the set keeps what it had - the frame after still draws the 8 quads above (the bright count again)
         std::vector<BillboardInstance> many(200, quads[0]);
-        CHECK(target->setBillboards(node, many.data(), many.size()), "setBillboards over capacity clamps");
+        const bool refusedPast = !target->setBillboards(node, many.data(), many.size()) &&
+                                 engine->lastError().find("200 quads past the set's capacity 64") != std::string::npos;
+        CHECK(refusedPast, "setBillboards past the set's capacity is refused naming the count and the capacity");
+        enginetest::frames(engine, 2);
+        CHECK(view->readPixels(img) && countBright(img) == lit, "the refused call kept the set: its 8 quads still draw");
         CHECK(target->setBillboards(node, nullptr, 0), "setBillboards(0) clears");
         enginetest::frames(engine, 2);
         view->readPixels(img);
