@@ -28,7 +28,8 @@ For more information see the LICENSE file
 //  10. an import whose insert failed answers false and leaves nothing (its unit rolls back: the audit's W3);
 //  11. "is it pinned here" that could not be read (a failed probe, a closed library) is no answer: readOk cleared;
 //  12. an import's archive whose PROJECT ROW cannot be read is refused by name - never an empty, unnamed world;
-//  13. "does it have dependencies" that could not be read is no answer: readOk cleared.
+//  13. "does it have dependencies" that could not be read is no answer: readOk cleared;
+//  14. where a project's pins are filed, unread, is no answer: readOk cleared.
 
 #include <QApplication>
 #include <QFile>
@@ -476,6 +477,26 @@ int main(int argc, char **argv)
         read = true;
         database.hasDependencies(QStringLiteral("f3-depender"), &read);
         check(read, QStringLiteral("13: CONTROL: a read that ran keeps readOk"));
+    }
+
+    // 14. WHERE A PROJECT's PINS ARE FILED, unread, is no answer (the sweep's d: an archive would put every pinned row
+    //     at its root): the project_assets read denied by an authorizer.
+    {
+        db::Error e;
+        database.connection().exec("INSERT INTO project_assets (project_guid, asset_guid, oid_pin, folder) "
+                                   "VALUES ('p14', 'a14', '', 'f14')", &e);
+        bool read = true;
+        const QHash<QString, QString> filed = database.fetchProjectPinFolders(QStringLiteral("p14"), &read);
+        check(read && filed.value(QStringLiteral("a14")) == QLatin1String("f14"),
+              QStringLiteral("14: CONTROL: a filed pin reads its folder (%1)").arg(filed.value(QStringLiteral("a14"))));
+        sqlite3 *raw = *static_cast<sqlite3 *const *>(QSqlDatabase::database().driver()->handle().constData());
+        sqlite3_set_authorizer(raw, [](void *, int action, const char *table, const char *, const char *, const char *) {
+            return action == SQLITE_READ && table && std::strcmp(table, "project_assets") == 0 ? SQLITE_DENY : SQLITE_OK;
+        }, nullptr);
+        read = true;
+        database.fetchProjectPinFolders(QStringLiteral("p14"), &read);
+        sqlite3_set_authorizer(raw, nullptr, nullptr);
+        check(!read, QStringLiteral("14: a FAILED read of the pins' folders is no answer (read %1)").arg(read));
     }
 
     database.closeDatabase();

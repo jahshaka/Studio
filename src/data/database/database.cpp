@@ -2766,15 +2766,16 @@ QSet<QString> Database::fetchProjectPinnedGuids(const QString &projectGuid)
     return out;
 }
 
-QHash<QString, QString> Database::fetchProjectPinFolders(const QString &projectGuid)
+QHash<QString, QString> Database::fetchProjectPinFolders(const QString &projectGuid, bool *readOk)
 {
     QHash<QString, QString> out;
     if (projectGuid.isEmpty()) return out;
     DbQuery query(connection(), "SELECT asset_guid, folder FROM project_assets "
                   "WHERE project_guid = ? AND folder IS NOT NULL AND folder <> ''");
     dbqt::bindText(query, 1, projectGuid);
-    executeAndCheckQuery(query, "fetchProjectPinFolders");
+    const bool ran = executeAndCheckQuery(query, "fetchProjectPinFolders");
     while (query.next()) out.insert(dbqt::text(query, 0), dbqt::text(query, 1));
+    if (readOk && (!ran || query.failed())) *readOk = false;
     return out;
 }
 

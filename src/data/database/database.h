@@ -693,8 +693,9 @@ public:
     /// WHERE EACH PIN IS FILED: asset guid -> folder guid, for the pins this
     /// project has filed somewhere (an unfiled pin is absent). ONE query for a
     /// whole listing, like the batch reads above — the tray reads it on every
-    /// edge write and every search keystroke.
-    QHash<QString, QString> fetchProjectPinFolders(const QString &projectGuid);
+    /// edge write and every search keystroke. `readOk` (optional) is CLEARED
+    /// when the read failed: the map is then no answer (an archive refuses).
+    QHash<QString, QString> fetchProjectPinFolders(const QString &projectGuid, bool *readOk = nullptr);
     /// The DEPENDERS of `dependee` among the dependency edges recorded for
     /// `projectGuid` — who in this project uses the asset (a node's material
     /// slot, the ground, a decal, an emitter, a material). Duplicates removed.

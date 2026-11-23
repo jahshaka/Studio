@@ -226,7 +226,13 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
     // nothing in the archive carried it — every pinned row came back at the
     // root of the imported project, the folders the user made standing empty
     // beside it. One query for the whole export.
-    const QHash<QString, QString> pinFolders = db->fetchProjectPinFolders(projectGuid);
+    // (Unread is no "filed nowhere", the sweep's d: every pinned row would come back at the archive's root.)
+    bool foldersRead = true;
+    const QHash<QString, QString> pinFolders = db->fetchProjectPinFolders(projectGuid, &foldersRead);
+    if (!foldersRead) {
+        mResult.error = QStringLiteral("the catalog read of the pins' folders failed (the log names it)");
+        return false;
+    }
 
     while (members.step(&readError)) {
         ManifestAsset asset;
@@ -256,7 +262,14 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
         // means every generation of every bake travels as dead megabytes. The
         // raw exporter has always filtered it; this path silently did not
         // (PUBLISH_AUDIT #2), which is why the two queries now agree.
-        const QString pin = AssetCas::pinnedOid(conn, projectGuid, asset.guid);
+        // THE PROJECT's PIN, read with its failure (the sweep's d): unread is no "no pin" - the archive would carry
+        // the library's bytes in place of the project's own version.
+        bool pinRead = true;
+        const QString pin = AssetCas::pinnedOid(conn, projectGuid, asset.guid, &pinRead);
+        if (!pinRead) {
+            mResult.error = QStringLiteral("the catalog read of the pin of '%1' failed").arg(asset.name);
+            return false;
+        }
 
         db::Statement files(conn, "SELECT AF.role, AF.name, AF.oid, F.size, F.ext FROM asset_files AF "
                                   "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
@@ -282,6 +295,10 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
                     file.oid = pin;
                     file.size = pinExt.int64(0);
                     ext = dbqt::text(pinExt, 1);
+                } else if (pinError) {   // the pinned object unread: never the library's in its place
+                    mResult.error = QStringLiteral("the catalog read of the pinned object of '%1' failed: %2")
+                                        .arg(asset.name, dbqt::describe(pinError));
+                    return false;
                 }
             }
             first = false;
