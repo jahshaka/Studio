@@ -390,24 +390,44 @@ int main()
     Registry &eng = engHost.registry();
     std::size_t engineCommands = 0;
     for (const CommandInfo *c : eng.commands()) engineCommands += c->name.rfind("engine.", 0) == 0;
-    check(engineCommands == 29 && eng.validate().empty(),
-          "the 29 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
+    // (a FLOOR: stage 2's families register more - each new command's access and shape is its family's own case in
+    // script.commands, which also holds "every command tagged and documented")
+    check(engineCommands >= 29 && eng.validate().empty(),
+          "the engine's commands register (" + std::to_string(engineCommands) + ", at least the 29 of stages 1, 2a and 2b), "
+          "each documented and shaped (targets positional, the rest named), with no engine");
     {
-        // THE ACCESS of the 26 (the spec's table, 2a a1, + setTransforms): these read; every other changes the engine
+        // THE ACCESS OF THE 31 COMMANDS OF STAGES 1, 2a AND 2b - NAMED (the spec's table, 2a a1, + setTransforms): each
+        // must be FOUND, with its tag; these 8 read, the other 23 change the engine. A command a later family adds is
+        // judged by its own family's case, never here.
         const std::vector<std::string> reads = {"host.check", "host.lastError", "engine.view.routes",
                                                 "engine.view.declareRoutes", "engine.picture.bytes", "engine.picture.hash",
                                                 "engine.picture.columnStep", "engine.picture.mean"};
+        const std::vector<std::string> changes = {
+            "engine.arm", "engine.frames", "engine.gi.set", "engine.material.createPbr", "engine.material.destroy",
+            "engine.mesh.destroy", "engine.mesh.unitCube", "engine.node.attachMesh", "engine.node.create",
+            "engine.node.destroy", "engine.node.setTransform", "engine.node.setTransforms", "engine.picture.create",
+            "engine.picture.release", "engine.scene.create", "engine.scene.destroy", "engine.scene.setAmbient",
+            "engine.view.createOffscreen", "engine.view.destroy", "engine.view.lookAt", "engine.view.readPixels",
+            "engine.view.setPostFx", "engine.view.setScene"};
         std::size_t checked = 0;
-        std::string wrong;
-        for (const CommandInfo *c : eng.commands()) {
-            bool read = false;
-            for (const std::string &n : reads) read = read || n == c->name;
-            ++checked;
-            if (c->signature.access != (read ? Access::Reads : Access::Changes)) wrong += " " + signatureText(*c);
-        }
-        check(checked == 31 && wrong.empty(),
-              "every one of the " + std::to_string(checked) + " commands declares the access of the spec's table: 8 " +
-                  "reads, the rest changes" + (wrong.empty() ? std::string() : " - wrong:" + wrong));
+        std::string wrong, missing;
+        const auto judge = [&](const std::vector<std::string> &names, Access want) {
+            for (const std::string &n : names) {
+                const CommandInfo *c = eng.find(n);
+                if (!c) {
+                    missing += " " + n;
+                    continue;
+                }
+                ++checked;
+                if (c->signature.access != want) wrong += " " + signatureText(*c);
+            }
+        };
+        judge(reads, Access::Reads);
+        judge(changes, Access::Changes);
+        check(checked == 31 && wrong.empty() && missing.empty(),
+              "every one of the 31 named commands of stages 1, 2a and 2b is found (" + std::to_string(checked) +
+                  ") and declares the access of the spec's table: 8 reads, 23 changes" +
+                  (wrong.empty() ? std::string() : " - wrong:" + wrong) + (missing.empty() ? std::string() : " - missing:" + missing));
         check(signatureText(*eng.find("engine.picture.hash")) == "engine.picture.hash(picture: target picture handle) -> string [reads]",
               "the signature prints its access last: " + signatureText(*eng.find("engine.picture.hash")));
     }
