@@ -13,11 +13,15 @@
 // AND THE PICTURE STAYS (the lead's ruling C1): the engine's refusal is atomic, so the mirror pushes the lamp once more
 // WITHOUT the profile and the emitter WITHOUT the ramp - the lamp exists and its edits reach it, the emitter is built.
 // NULL render system, offscreen platform: no display, no card.
+#include <QDir>
+#include <QFile>
 #include <QGuiApplication>
+#include <QImage>
 #include <cstdint>
 #include <cstdio>
 #include <string>
 
+#include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -116,6 +120,71 @@ int main(int argc, char **argv)
         check(defs1 == defs0 + 1 && rampRefusals == 1,
               "A MISSING RAMP DOES NOT TAKE THE EMITTER DOWN: its definition built (" + std::to_string(defs0) + " -> " +
                   std::to_string(defs1) + "), the refusal said once (" + std::to_string(rampRefusals) + ")");
+
+        // THE FALLBACK's OWN ANSWER DECIDES (the confirm's D2, the lead's ruling): an emitter with a PRESENT ramp image and
+        // a broken texture (a file that is there and no image: the engine's load refuses, the emitter's texture is
+        // unknown) is refused - NOT for its ramp: the fallback without the ramp is refused too, so nothing is latched.
+        // The texture fixed, the WHOLE value is pushed, its ramp included. THE READ: the ramp is then cleared in the
+        // document - a NEW topology (no ramp affector) builds one more definition (published particleDefinitionsCreated);
+        // had the good ramp been latched as refused, the emitter would already be ramp-less and nothing would build
+        const QString dir = QDir::currentPath();
+        QImage(4, 1, QImage::Format_RGBA8888).save(dir + "/final_refusal_ramp.png");
+        QImage(2, 2, QImage::Format_RGBA8888).save(dir + "/final_refusal_texture.png");
+        if (QFile bad(dir + "/final_refusal_broken.png"); bad.open(QIODevice::WriteOnly)) bad.write("\x89PNG\r\n\x1a\n not an image");
+        auto broken = iris::Texture2D::create(QImage());
+        broken->source = dir + "/final_refusal_broken.png";
+        auto good = iris::Texture2D::create(QImage());
+        good->source = dir + "/final_refusal_texture.png";
+        auto ramped = iris::ParticleSystemNode::create();
+        ramped->setName("ramped");
+        ramped->colourRampImage = dir + "/final_refusal_ramp.png";
+        ramped->texture = broken;
+        doc->getRootNode()->addChild(ramped);
+        for (int i = 0; i < 3; ++i) {
+            mirror.sync();
+            enginetest::frozenFrames(e, 1);
+        }
+        ramped->texture = good;
+        ramped->markChanged(iris::NodeChange::Params);
+        for (int i = 0; i < 3; ++i) {
+            mirror.sync();
+            enginetest::frozenFrames(e, 1);
+        }
+        const unsigned withRamp = target->published().particleDefinitionsCreated;
+        ramped->colourRampImage.clear();
+        ramped->markChanged(iris::NodeChange::Params);
+        for (int i = 0; i < 3; ++i) {
+            mirror.sync();
+            enginetest::frozenFrames(e, 1);
+        }
+        const unsigned rampless = target->published().particleDefinitionsCreated;
+        std::printf("      a present ramp and a broken texture, the texture fixed, then the ramp cleared: definitions %u -> %u\n",
+                    withRamp, rampless);
+        check(rampless == withRamp + 1,
+              "A REFUSAL NOT FOR THE FILE LATCHES NOTHING: a present ramp kept through a texture's refusal (the fallback "
+              "refused too); the texture fixed, the emitter pushed WITH its ramp - clearing the ramp builds a new "
+              "definition (" + std::to_string(withRamp) + " -> " + std::to_string(rampless) + ")");
+
+        // THE FALLBACK READS NO FREED NODE (the confirm's D1): a lamp naming a missing .ies pushed, then removed and FREED
+        // before the next sync - its refusal arrives at that sync's top, before the mirror releases the entry; the
+        // fallback was built while the node lived and reads nothing of it (a use-after-free here is shown under
+        // AddressSanitizer: the red-once arm). THE CONTROL: the sync completes and the row goes on
+        {
+            auto doomed = iris::LightNode::create();
+            doomed->setName("doomed");
+            doomed->setLightType(iris::LightType::Point);
+            doomed->iesProfilePath = QStringLiteral("/no/such/dir/doomed.ies");
+            doc->getRootNode()->addChild(doomed);
+            mirror.sync();
+            enginetest::frozenFrames(e, 1);
+            doc->getRootNode()->removeChild(doomed);
+            doomed.reset();   // freed: no reference left (no undo stack here)
+        }
+        for (int i = 0; i < 2; ++i) {
+            mirror.sync();
+            enginetest::frozenFrames(e, 1);
+        }
+        check(true, "A FREED LAMP's REFUSAL: the sync that reads it completes (AddressSanitizer is the arm that sees a read)");
     }
     e->destroyScene(target);
     std::printf("%s\n", gFailures == 0 ? "mirror.final_refusal: PASSED" : ("mirror.final_refusal: FAILED (" +
