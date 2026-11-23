@@ -15,7 +15,7 @@ const W = 257, H = 145;
 const view = engine.view.createOffscreen({name: "oddsize", width: W, height: H, background: [0.05, 0.05, 0.06, 1]});
 const scene = engine.scene.create("oddsize");
 engine.view.setScene(view, {scene});
-engine.scene.setAmbient(scene, {upper: [0.05, 0.05, 0.06], lower: [0.03, 0.03, 0.03]});
+engine.scene.setAmbient(scene, {upper: [0.05, 0.05, 0.06, 1], lower: [0.03, 0.03, 0.03, 1]});
 
 const cube = engine.mesh.unitCube(scene);
 const floor = engine.node.create(scene), wall = engine.node.create(scene);

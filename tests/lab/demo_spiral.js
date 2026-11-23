@@ -18,7 +18,7 @@ const FRAMES = 240, N = 48;
 const view = lab.view();   // the lab's view, handed over detached
 const scene = engine.scene.create("demo-spiral");
 engine.view.setScene(view, {scene});
-engine.scene.setAmbient(scene, {upper: [0.55, 0.6, 0.7], lower: [0.12, 0.1, 0.08]});
+engine.scene.setAmbient(scene, {upper: [0.55, 0.6, 0.7, 1], lower: [0.12, 0.1, 0.08, 1]});
 const cube = engine.mesh.unitCube(scene);
 
 const hub = engine.node.create(scene);

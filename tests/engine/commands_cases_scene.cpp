@@ -91,6 +91,11 @@ void casesScene(Fixture &f)
             {"engine.scene.setEnvironmentLight", nums({1, 1, 1}), "gain must hold 4 elements (it holds 3)"},
             {"engine.scene.setEnvironmentLight", nums({1, -1, 1, 1}), "gain[1] -1 is outside >= 0"},
             {"engine.scene.setAmbientSh", nums({1, 1, 1}), "sh must hold 27 elements (it holds 3)"},
+            // A COLOUR IS FOUR NUMBERS (the tail: E0's setAmbient took 3) - three are refused by the registry's count check
+            {"engine.scene.setAmbient", Value(Value::Object{{"upper", nums({1, 1, 1})}, {"lower", nums({0, 0, 0, 1})}}),
+             "ambient.upper must hold 4 elements (it holds 3)"},
+            {"engine.scene.setAmbient", Value(Value::Object{{"upper", nums({1, 1, 1, 1})}, {"lower", nums({0, 0, 0})}}),
+             "ambient.lower must hold 4 elements (it holds 3)"},
             {"engine.scene.setFog", Value(Value::Object{{"density", Value(-0.5)}}), "fog.density -0.5 is outside >= 0"},
             {"engine.scene.setFog", Value(Value::Object{{"colour", nums({1, 1, 1})}}), "fog.colour must hold 4 elements (it holds 3)"},
             {"engine.scene.setShadowSettings", Value(Value::Object{{"filter", Value("blurry")}}),
@@ -115,6 +120,7 @@ void casesScene(Fixture &f)
         for (const auto &[command, arg] : std::initializer_list<std::pair<const char *, Value>>{
                  {"engine.scene.setSky", Value(Value::Object{{"mode", Value("atmosphere")}})},
                  {"engine.scene.setEnvironmentLight", nums({1, 1, 1, 1})},
+                 {"engine.scene.setAmbient", Value(Value::Object{{"upper", nums({1, 1, 1, 1})}, {"lower", nums({0, 0, 0, 1})}})},
                  {"engine.scene.setFog", Value(Value::Object{{"enabled", Value(true)}})},
                  {"engine.mesh.create", Value(Value::Object{})}}) {
             const Result r = f.none.call(command, {ns, arg});

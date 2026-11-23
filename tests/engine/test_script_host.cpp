@@ -1583,7 +1583,7 @@ int main()
                 "console.log(caught(() => engine.node.destroy(s, theirs)));\n"
                 "console.log(caught(() => engine.mesh.destroy(s, forge(mesh, " + std::to_string(ownerMesh) + "))));\n"
                 "console.log(caught(() => engine.material.destroy(s, forge(material, " + std::to_string(ownerMat) + "))));\n"
-                "console.log(caught(() => engine.scene.setAmbient(s, {upper: [1, 1, 1], lower: [0, 0, 0]})));\n"
+                "console.log(caught(() => engine.scene.setAmbient(s, {upper: [1, 1, 1, 1], lower: [0, 0, 0, 1]})));\n"
                 "console.log(caught(() => engine.gi.set(s, {mode: 'off', cascades: []})));\n"
                 "engine.node.attachMesh(s, node, {mesh, material});\n"
                 "console.log(engine.node.destroy(s, gone), node % 2 ** 32);\n",

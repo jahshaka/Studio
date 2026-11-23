@@ -4,7 +4,7 @@
 const view = lab.view();
 const scene = engine.scene.create("js-cube");
 engine.view.setScene(view, {scene});
-engine.scene.setAmbient(scene, {upper: [0.55, 0.6, 0.7], lower: [0.12, 0.1, 0.08]});
+engine.scene.setAmbient(scene, {upper: [0.55, 0.6, 0.7, 1], lower: [0.12, 0.1, 0.08, 1]});
 const cube = engine.node.create(scene);
 engine.node.attachMesh(scene, cube, {
     mesh: engine.mesh.unitCube(scene),
