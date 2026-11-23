@@ -140,16 +140,16 @@ int main(int argc, char **argv)
         CHECK(map.bind(InputAction::Sprint, { { Qt::Key_A, 0, 0 } }), "a freed key can be rebound");
     }
 
-    // ---- binding round-trip: QVariantMap, then QSettings ------------------
+    // ---- binding round-trip: the Value form, then the settings file --------
     {
         InputMap map;
         map.bind(InputAction::Move, { { Qt::Key_Up, 0, +1 }, { Qt::Key_Down, 0, -1 },
                                       { Qt::Key_Left, -1, 0 }, { Qt::Key_Right, +1, 0 } });
         map.bind(InputAction::Jump, { { Qt::Key_Return, 0, 0 } });
-        const QVariantMap serialized = map.toVariantMap();
+        const iris::Value serialized = map.toValue();
 
         InputMap other;
-        CHECK(other.fromVariantMap(serialized), "a serialized map is understood");
+        CHECK(other.fromValue(serialized), "a serialized map is understood");
         CHECK(other.bindings(InputAction::Move).size() == 4, "the axis keys came back");
         bool up = false;
         for (const auto &b : other.bindings(InputAction::Move))
@@ -157,17 +157,17 @@ int main(int argc, char **argv)
         CHECK(up, "an axis key's CONTRIBUTION round-trips, not just its key code");
         CHECK(other.bindings(InputAction::Jump).size() == 1 &&
               other.bindings(InputAction::Jump)[0].key == Qt::Key_Return, "the button key came back");
-        CHECK(other.toVariantMap() == serialized, "the round trip is byte-stable");
+        CHECK(other.toValue() == serialized, "the round trip is byte-stable");
 
         // Tolerance: a future action and a corrupt key must not brick the map.
-        QVariantMap junk = serialized;
-        junk.insert("Crouch", QStringList{ "C" });
-        junk.insert("Jump", QStringList{ "NotAKey", "Return" });
+        iris::Value junk = serialized;
+        (void)junk.set("Crouch", iris::Value(iris::Value::Array{ iris::Value("C") }));
+        (void)junk.set("Jump", iris::Value(iris::Value::Array{ iris::Value("NotAKey"), iris::Value("Return") }));
         InputMap tolerant;
-        CHECK(tolerant.fromVariantMap(junk), "an unknown action is skipped, not fatal");
+        CHECK(tolerant.fromValue(junk), "an unknown action is skipped, not fatal");
         CHECK(tolerant.bindings(InputAction::Jump).size() == 1, "an unparseable key row is dropped");
         InputMap empty;
-        CHECK(!empty.fromVariantMap(QVariantMap{ { "Crouch", QStringList{ "C" } } }),
+        CHECK(!empty.fromValue(iris::Value(iris::Value::Object{ { "Crouch", iris::Value(iris::Value::Array{ iris::Value("C") }) } })),
               "a map with nothing recognizable reports false");
     }
 
@@ -177,13 +177,13 @@ int main(int argc, char **argv)
         SettingsStore ini(iniPath);
         InputMap map;
         map.bind(InputAction::Jump, { { Qt::Key_Return, 0, 0 } });
-        map.save(ini);
+        map.save(ini.keyValues());
         ini.flush();
     }
     {
         SettingsStore ini(iniPath);
         InputMap map;
-        map.load(ini);
+        map.load(ini.keyValues());
         CHECK(map.bindings(InputAction::Jump).size() == 1 &&
               map.bindings(InputAction::Jump)[0].key == Qt::Key_Return,
               "bindings persist through jahsettings.ini");
@@ -194,7 +194,7 @@ int main(int argc, char **argv)
         // An action with NO stored row keeps its default rather than unbinding.
         SettingsStore ini(dir.filePath("empty.ini"));
         InputMap map;
-        map.load(ini);
+        map.load(ini.keyValues());
         CHECK(map.bindings(InputAction::Move).size() == 8, "an empty settings file keeps defaults");
     }
 

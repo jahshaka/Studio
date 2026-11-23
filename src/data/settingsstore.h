@@ -44,7 +44,7 @@
 // a QSettings read here would be exactly the wait this store removes (the
 // suite reads the file back as bytes for that reason).
 
-#include "irisgl/document/qt/keyvaluestore.h"
+#include "irisgl/document/input/keyvaluestore.h"
 
 #include <QMap>
 #include <QString>
@@ -54,26 +54,28 @@
 #include <condition_variable>
 #include <deque>
 #include <mutex>
+#include <optional>
+#include <string_view>
 #include <thread>
 
-class SettingsStore : public iris::KeyValueStore
+class SettingsStore
 {
 public:
     /// Reads `path` (an INI file; absent = empty) and starts the writer.
     explicit SettingsStore(const QString &path);
     /// Flushes (waits for every queued write) and stops the writer.
-    ~SettingsStore() override;
+    ~SettingsStore();
 
     SettingsStore(const SettingsStore &) = delete;
     SettingsStore &operator=(const SettingsStore &) = delete;
 
     // ---- the QSettings-shaped surface (keys are relative to group()) ------
-    QVariant value(const QString &key, const QVariant &fallback = QVariant()) const override;
-    bool contains(const QString &key) const override;
-    void setValue(const QString &key, const QVariant &value) override;
+    QVariant value(const QString &key, const QVariant &fallback = QVariant()) const;
+    bool contains(const QString &key) const;
+    void setValue(const QString &key, const QVariant &value);
     /// The key and every key under "key/"; an EMPTY key removes everything in
     /// the current group (QSettings::remove's contract).
-    void remove(const QString &key) override;
+    void remove(const QString &key);
 
     void beginGroup(const QString &prefix);
     void endGroup();
@@ -82,6 +84,14 @@ public:
     QStringList childKeys() const;
     QStringList childGroups() const;
     QString fileName() const { return mPath; }
+
+    /// THE DOCUMENT's VIEW of this store (iris::KeyValueStore, std types: NOQT-DOCUMENT-1 stage 4): the same keys
+    /// and the same file. A Value Array of Strings is written as the QStringList the ini has always held, and a
+    /// stored list reads back as one (a one-entry list the ini returns as a QString reads as that String: the
+    /// InputMap takes it as one row, as QVariant::toStringList did); any other kind crosses through qtstd's
+    /// QVariant conversion. An ADAPTER the store owns rather than a base class, because the QString overloads above
+    /// and the std ones below would make every value("key") call with a literal ambiguous.
+    iris::KeyValueStore &keyValues() { return mKeyValues; }
 
     // ---- durability -------------------------------------------------------
     /// Blocks until every change made so far is in the file (or the budget
@@ -106,6 +116,19 @@ private:
     QString absolute(const QString &key) const;
     void enqueue(Op op);
     void writerLoop();
+
+    class KeyValues : public iris::KeyValueStore
+    {
+    public:
+        explicit KeyValues(SettingsStore &store) : mStore(store) {}
+        bool contains(std::string_view key) const override;
+        std::optional<iris::Value> value(std::string_view key) const override;
+        void setValue(std::string_view key, const iris::Value &value) override;
+        void remove(std::string_view key) override;
+    private:
+        SettingsStore &mStore;
+    };
+    KeyValues mKeyValues{ *this };
 
     QString mPath;
     QMap<QString, QVariant> mValues;   // absolute key -> value; the UI thread's

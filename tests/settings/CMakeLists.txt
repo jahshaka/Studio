@@ -12,7 +12,7 @@ target_include_directories(test_settings_store PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl)
-target_link_libraries(test_settings_store PRIVATE Qt6::Core)
+target_link_libraries(test_settings_store PRIVATE Qt6::Core IrisCore)   # IrisCore: iris::Value (the settings seam's std interface, NOQT-DOCUMENT-1 stage 4)
 add_test(NAME settings.store COMMAND test_settings_store
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(settings.store)   # THE SHIP SET (TEST-CUT-1)

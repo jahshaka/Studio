@@ -19,7 +19,7 @@ target_include_directories(test_shortcut_registry PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl)
-target_link_libraries(test_shortcut_registry PRIVATE Qt6::Widgets Qt6::Test)
+target_link_libraries(test_shortcut_registry PRIVATE Qt6::Widgets Qt6::Test IrisCore)   # IrisCore: iris::Value (the settings seam's std interface, NOQT-DOCUMENT-1 stage 4)
 add_test(NAME shortcuts.registry COMMAND test_shortcut_registry
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(shortcuts.registry)   # THE SHIP SET (TEST-CUT-1)

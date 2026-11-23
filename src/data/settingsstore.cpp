@@ -1,5 +1,6 @@
 // SettingsStore — read data/settingsstore.h first.
 #include "data/settingsstore.h"
+#include "app/qtstd.h"
 
 #include <QSettings>
 
@@ -72,6 +73,46 @@ void SettingsStore::setValue(const QString &key, const QVariant &value)
     if (k.isEmpty()) return;
     mValues.insert(k, value);
     enqueue({ false, k, value });
+}
+
+// ---- the document's view (iris::KeyValueStore) ----------------------------------------------------------------------
+
+bool SettingsStore::KeyValues::contains(std::string_view key) const
+{
+    return mStore.contains(qtstd::toQString(key));
+}
+
+std::optional<iris::Value> SettingsStore::KeyValues::value(std::string_view key) const
+{
+    const QString k = qtstd::toQString(key);
+    if (!mStore.contains(k)) return std::nullopt;
+    const QVariant v = mStore.value(k);
+    if (v.typeId() == QMetaType::QStringList) {
+        iris::Value::Array out;
+        for (const QString &s : v.toStringList()) out.push_back(iris::Value(s.toStdString()));
+        return iris::Value(std::move(out));
+    }
+    return qtstd::fromVariant(v);
+}
+
+void SettingsStore::KeyValues::setValue(std::string_view key, const iris::Value &value)
+{
+    // A list of strings is the QStringList the ini has always held for it (the file's bytes unchanged).
+    if (value.kind() == iris::Kind::Array) {
+        QStringList list;
+        bool strings = true;
+        for (const iris::Value &e : value.asArray()) {
+            if (e.kind() != iris::Kind::String) { strings = false; break; }
+            list << qtstd::toQString(e.asString());
+        }
+        if (strings) { mStore.setValue(qtstd::toQString(key), list); return; }
+    }
+    mStore.setValue(qtstd::toQString(key), qtstd::toVariant(value));
+}
+
+void SettingsStore::KeyValues::remove(std::string_view key)
+{
+    mStore.remove(qtstd::toQString(key));
 }
 
 void SettingsStore::remove(const QString &key)

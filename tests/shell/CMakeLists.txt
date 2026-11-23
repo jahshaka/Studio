@@ -14,7 +14,7 @@ target_include_directories(test_shell_contract PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl)
-target_link_libraries(test_shell_contract PRIVATE Qt6::Widgets)
+target_link_libraries(test_shell_contract PRIVATE Qt6::Widgets IrisCore)   # IrisCore: iris::Value (the settings seam's std interface, NOQT-DOCUMENT-1 stage 4)
 add_test(NAME shell.contract COMMAND test_shell_contract
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(shell.contract)   # THE SHIP SET (TEST-CUT-1)

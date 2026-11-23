@@ -345,7 +345,7 @@ void define(ActionHost &actions, MainWindow &w)
     // playing, and a QShortcut on W is exactly what stops W from reaching play
     // mode today. The rebindable half lives in the InputMap — `input.bind`
     // writes it and refreshGameplayShortcutRows() re-labels these rows.
-    iris::InputSystem::instance().setSettings(w.getSettingsManager()->settings);
+    iris::InputSystem::instance().setSettings(&w.getSettingsManager()->settings->keyValues());
     fixed("gameplay.move",   "Move (play mode)",   "Gameplay", "W / S / A / D");
     fixed("gameplay.look",   "Look (play mode)",   "Gameplay", "Mouse");
     fixed("gameplay.jump",   "Jump (play mode)",   "Gameplay", "Space");
