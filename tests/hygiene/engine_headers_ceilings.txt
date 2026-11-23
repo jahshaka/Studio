@@ -9,13 +9,13 @@
 # GENERATED: `engine_headers.py <tree> --write` (the row's header: a conflict here is resolved by regenerating, the diff shown).
 lines Atom.h 338
 fanout Atom.h 0
-lines Camera.h 247
+lines Camera.h 249
 fanout Camera.h 4
 lines Config.h 218
 fanout Config.h 6
 lines Culling.h 167
 fanout Culling.h 0
-lines Engine.h 3216
+lines Engine.h 3215
 fanout Engine.h 1
 lines EngineInspect.h 246
 fanout EngineInspect.h 0
@@ -91,9 +91,9 @@ lines VoxelReader.h 68
 fanout VoxelReader.h 0
 lines Vr.h 777
 fanout Vr.h 1
-reach Fog.h 236
-reach FrameInput.h 236
-reach GiParams.h 249
-reach Monitor.h 237
-reach Planar.h 236
-reach Sky.h 246
+reach Fog.h 238
+reach FrameInput.h 238
+reach GiParams.h 251
+reach Monitor.h 239
+reach Planar.h 238
+reach Sky.h 248
